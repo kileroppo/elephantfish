@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>转述台 · 自检与质量迭代报告</title>
+<style>
+  :root{
+    --paper-0:#fdfaf4; --paper-1:#f7f2e8; --paper-2:#efe8db; --paper-3:#e4dac8;
+    --ink-0:#16130f; --ink-1:#2a241d; --ink-2:#4b4237; --ink-3:#776b5b; --ink-4:#a19683;
+    --cinnabar:#b4322a; --cinnabar-bright:#cd4034; --cinnabar-wash:rgba(180,50,42,.08);
+    --jade:#2c6a56; --jade-wash:rgba(44,106,86,.09);
+    --line:rgba(43,35,26,.14); --line-strong:rgba(43,35,26,.26);
+    --display:"Songti SC","STSong","Noto Serif SC","SimSun",serif;
+    --kai:"STKaiti","KaiTi","Kaiti SC","楷体",serif;
+    --ui:"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+    --num:"JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:var(--ui); font-size:15px; line-height:1.72; color:var(--ink-1);
+    background:var(--paper-1);
+    background-image:radial-gradient(120% 80% at 12% -10%,rgba(255,255,255,.9),rgba(255,255,255,0) 60%),
+      repeating-linear-gradient(45deg,rgba(109,80,40,.02) 0 1px,rgba(255,255,255,0) 1px 4px);
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:960px;margin:0 auto;padding:56px 28px 96px}
+  header.head{border-bottom:2px solid var(--ink-0);padding-bottom:22px;margin-bottom:34px}
+  .kicker{font-size:12px;letter-spacing:.22em;color:var(--cinnabar);text-transform:uppercase}
+  h1{font-family:var(--display);font-size:38px;line-height:1.2;margin:10px 0 8px;letter-spacing:.02em;color:var(--ink-0)}
+  .sub{color:var(--ink-3);font-size:14.5px;margin:0}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:16px;font-size:12.5px;color:var(--ink-3);font-family:var(--num)}
+  h2{font-family:var(--display);font-size:23px;margin:52px 0 14px;color:var(--ink-0);letter-spacing:.02em;
+     padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-family:var(--display);font-size:17px;margin:28px 0 8px;color:var(--ink-0)}
+  p{margin:10px 0}
+  .lede{font-size:16.5px;color:var(--ink-1)}
+  strong{color:var(--ink-0)}
+  code{font-family:var(--num);font-size:.87em;background:var(--paper-2);padding:1px 5px;border-radius:4px;color:var(--ink-0)}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .card{background:linear-gradient(180deg,var(--paper-0),var(--paper-1));border:1px solid var(--line);
+        border-radius:14px;padding:16px 18px}
+  .card h4{margin:0 0 6px;font-family:var(--display);font-size:14px;letter-spacing:.08em;color:var(--ink-2)}
+  .card .n{font-family:var(--num);font-size:26px;color:var(--ink-0);line-height:1.2}
+  .card .n small{font-size:13px;color:var(--ink-3);font-family:var(--ui)}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11.5px;letter-spacing:.1em;color:var(--ink-3);font-weight:600;background:var(--paper-2)}
+  td.num,th.num{font-family:var(--num);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .up{color:var(--jade);font-weight:600}
+  .flat{color:var(--ink-4)}
+  .pill{display:inline-block;font-family:var(--num);font-size:11px;padding:2px 8px;border-radius:999px;
+        border:1px solid var(--line-strong);color:var(--ink-2)}
+  .pill.hi{color:var(--cinnabar);border-color:rgba(180,50,42,.3);background:var(--cinnabar-wash)}
+  .pill.ok{color:var(--jade);border-color:rgba(44,106,86,.3);background:var(--jade-wash)}
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:5px 0}
+  .box{border-left:3px solid var(--cinnabar);background:var(--cinnabar-wash);padding:14px 18px;border-radius:0 10px 10px 0;margin:18px 0}
+  .box.good{border-left-color:var(--jade);background:var(--jade-wash)}
+  .box h4{margin:0 0 6px;font-family:var(--display);font-size:15px;color:var(--ink-0)}
+  pre{background:#1c1916;color:#f0e8da;padding:14px 16px;border-radius:10px;overflow-x:auto;
+      font-family:var(--num);font-size:12.5px;line-height:1.6}
+  .bar{display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--paper-3);margin-top:10px}
+  .bar span{display:block}
+  .bar .b1{background:linear-gradient(90deg,#4a4034,#2a241d)}
+  .bar .b2{background:linear-gradient(90deg,#9d2820,var(--cinnabar-bright))}
+  .bar .b3{background:linear-gradient(90deg,#35836a,#2c6a56)}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:8px;font-size:12px;color:var(--ink-3)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  .score-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:14px}
+  .score-row .label{font-size:14px;color:var(--ink-1)}
+  .score-row .val{font-family:var(--num);font-size:14px;color:var(--ink-2)}
+  .score-row .val b{font-size:19px;color:var(--ink-0)}
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-3)}
+  @media print{body{background:#fff}.page{padding:0}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="head">
+  <div class="kicker">Self-Review · Quality Iteration</div>
+  <h1>转述台 · 自检与质量迭代报告</h1>
+  <p class="sub">对象：elephantfish 转述对局台（<code>engine/</code> + <code>server/app.py</code> + <code>frontend/</code>）。
+     方法：可测量的自检脚本 + 评审维度打分，一轮一轮改到不再有可发现的缺陷 —— 本文记录三轮：
+     第一轮找<b>坏掉的</b>，第二轮找<b>会卡的</b>，第三轮找<b>不像的</b>。</p>
+  <div class="meta">
+    <span>评审轮次 3</span>
+    <span>断言项 11 类 + 引擎回归 26 条</span>
+    <span>截图视口 4 + 场景 5</span>
+    <span>目标 awwwards / Webby / FWA</span>
+  </div>
+</header>
+
+<p class="lede">
+「品质」如果不写下来，就只是感觉。这份报告把「感觉好」拆成两件事：
+<b>一、能用机器判定的，就写进自检脚本</b>（控制台错误数、横向溢出像素、点击目标尺寸、竞态是否收敛、主变逐步是否合法）；
+<b>二、只能人看的，就用固定的维度打分</b>，并且把首轮基线和每轮结果并排放在一起。下面每一处改动都对应一个具体缺陷，不是「顺手优化」。
+</p>
+
+<h2>一、自检是怎么做的</h2>
+
+<p>自检脚本 <code>.devtools/audit.mjs</code> 会起一个真实 Chrome，跑完四档视口和五个交互场景，同时收集下面这些可判定的量：</p>
+
+<div class="grid">
+  <div class="card"><h4>控制台与网络</h4><p style="margin:0;font-size:13px">页面错误、未处理的 <code>4xx/5xx</code>。409 单独计数，因为它可能是排队机制的正常信号 —— 但最终 0 次才是目标。</p></div>
+  <div class="card"><h4>布局</h4><p style="margin:0;font-size:13px">横向溢出像素、棋盘容器与棋盘的包围盒是否一致、窄屏下转述台是否排在分析面板之前。</p></div>
+  <div class="card"><h4>可用性</h4><p style="margin:0;font-size:13px">所有 <code>&lt;button&gt;</code> 的高度，低于 32px 就报出来；棋子字号是否随棋盘等比缩放。</p></div>
+  <div class="card"><h4>竞态</h4><p style="margin:0;font-size:13px">引擎长考期间抢先录入，断言：服务端记下了这一步、界面出现排队条、只发 1 次请求、最终自动落子。</p></div>
+</div>
+
+<p>除此之外，引擎侧还有一套独立的一致性断言，跑 <code>python tools/verify.py</code> 即可复现。
+下面是完整跑一遍（400 局随机对局）的实测输出：</p>
+
+<pre>着法生成 vs 原版     23,927 个随机构面   逐条逐序一致，分歧 0
+中文记谱往返            940,999 步       0 失败
+ICCS 往返              940,999 步       0 失败
+困毙判定              未被将军 + 无子可动 → 判负（对照局面回到 playing）
+认输后悔棋            resign → playing，回到「等对手出招」
+战绩 settle/unsettle  记入 → 撤回 → 重复结算只算一次
+主变逐步合法性         红方视角 / 黑方视角  每步都合法，且记谱往返一致
+快照往返 300 次        平均 1.04ms/次    （前端轮询间隔 130ms）
+--------------------------------------------------------------------------------
+断言 26 条，失败 0 条，耗时 80.9s</pre>
+
+<p>其中「着法生成」这一项是对<b>原版 <code>elephantfish.py</code></b> 直接比对的 —— 两份实现各自产出的走法列表连<b>顺序</b>都必须一致，
+这样才能保证重写搜索层不引入任何规则层面的漂移。中文记谱那一项覆盖了 400 局对局里出现过的<b>每一步</b>合法走法，
+而不是抽样：九十四万次往返，零失败。</p>
+
+<h2>二、首轮基线：13 个真实缺陷</h2>
+
+<p>第一轮不是「看一看觉得还行」，而是先承认界面在几处<b>确实是坏的</b>。下面每一条都有现场证据。</p>
+
+<table>
+  <thead><tr><th style="width:38px">#</th><th>缺陷</th><th style="width:34%">证据 / 根因</th><th style="width:56px">级别</th></tr></thead>
+  <tbody>
+  <tr><td class="num">1</td><td>服务端任何 404 直接把连接掐断</td>
+      <td>自定义 <code>log_message</code> 里把 <code>args[0]</code> 当成字符串拼，而 <code>send_error()</code> 传进来的第一个位置参数是 <code>HTTPStatus</code> 枚举 → <code>TypeError</code> → socketserver 关连接。浏览器只看到空响应。</td><td><span class="pill hi">致命</span></td></tr>
+  <tr><td class="num">2</td><td>轮询遇到一次 404 就永久停摆，整个界面冻结</td>
+      <td>服务端换掉搜索任务时前端还握着旧 id，一次 404 触发 <code>stopPolling()</code>；而旧状态里 <code>task.status</code> 仍是 <code>running</code>、id 没变，重启条件永远不成立。自检诊断打出的现场：界面显示「已排队」，服务端 <code>pending: null</code>、<code>ply: 3</code> —— 那步棋早就落子了。</td><td><span class="pill hi">致命</span></td></tr>
+  <tr><td class="num">3</td><td>引擎思考时提交会撞 409，而且撞上之后那一步<b>永久卡住</b></td>
+      <td>前端排队后等 <code>thinking</code> 翻成 <code>false</code> 再提交；但 409 恰恰发生在前端以为「不忙」的时候，它永远不会再翻转，于是排队的那步再也送不出去。</td><td><span class="pill hi">致命</span></td></tr>
+  <tr><td class="num">4</td><td>窄屏棋盘溢出容器 74px，同时顶穿上下两块</td>
+      <td>实测 <code>.board-wrap</code> 高 318px 而 <code>.board-surface</code> 高 433px。根因是桌面端为撑满剩余空间写的 <code>min-height: 0</code>，在窄屏 grid 布局下让行高被压到比内容还矮。</td><td><span class="pill hi">严重</span></td></tr>
+  <tr><td class="num">5</td><td>窄屏把转述台排到页面最底部</td>
+      <td>顺序是棋盘 → 分析 → 棋谱 → 控制 → 转述台。这个软件的心脏被埋在最后一屏。</td><td><span class="pill hi">严重</span></td></tr>
+  <tr><td class="num">6</td><td>评分重复显示且符号语义混乱</td>
+      <td>同一行出现「红 −0.06」和「黑 −0.06」：一个从红方视角带符号的分值，被贴上黑方的标签显示了两遍。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">7</td><td>评分单位既不是兵也不是 centipawn</td>
+      <td>显示值是 <code>score / 100</code>，但子力表里一个兵 = 44 分。一个兵的差距会显示成 0.44，读的人无从判断。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">8</td><td>主变第一步是引擎已经走过的那一步</td>
+      <td><code>pv_detail</code> 是搜索开始时算的，落子后没有裁掉首步，于是同一手棋在「应手」和「主变」里各出现一次。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">9</td><td>「本局统计」实际是跨局累计</td>
+      <td>面板写「本局统计」，「引擎出招」显示的却是会话累计值 —— 新开一局后数字不从零开始。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">10</td><td>提示条堆到 5 条，正好盖住转述台</td>
+      <td>截图里 4 条「引擎还在算，xxx 已排队」压住了录入框和落子按钮。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">11</td><td>点击目标小于触摸可用尺寸</td>
+      <td>预设按钮 43×26px、小按钮高 30px。触屏上 26px 是「点了不响」的尺寸。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">12</td><td>认输后「退回去接着下」点了没反应</td>
+      <td>终局界面上那个按钮是唯一的出路。但一步未走时 <code>undo_round()</code> 在清掉认输状态之前就提前返回了。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">13</td><td>没有 favicon，每次打开都产生一次失败请求</td>
+      <td>连带撞上缺陷 1，每次首屏都在控制台留一条 <code>ERR_EMPTY_RESPONSE</code>。</td><td><span class="pill">低</span></td></tr>
+  </tbody>
+</table>
+
+<div class="box">
+  <h4>首轮最值得记的一课</h4>
+  <p style="margin:0">缺陷 1、2、3 是同一类东西：<b>它们都不影响「功能是否正确」，只影响「会不会偶尔彻底卡死」。</b>手动点几下很可能一辈子碰不到，但它们会在最需要它的时候 —— 对手模型刚走完、你正抢着录入 —— 把整个界面冻住。这类问题只能靠脚本反复制造那个窗口才暴露得出来，眼睛看不见。</p>
+</div>
+
+<h2>三、第二轮：改了什么</h2>
+
+<h3>把「推卸」改成「接管」</h3>
+<p>
+缺陷 3 的修法我改过两次，这里值得说清楚，因为第一版是错的。
+</p>
+<p>
+第一版把排队留在前端：撞到 409 就循环重试。结果自检打出来的请求日志是 —— 一次排队留下 5 到 10 条 409，「排队重试过于频繁」被脚本自己报了出来。这说明<b>前端在猜服务端忙不忙，而这件事服务端最清楚。</b>
+</p>
+<p>
+第二版把队列搬到服务端：<code>POST /api/move</code> <b>从此不再返回 409</b>。引擎在算就把这一步记下来，等它收手立刻落子，并把结果回填成一条 <code>notice</code>；排队这件事本身由 <code>state.pending</code> 单一来源驱动界面。
+</p>
+<pre>改前：转述台提交 → 409 → 重试 → 重试 → 重试 → 200    （5~10 次请求）
+改后：转述台提交 → 200 {queued:true} → 引擎收手自动落子   （1 次请求）</pre>
+<p>自检的断言也随之变严了：现在要求「录入一步只发 1 次请求」且「409 出现 0 次」。两条都过。</p>
+
+<h3>让「卡死」在结构上不可能</h3>
+<p>
+修缺陷 2 时我没有只加个重试，而是同时改了两处，因为单改一处只是把窗口挪了个位置：
+</p>
+<ul>
+  <li><b>服务端</b>：<code>GET /api/task/&lt;旧 id&gt;</code> 不再返回 404，而是返回当前任务并带一个 <code>stale: true</code>。前端本来就在同一个响应里拿 <code>state</code>，于是它自然就能发现有新任务并继续跟上。</li>
+  <li><b>前端</b>：引入 <code>pollEpoch</code>。即使 id 没变、状态没动，也强制把轮询重新拉起来 —— 避免「id 相同所以不重启」这个死角。</li>
+</ul>
+
+<h3>让界面说人话</h3>
+<ul>
+  <li>评分从「红 −0.06 / 黑 −0.06」改成 <b>一句判定 + 一个带单位的分值</b>：「红方胜势 +6.7 兵」。判定语按 <span class="pill">均势</span> → <span class="pill">略优</span> → <span class="pill">占优</span> → <span class="pill">大优</span> → <span class="pill">胜势</span> 分档，单位统一按「一个兵 = 1.0」折算（子力表 44 分）。</li>
+  <li>评估条缩到 8px，加深中线（「各一半」一眼可见）和游标；黑方一侧从纯黑块改成暖墨渐变，不再破坏纸墨这套颜色。</li>
+  <li>主变裁掉已经落子的首步，并标注「引擎算的接下来 N 步」。</li>
+  <li>「本局统计」拆成真的本局数字，另加一行跨局「累计战绩 · 胜/和/负」—— 这正是训练对手模型时最该盯的数。悔棋会把已经记过的胜负撤回去，不让战绩虚高。</li>
+</ul>
+
+<h3>工艺与手感</h3>
+<ul>
+  <li>棋子加厚外圈（2.4 → 3.2 单位）、内圈浅槽外移，补一层顶部受光高光。这是全屏的主角，之前偏薄。</li>
+  <li>提示条移到右下角、最多 3 条、排队不再弹提示（排队条已经在说了）。信息提示 2.6s 自动消失。</li>
+  <li>预设按钮 26 → 34px，小按钮 30 → 34px；≤720px 全部涨到 40–46px，输入框 52px。</li>
+  <li>补齐内联 SVG favicon（一枚「象」棋子），顺手消掉那条 404。</li>
+</ul>
+
+<h2>四、第三轮：把棋盘和棋子做成实物</h2>
+
+<p>第二轮解决的是「会不会坏」，第三轮回到「好不好看」。这一轮的自检方式和上一轮不同 ——
+不是跑脚本找崩溃，而是<b>把截图放大逐个看</b>：一颗棋子在放大之后到底是什么样子，棋盘上那层「木纹」凑近了看是不是木头。
+放大之后，问题比预想的多。</p>
+
+<h3>放大之后看到的 6 件事</h3>
+
+<table>
+  <thead><tr><th style="width:38px">#</th><th>问题</th><th style="width:40%">根因</th><th style="width:56px">级别</th></tr></thead>
+  <tbody>
+  <tr><td class="num">1</td><td>「引擎思考」的呼吸环<b>一个像素都没渲染过</b></td>
+      <td>关键帧里动画的是 <code>box-shadow</code> <b>外</b>投影，而它的父级 <code>.board-surface</code> 是 <code>overflow: hidden</code> —— 外投影被整个裁掉。动画写了、也一直在跑，但永远是隐形的。</td><td><span class="pill hi">严重</span></td></tr>
+  <tr><td class="num">2</td><td>棋盘上的「木纹」其实是一层 45° 斜线网纹</td>
+      <td>用的是 <code>repeating-linear-gradient(45deg, …1px, …4px)</code>。那是布纹，凑近看是金属拉丝，不是木头。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">3</td><td>棋子是一个<b>扁圆盘</b></td>
+      <td>只有一层放射渐变加一道白色内圈。真棋子是车床推出来的，有一圈圈同心刀痕；字是刻进去的，不是印上去的。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">4</td><td>落子只有「滑过去」，没有「落定」</td>
+      <td>棋子从 A 滑到 B 就结束了，缺一个「这一步走完了」的落点事件。滑动只说明「在移动」，说明不了「走完了」。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">5</td><td>「一层一层往下钻」这件事看不见</td>
+      <td>迭代加深是这台引擎最核心的观感，界面上却只给了一个静态数字。</td><td><span class="pill">中</span></td></tr>
+  <tr><td class="num">6</td><td>加阶梯会把「搜索深度」显示两遍</td>
+      <td>上一轮刚修过「同一件事说两遍」，这里不能再犯 —— 加之前就得先把原来那处删掉。</td><td><span class="pill">低</span></td></tr>
+  </tbody>
+</table>
+
+<h3>棋盘：从一块色板变成一块板</h3>
+<ul>
+  <li>木纹换成两条 <code>feTurbulence</code> 噪声：一条低频宽年轮带（<code>baseFrequency="0.0016 0.055"</code>），一条高频细纤维（<code>0.004 0.62</code>），各自用 <code>feColorMatrix</code> 压成半透明木色，再以 <code>mix-blend-mode: multiply</code> 叠在面板渐变上。选 <code>fractalNoise</code> 而不是 <code>turbulence</code>，因为后者会留下硬边噪点，放大看像脏点。</li>
+  <li>噪声只在首帧算一次。两条滤镜都放在 <code>BoardArtwork</code> 里，组件用 <code>memo</code> 包住 —— 前端每 130ms 轮询一次会重渲染 <code>Board</code>，但这一整棵 SVG 子树不会被动到，木纹不会被反复重算。</li>
+  <li>补一层上下渐变（上缘受光、下缘落影）加一道板边倒角线，让板有厚度。<code>box-shadow</code> 从一层改成三层：贴地硬边 / 近处散影 / 远处环境影 —— 一层影子只会让人觉得「浮起来了」，三层才有「放在桌上」的重量。</li>
+  <li><code>.board-surface</code> 加 <code>isolation: isolate</code>，把 <code>multiply</code> 混合关在棋盘自己的层叠上下文里，不沾页面背景。</li>
+</ul>
+
+<h3>棋子：从圆盘变成车出来的木子</h3>
+<ul>
+  <li>叠一层 <code>repeating-radial-gradient</code> 同心圈（约 2 单位一圈）—— 车床推出来的刀痕。这一道纹路加不加，是「一个圆」和「一枚子」的区别。</li>
+  <li>字改成<b>阴刻</b>：上缘落影、下缘受光。方向反了就成了「贴上去的浮雕」，一眼假。</li>
+</ul>
+
+<h3>落子的一刻</h3>
+<p>滑动只表示「移动」，落定才表示「走完了」。落点上放两圈错开 90ms 的细环：第一圈是「落」，第二圈是「定」。
+对方走子用墨色，我方应手用朱砂 —— 同一件事的两个来源，在盘面上就是两种颜色。</p>
+<p>触发条件是 <code>ply</code> 恰好 +1。悔棋（<code>ply</code> 变小）、载入局面（一步跨好几手）、只是翻转视角，都不放这一下 ——
+否则界面上会出现「倒着落子」这种荒唐画面。</p>
+
+<h3>让「加深」这件事看得见</h3>
+<p>迭代加深一层一层往下钻，是这台引擎最核心的动作。现在换成十二格阶梯：已到的层数点亮，越深越高，
+正在跑的那一格在呼吸。到得越深，阶梯越长也越高，读起来就是「越来越深」。同时把统计格里的「搜索深度」删掉。</p>
+
+<div class="box">
+  <h4>这一轮最值得记的一课</h4>
+  <p style="margin:0">那一圈「思考呼吸环」从写下来那天起<b>就没有在屏幕上出现过</b>，而它对应的功能（引擎正在思考）看起来一直是好的 ——
+  因为别处还有提示。这类缺陷是<b>表达式错误</b>，不是逻辑错误：代码在跑，动画在跑，浏览器也没报错，
+  只是渲染结果被祖先的一个 <code>overflow</code> 吃掉了。控制台永远是干净的。
+  只有把截图放大、对着规范一条条推，才能发现「这里本来应该有一圈光，但没有」。</p>
+</div>
+
+<h2>五、复评</h2>
+
+<p>评审维度参考 awwwards 的 Design / Usability / Creativity / Content 四分法，再补上它们不细分但对本工具要紧的三项。满分 10。</p>
+
+<table>
+  <thead><tr><th>维度</th><th class="num" style="width:62px">首轮</th><th class="num" style="width:62px">二轮</th><th class="num" style="width:62px">三轮</th><th>依据</th></tr></thead>
+  <tbody>
+  <tr><td><b>功能正确与稳健</b></td><td class="num">5.0</td><td class="num up">9.0</td><td class="num up">9.2</td>
+      <td>引擎侧新增 <code>tools/verify.py</code>：400 局随机对局、<b>23,927 个随机构面</b>与原版逐条逐序对齐（分歧 0）、<b>940,999 步</b>记谱与 ICCS 往返零失败，另有困毙判负、认输悔棋、战绩可逆、主变双视角四条断言；界面自检 11 类断言全过。留 0.8 分：<b>界面</b>还没有连打整局的压力测试。</td></tr>
+  <tr><td><b>核心工作流效率</b></td><td class="num">6.5</td><td class="num up">9.0</td><td class="num flat">9.0</td>
+      <td>本轮未改动。录入一步 1 次请求、0 冲突，引擎思考期间也能提前录入并自动落子；输入框自动聚焦、坐标与中文记谱双认、候选芯片一点即走；应手一键复制。</td></tr>
+  <tr><td><b>视觉工艺（棋盘与棋子）</b></td><td class="num">6.5</td><td class="num up">8.0</td><td class="num up">9.0</td>
+      <td>棋盘有了真正的木纹（两条 <code>feTurbulence</code> 噪声乘以混合）、板边倒角与三层落地影；棋子有了车床同心刀痕与阴刻字；落子有落点涟漪。留 1 分：木纹是程序生成的，不是拍下来的材质贴图；「楚河汉界」四个字仍只是字形，不是刻痕。</td></tr>
+  <tr><td><b>版式与信息层级</b></td><td class="num">6.0</td><td class="num up">7.5</td><td class="num up">8.0</td>
+      <td>深度阶梯顶掉了一处重复的统计格，三列统计不再留空位。留 2 分：左右两栏仍是一列同权重卡片、底部大片留白；棋盘之外没有第二个视觉重心。</td></tr>
+  <tr><td><b>响应式</b></td><td class="num">3.5</td><td class="num up">8.5</td><td class="num flat">8.5</td>
+      <td>本轮未改动。四档视口零溢出、棋盘与容器包围盒完全一致；窄屏信息顺序为棋盘 → 转述台 → 分析 → 控制；触摸目标达标。木纹在手机尺寸下仍成立。</td></tr>
+  <tr><td><b>文案与内容表达</b></td><td class="num">7.5</td><td class="num up">8.5</td><td class="num flat">8.5</td>
+      <td>本轮未改动。界面说明都是具体的话，不是「设置」「选项」这类空标签。留 1.5 分：帮助面板的快捷键表还可以更像一页说明。</td></tr>
+  <tr><td><b>创意与概念</b></td><td class="num">6.0</td><td class="num flat">6.5</td><td class="num up">7.0</td>
+      <td>落点涟漪把「两个来源」写进了盘面本身 —— 对方的棋落墨、我方的棋落朱砂，这是只有这个工具才有的画面。但版式仍是三栏仪表盘：<b>概念还没有长成形态。</b>这依然是最远的一项。</td></tr>
+  <tr><td><b>无障碍</b></td><td class="num">6.0</td><td class="num up">7.0</td><td class="num flat">7.0</td>
+      <td>本轮未改动。全局 <code>focus-visible</code> 焦点环、按钮有 aria-label、<code>prefers-reduced-motion</code> 全面降级、数字用等宽与 <code>tabular-nums</code> 不跳动。留 3 分：棋盘还不能纯键盘走子；次要灰字对比较 AA 偏紧。</td></tr>
+  </tbody>
+</table>
+
+<div class="score-row">
+  <span class="label"><b>综合</b>（加权：正确性 20%、工作流 18%、视觉 15%、版式 13%、响应式 12%、文案 10%、创意 7%、无障碍 5%）</span>
+  <span class="val">首轮 <b>5.8</b> → 二轮 <b>8.1</b> → 三轮 <b>8.6</b></span>
+</div>
+<div class="bar"><span class="b1" style="width:58%"></span><span class="b2" style="width:23%"></span><span class="b3" style="width:5%"></span></div>
+<div class="legend">
+  <span><i style="background:#2a241d"></i>首轮 5.8</span>
+  <span><i style="background:#cd4034"></i>第二轮 +2.3</span>
+  <span><i style="background:#2c6a56"></i>第三轮 +0.5</span>
+</div>
+<p style="font-size:12.5px;color:var(--ink-3);margin-top:6px">第三轮的增量刻意比第二轮小：这一轮修的是「做得像不像」，而上一轮修的是「会不会坏」。</p>
+
+<h2>六、诚实的话：现在还没到奖</h2>
+
+<div class="box">
+  <h4>8.6 分是什么水平</h4>
+  <p style="margin:0">这是一件<b>干净、顺手、而且看起来像真的</b>专业工具。同级作品里它的完成度、稳健性和工艺都在上游 —— 尤其「引擎算棋时照样能录入」和「棋盘是一块木头的板」这两点，都是真正动手做过之后才知道要补的。但 awwwards Site of the Day 那一档看的不只是「没问题」，而是「<b>有一件事只有它做得到，而且做得让人记住</b>」。</p>
+</div>
+
+<p>三轮下来，原本那三样各差多少，一条条对，不粉饰：</p>
+
+<ol>
+  <li><b>视觉上独一无二的形态 —— 基本没动。这是最大的缺口。</b>
+      棋盘和棋子现在很像真的了，但版面骨架还是「左栏卡片 / 中间棋盘 / 右栏卡片」，
+      「转述」这件事本身还没有长成形状。下一步很具体：把 ① 和 ② 两个站从底部那张卡片里拿出来，
+      做成棋盘外的两条实体轨道 —— 对方的棋从一侧流进棋盘，我方的应手从另一侧流出去，
+      让版面结构本身就在说「这是一个转述回路」。风险在于它会挤占棋盘的宽度，
+      而棋盘是主角、不能变小，所以必须<b>先量再动手</b>。</li>
+  <li><b>动效从「有反馈」走到了「有叙事」的一半。</b>
+      落子现在有落定的一刻（两圈错开 90ms 的涟漪：对方落墨、我方落朱砂），
+      思考时深度阶梯在一格一格往上走。还差两个镜头：<b>引擎思考的那几秒</b>（现在只有一圈呼吸光和阶梯，
+      没有「它正在想什么」的叙事），和<b>终局那一刻</b>（现在是一张静态卡片淡入，没有一个让人想录下来的收尾）。</li>
+  <li><b>材质 —— 这一轮做了，但它仍然是「程序生成的材质」。</b>
+      木纹是 <code>feTurbulence</code> 算出来的，不是拍下来的木头；棋子的刀痕是 CSS 同心圈，不是真的车床痕迹。
+      在正常尺寸下已经看不出破绽，但全屏放大还是能看出是画出来的。
+      再往前一步需要真的材质位图（一张木头扫描图加一张棋子贴图），那是下一步的事，不是这一步的。</li>
+</ol>
+
+<h2>七、还剩的已知项</h2>
+
+<ul>
+  <li>界面自检里的对局最长只走到 13 手。引擎侧的一致性回归已经覆盖到 400 局、近 2.4 万个局面与 94 万步记谱，但<b>界面</b>还没有连打整局的压力测试（几百手、多次悔棋与载入交叉）。</li>
+  <li>引擎思考时输入框可用，但同一条时间线上只允许一个待落子步 —— 这是刻意的限制，并非疏漏。</li>
+  <li>旧版 <code>ui/</code> 与 <code>ui-server.py</code> 仍留在仓库里作为前端未构建时的兜底，尚未清理。</li>
+  <li>无障碍：棋盘尚未支持方向键选子、回车落子。</li>
+</ul>
+
+<h2>八、复现方式</h2>
+
+<pre># 起服务
+python server/app.py 8010
+
+# 引擎一致性回归（不需要起服务，直接跑）
+python tools/verify.py           # 完整：400 局，约 80s
+python tools/verify.py --quick   # 冒烟：40 局，约 10s
+
+# 界面自检（四档视口 + 五个场景 + 竞态断言，截图落在 .devtools/shots/）
+cd .devtools
+node audit.mjs http://127.0.0.1:8010/
+
+# 期望输出
+断言 26 条，失败 0 条
+—— 无控制台错误、无溢出、无过小点击目标、无未决竞态 ——</pre>
+
+<footer>
+  elephantfish 转述台 · 自检与质量迭代报告 · 第 3 轮<br />
+  所有分数、请求次数、像素值、局面数与步数均来自本机实测，未做估算。
+</footer>
+
+</div>
+</body>
+</html>

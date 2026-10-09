@@ -1,0 +1,61 @@
+/* ==========================================================================
+   Tailwind CSS 4 —— 只接管「新增样式」，存量 app.css 一字不动
+   --------------------------------------------------------------------------
+   两条生命线：
+   1. 不引入 preflight。Tailwind 自带的全局 reset 会冲掉 app.css 里
+      已经调好的按钮/输入框继承，这里只挂 theme + utilities 两层。
+   2. 层叠顺序。tw 层全部声明在 layer 里，app.css 是无层样式 ——
+      冲突时存量永远赢，新增类只负责新写的 DOM。
+
+   用法约定（与 tokens.css 同名同义）：
+     bg-cinnabar / text-ink-2 / border-hairline / font-display / font-num …
+   ========================================================================== */
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@theme {
+  /* 纸 */
+  --color-paper-0: #fdfaf4;
+  --color-paper-1: #f7f2e8;
+  --color-paper-2: #efe8db;
+  --color-paper-3: #e4dac8;
+  --color-paper-4: #d6c9b1;
+
+  /* 墨 */
+  --color-ink-0: #16130f;
+  --color-ink-1: #2a241d;
+  --color-ink-2: #4b4237;
+  --color-ink-3: #776b5b;
+  --color-ink-4: #a19683;
+  --color-ink-mute: #9a8f7d;
+  --color-hairline: rgba(43, 35, 26, 0.12);
+  --color-hairline-strong: rgba(43, 35, 26, 0.22);
+
+  /* 朱砂 / 玉 */
+  --color-cinnabar: #b4322a;
+  --color-cinnabar-bright: #cd4034;
+  --color-jade: #2c6a56;
+  --color-jade-bright: #35836a;
+
+  /* 棋盘与棋子 */
+  --color-board-line: #6d5028;
+  --color-piece-red: #a92c24;
+  --color-piece-black: #221d18;
+
+  /* 字体（与 tokens.css 同一族） */
+  --font-display: 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC',
+    'SimSun', serif;
+  --font-kai: 'STKaiti', 'KaiTi', 'Kaiti SC', '楷体', 'STSong', serif;
+  --font-ui: 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    system-ui, -apple-system, sans-serif;
+  --font-num: 'JetBrains Mono', 'Cascadia Mono', 'SFMono-Regular', Consolas,
+    'Menlo', monospace;
+
+  /* 动效令牌 */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.46, 1);
+  --animate-duration-fast: 140ms;
+  --animate-duration: 220ms;
+  --animate-duration-slow: 380ms;
+}

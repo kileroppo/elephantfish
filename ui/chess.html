@@ -3,12 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <title>中国象棋</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
     <h1>中国象棋在线对战</h1>
+    <div class="control-bar">
+        <button id="btn-red" class="side-btn active">我执红（先手）</button>
+        <button id="btn-black" class="side-btn">我执黑（后手）</button>
+        <label class="level-box">引擎强度
+            <select id="level">
+                <option value="4">极速 · 4层</option>
+                <option value="5">快速 · 5层</option>
+                <option value="6" selected>标准 · 6层</option>
+                <option value="7">深思 · 7层（慢）</option>
+            </select>
+        </label>
+        <span id="status">准备开始</span>
+    </div>
     <div class="game-container">
         <div class="chessboard">
+            <!-- 最近一步标记：起点小圆点 + 终点圆环 -->
+            <div class="move-marker marker-from" id="marker-from"></div>
+            <div class="move-marker marker-to" id="marker-to"></div>
+
             <!-- 红方棋子 -->
             <div class="piece red-che" data-position="a0">车</div>
             <div class="piece red-ma" data-position="b0">马</div>
@@ -57,6 +74,7 @@
             </div>
         </div>
     </div>
-    <script src="script.js"></script>
+
+    <script src="script.js?v=6"></script>
 </body>
 </html>

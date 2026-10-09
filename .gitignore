@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node / 前端
+node_modules/
+frontend/dist/
+.vite/
+*.tsbuildinfo
+
+# 开发自检产物（脚本保留，截图与依赖不入库）
+.devtools/node_modules/
+.devtools/shots/
+.devtools/*.log
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# 日志与临时文件
+*.log
+*.tmp
+nohup.out

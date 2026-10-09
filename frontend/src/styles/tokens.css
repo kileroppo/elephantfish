@@ -1,0 +1,114 @@
+/* ==========================================================================
+   设计令牌
+   --------------------------------------------------------------------------
+   整套界面只有三组颜色：纸、墨、朱砂。纸是底，墨是字，朱砂只用来标记
+   「现在轮到谁」和「有危险」。数量少才压得住，多了就俗。
+   ========================================================================== */
+
+:root {
+  /* ---- 纸：从最亮的面到最沉的边 ---- */
+  --paper-0: #fdfaf4;
+  --paper-1: #f7f2e8;
+  --paper-2: #efe8db;
+  --paper-3: #e4dac8;
+  --paper-4: #d6c9b1;
+
+  /* ---- 墨：正文到极淡的线 ---- */
+  --ink-0: #16130f;
+  --ink-1: #2a241d;
+  --ink-2: #4b4237;
+  --ink-3: #776b5b;
+  --ink-4: #a19683;
+  --ink-mute: #9a8f7d;
+  --hairline: rgba(43, 35, 26, 0.12);
+  --hairline-strong: rgba(43, 35, 26, 0.22);
+
+  /* ---- 朱砂：唯一的强调色 ---- */
+  --cinnabar: #b4322a;
+  --cinnabar-bright: #cd4034;
+  --cinnabar-wash: rgba(180, 50, 42, 0.1);
+  --cinnabar-edge: rgba(180, 50, 42, 0.28);
+
+  /* ---- 玉：正面的、确认性的绿 ---- */
+  --jade: #2c6a56;
+  --jade-bright: #35836a;
+  --jade-wash: rgba(44, 106, 86, 0.1);
+
+  /* ---- 棋盘 ---- */
+  --board-face-1: #f2e6cb;
+  --board-face-2: #e9d8b4;
+  --board-face-3: #dcc79d;
+  --board-line: #6d5028;
+  --board-vignette: rgba(109, 80, 40, 0.16);
+  /* 木纹不是颜色，是两条 feTurbulence 噪声，写在 Board.tsx 的 <defs> 里。
+     feColorMatrix 的 values 属性不吃 CSS 变量，所以那两处颜色只能硬编码。 */
+
+  /* ---- 棋子 ---- */
+  --disc-face-1: #fdf8ec;
+  --disc-face-2: #f0e5cd;
+  --disc-face-3: #ddcfaf;
+  --piece-red: #a92c24;
+  --piece-black: #221d18;
+  --disc-shadow: 0 3px 6px rgba(58, 41, 18, 0.28), 0 10px 22px rgba(58, 41, 18, 0.16);
+
+  /* ---- 字体 ---- */
+  --font-display: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC",
+    "SimSun", serif;
+  --font-kai: "STKaiti", "KaiTi", "Kaiti SC", "楷体", "STSong", serif;
+  --font-ui: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    system-ui, -apple-system, sans-serif;
+  --font-num: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas,
+    "Menlo", monospace;
+
+  /* ---- 尺寸 ---- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  --shadow-panel: 0 1px 2px rgba(43, 35, 26, 0.05),
+    0 8px 24px -12px rgba(43, 35, 26, 0.2);
+  --shadow-float: 0 2px 6px rgba(43, 35, 26, 0.08),
+    0 24px 48px -20px rgba(43, 35, 26, 0.3);
+
+  /* ---- 棋子接触影 ---- */
+  --shadow-contact: rgba(58, 41, 18, 0.34);
+  --shadow-contact-fade: rgba(58, 41, 18, 0);
+
+  /* ---- 动效 ---- */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.46, 1);
+  --dur-fast: 140ms;
+  --dur: 220ms;
+  --dur-slow: 380ms;
+
+  color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 1ms;
+    --dur: 1ms;
+    --dur-slow: 1ms;
+  }
+}
+
+/* 棋子位移走合成层：注册成 <length> 才能被 transition 插值。
+   Board.tsx 写入棋盘像素值（720×800 坐标系），CSS 里乘 --u 得到渲染像素。 */
+@property --px {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --py {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* 棋子掠射光的角度：注册成 <angle> 才能被 keyframes 插值 */
+@property --sweep {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: -120deg;
+}
