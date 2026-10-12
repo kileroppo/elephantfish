@@ -438,22 +438,54 @@ export function Board({
           )
         })()}
 
-        {/* 选中棋子周围的三段红色旋转弧环（参考图风格） */}
+        {/* 选中棋子周围的清透月牙高光圆环（精准对齐图一） */}
         {selected && (() => {
           const { file, rank } = parseSquare(selected)
           const { x, y } = toPercent(file, rank, flipped)
           return (
             <span
-              key={`selected-arc-${selected}`}
-              className="selected-arc-ring"
+              key={`selected-crescent-${selected}`}
+              className="selected-crescent-ring"
               style={{
                 left: `${x}%`,
                 top: `${y}%`,
               }}
               aria-hidden="true"
             >
-              <svg className="last-to-spinner" viewBox="0 0 100 100" aria-hidden="true">
-                <circle className="spinner-arcs selected-arcs" cx="50" cy="50" r="43" />
+              <svg viewBox="0 0 100 100" className="crescent-svg" aria-hidden="true">
+                <defs>
+                  <linearGradient id="crescentGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
+                    <stop offset="35%" stopColor="#ffffff" stopOpacity="0.85" />
+                    <stop offset="70%" stopColor="#ffffff" stopOpacity="0.25" />
+                    <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                  </linearGradient>
+                  <filter id="crescentGlow" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="2.2" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                {/* 底部细圆环：定出中空轮廓，晶莹通透 */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="43"
+                  fill="none"
+                  stroke="rgba(255, 255, 255, 0.35)"
+                  strokeWidth="1.6"
+                />
+                {/* 顶部高亮月牙弧光：形成图一鲜明的顶光高光弧 */}
+                <path
+                  d="M 10 50 A 43 43 0 0 1 90 50"
+                  fill="none"
+                  stroke="url(#crescentGrad)"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  filter="url(#crescentGlow)"
+                />
               </svg>
             </span>
           )
@@ -461,7 +493,7 @@ export function Board({
 
         {/* 上一步的起终点：
             起点：柔光白圈点（指示从何处起步）
-            终点：三段围绕棋子的朱红色半透弧环 */}
+            终点：典雅微光取景落点框 */}
         {game.last_move && (
           <>
             <span
@@ -481,11 +513,7 @@ export function Board({
                 left: `${toPercent(parseSquare(game.last_move.to).file, parseSquare(game.last_move.to).rank, flipped).x}%`,
                 top: `${toPercent(parseSquare(game.last_move.to).file, parseSquare(game.last_move.to).rank, flipped).y}%`,
               }}
-            >
-              <svg className="last-to-spinner" viewBox="0 0 100 100" aria-hidden="true">
-                <circle className="spinner-arcs" cx="50" cy="50" r="43" />
-              </svg>
-            </span>
+            />
           </>
         )}
 

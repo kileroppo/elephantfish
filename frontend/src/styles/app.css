@@ -1512,32 +1512,33 @@ kbd {
 
 .piece.is-selected {
   z-index: 45;
-  /* 选中态：棋子向上浮起（远离盘面，高度增加） */
-  transform: translate(-50%, calc(-50% - var(--u) * 4px));
+  /* 选中态：棋子向上浮起（产生立体悬浮高度） */
+  transform: translate(-50%, calc(-50% - var(--u) * 6px));
   transition: transform var(--dur-fast) var(--ease-spring);
 }
 
 .piece.is-selected .piece-face {
-  transform: scale(1.03);
-  filter: brightness(1.06);
-  /* 棋子本体不受杂光干扰，保持纯正木质与原字墨色 */
+  transform: scale(1.02);
+  filter: brightness(1.04);
+  /* 棋子本体不受杂白光遮蔽，仅在顶部边缘有清脆高光反光 */
   box-shadow:
+    0 calc(var(--u) * -2px) calc(var(--u) * 5px) rgba(255, 255, 255, 0.75),
     inset 0 calc(var(--u) * 2px) calc(var(--u) * 3px) rgba(255, 255, 255, 0.95),
     inset 0 calc(var(--u) * -2px) calc(var(--u) * 4px) rgba(109, 80, 40, 0.28),
     var(--disc-shadow);
-  transition: transform var(--dur-fast) var(--ease-spring), filter var(--dur-fast) var(--ease-out);
+  transition: transform var(--dur-fast) var(--ease-spring), filter var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
-/* 选中态投影：浮起使投影向右下方偏移更大、变深、边缘微羽化（精准对应图片中「炮」的投影） */
+/* 选中态浮空深投影：棋子抬升后，深色影子向右下方沉降、略微扩散，形成强烈的悬浮高度感 */
 .piece.is-selected::after {
-  transform: translate(calc(var(--u) * 7.5px), calc(var(--u) * 10px)) scale(1.08);
-  opacity: 0.68;
-  filter: blur(calc(var(--u) * 3.6px));
+  transform: translate(calc(var(--u) * 6px), calc(var(--u) * 11px)) scale(0.96);
+  opacity: 0.72;
+  filter: blur(calc(var(--u) * 2.8px));
   background: radial-gradient(
-    circle at 45% 45%,
-    rgba(28, 16, 6, 0.65) 0%,
-    rgba(35, 20, 8, 0.45) 50%,
-    rgba(45, 25, 10, 0.15) 75%,
+    ellipse at 50% 50%,
+    rgba(20, 10, 4, 0.75) 0%,
+    rgba(30, 16, 6, 0.5) 45%,
+    rgba(40, 22, 10, 0.18) 70%,
     transparent 100%
   );
   transition: transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out);
@@ -1695,17 +1696,33 @@ kbd {
 
 .target {
   position: absolute;
-  width: calc(var(--u) * 26px);
-  height: calc(var(--u) * 26px);
+  width: calc(var(--u) * 20px);
+  height: calc(var(--u) * 20px);
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: var(--cinnabar);
-  opacity: 0.6;
+  border: calc(var(--u) * 1.2px) solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 0 calc(var(--u) * 4px) rgba(255, 255, 255, 0.55),
+    inset 0 0 calc(var(--u) * 3px) rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  display: grid;
+  place-items: center;
   pointer-events: none;
   z-index: 15;
   animation: pop 240ms var(--ease-spring) both;
   transition: opacity var(--dur-fast) var(--ease-out),
     filter var(--dur-fast) var(--ease-out);
+}
+
+.target::after {
+  content: '';
+  width: calc(var(--u) * 8px);
+  height: calc(var(--u) * 8px);
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow:
+    0 0 calc(var(--u) * 4px) rgba(255, 255, 255, 0.95),
+    0 0 calc(var(--u) * 8px) rgba(255, 255, 255, 0.65);
 }
 
 /* 键盘走子：棋盘可聚焦，焦点环收在内沿（inset 光晕纪律，不外溢） */
@@ -1750,19 +1767,40 @@ kbd {
 }
 
 .target-capture {
-  width: calc(var(--u) * 62px);
-  height: calc(var(--u) * 62px);
+  width: calc(var(--u) * 72px);
+  height: calc(var(--u) * 72px);
   background: transparent;
-  box-shadow: inset 0 0 0 calc(var(--u) * 2.6px) var(--cinnabar);
-  opacity: 0.9;
+  border-radius: 50%;
+  border: calc(var(--u) * 2px) solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 0 calc(var(--u) * 12px) rgba(255, 255, 255, 0.85),
+    inset 0 0 calc(var(--u) * 10px) rgba(255, 255, 255, 0.45);
+  opacity: 0.92;
+  animation: targetCapturePulse 2s ease-in-out infinite alternate;
 }
 
-/* 拖着子掠过合法落点时，那个点亮一下 —— 不用松手就知道这儿能落。
-   故意用 filter 而不是 box-shadow/transform：pop 关键帧带 both 填充，
-   动画结束后仍会占住 transform，改它就是白改。 */
+.target-capture::after {
+  display: none;
+}
+
+@keyframes targetCapturePulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.96);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.03);
+    opacity: 1;
+    box-shadow:
+      0 0 calc(var(--u) * 16px) rgba(255, 255, 255, 0.95),
+      inset 0 0 calc(var(--u) * 12px) rgba(255, 255, 255, 0.55);
+  }
+}
+
+/* 拖着子掠过合法落点时，那个点亮一下 —— 不用松手就知道这儿能落 */
 .target.is-over {
   opacity: 1;
-  filter: drop-shadow(0 0 calc(var(--u) * 6px) var(--cinnabar));
+  filter: drop-shadow(0 0 calc(var(--u) * 8px) rgba(255, 255, 255, 1));
 }
 
 @keyframes pop {
@@ -1805,78 +1843,87 @@ kbd {
     0 0 calc(var(--u) * 14px) rgba(255, 255, 255, 0.7);
 }
 
-/* ---- 环绕棋子的三段朱红色半透弧形光圈（严格还原参考图） ---- */
+/* ---- 选中棋子背后的清透月牙高光圆环（精准对齐图一） ---- */
 
-.selected-arc-ring {
+.selected-crescent-ring {
   position: absolute;
   width: calc(var(--u) * 82px);
   height: calc(var(--u) * 82px);
+  transform: translate(-50%, calc(-50% - var(--u) * 6px));
+  display: grid;
+  place-items: center;
+  z-index: 22; /* 浮于接触影上方，紧紧贴合棋子四周 */
+  pointer-events: none;
+  animation: crescentFade 200ms var(--ease-out) both;
+}
+
+.crescent-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: crescentBreathe 2.8s ease-in-out infinite alternate;
+  transform-origin: 50% 50%;
+}
+
+@keyframes crescentBreathe {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.015);
+  }
+}
+
+@keyframes crescentFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, calc(-50% - var(--u) * 6px)) scale(1);
+  }
+}
+
+/* ---- 上一手落子终点：典雅微光取景落点框 ---- */
+
+.last-to {
+  width: calc(var(--u) * 72px);
+  height: calc(var(--u) * 72px);
+  position: absolute;
   transform: translate(-50%, -50%);
   display: grid;
   place-items: center;
-  z-index: 22; /* 浮于棋子本体(20)周围与接触影上方 */
-  pointer-events: none;
-  animation: fadeIn 180ms var(--ease-out) both;
-}
-
-.last-to {
-  width: calc(var(--u) * 82px);
-  height: calc(var(--u) * 82px);
-  display: grid;
-  place-items: center;
-  z-index: 22;
+  z-index: 18;
   pointer-events: none;
   animation: fadeIn 220ms var(--ease-out) both;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)),
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)),
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)),
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)),
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)),
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)),
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)),
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75));
+  background-repeat: no-repeat;
+  background-size:
+    calc(var(--u) * 10px) 1.6px, 1.6px calc(var(--u) * 10px),
+    calc(var(--u) * 10px) 1.6px, 1.6px calc(var(--u) * 10px),
+    calc(var(--u) * 10px) 1.6px, 1.6px calc(var(--u) * 10px),
+    calc(var(--u) * 10px) 1.6px, 1.6px calc(var(--u) * 10px);
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+  filter: drop-shadow(0 0 calc(var(--u) * 3px) rgba(255, 255, 255, 0.45));
 }
 
-.last-to-spinner {
-  width: 100%;
-  height: 100%;
-  animation: spinnerRotate 10s linear infinite;
-  transform-origin: 50% 50%;
-  pointer-events: none;
-}
-
-/* 参考图中围绕「士」的三段红色弧：半透亮朱红色、圆头、带柔和外发光 */
-.spinner-arcs {
-  fill: none;
-  stroke: rgba(235, 60, 50, 0.82);
-  stroke-width: 4.2;
-  stroke-linecap: round;
-  /* 周长 2*pi*43 ≈ 270.18，三段均分：每段长 56，间隙 34，(56+34)*3 = 270 */
-  stroke-dasharray: 56 34;
-  /* 柔和虚化与朱红荧光（参考图中的半透扩散红光） */
-  filter: blur(calc(var(--u) * 0.6px))
-    drop-shadow(0 0 calc(var(--u) * 3px) rgba(255, 65, 50, 0.85))
-    drop-shadow(0 0 calc(var(--u) * 8px) rgba(220, 45, 35, 0.55));
-  opacity: 0.90;
-}
-
-/* 选中棋子时的弧段略微加亮加厚 */
-.spinner-arcs.selected-arcs {
-  stroke: rgba(245, 65, 55, 0.88);
-  stroke-width: 4.6;
-  filter: blur(calc(var(--u) * 0.5px))
-    drop-shadow(0 0 calc(var(--u) * 3.5px) rgba(255, 75, 60, 0.95))
-    drop-shadow(0 0 calc(var(--u) * 9px) rgba(220, 45, 35, 0.65));
-  opacity: 0.95;
-}
-
-.last-to-capture .spinner-arcs {
-  stroke: rgba(255, 45, 35, 0.95);
-  filter: blur(calc(var(--u) * 0.6px))
-    drop-shadow(0 0 calc(var(--u) * 4px) rgba(255, 50, 40, 1))
-    drop-shadow(0 0 calc(var(--u) * 11px) rgba(200, 30, 20, 0.75));
-  opacity: 0.98;
-}
-
-@keyframes spinnerRotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.last-to-capture {
+  filter: drop-shadow(0 0 calc(var(--u) * 5px) rgba(255, 80, 60, 0.75));
 }
 
 .pv-trace {

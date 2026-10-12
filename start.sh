@@ -83,7 +83,7 @@ try:
     url = "http://127.0.0.1:%d/api/health" % port
     with urllib.request.urlopen(url, timeout=2) as resp:
         data = json.loads(resp.read().decode("utf-8", "replace"))
-    if isinstance(data, dict) and data.get("engine") == "elephantfish":
+    if isinstance(data, dict) and (data.get("engine") in ("elephantfish", "pikafish") or "pikafish_available" in data):
         print("ours")
         raise SystemExit(0)
 except Exception:
@@ -138,9 +138,16 @@ if [ "$IDENT" = "other" ]; then
     echo
 fi
 
-# ---------- 前端要先构建一次，否则只能看到一句「请先构建」的临时页 ----------
+# ---------- 前端构建检查（未构建或源码有更新时自动构建） ----------
+NEED_BUILD="no"
 if [ ! -f "frontend/dist/index.html" ]; then
-    echo "[1/3] 首次运行，正在构建前端界面 ..."
+    NEED_BUILD="yes"
+else
+    NEED_BUILD="$("$PY" tools/run_server.py check-build 2>/dev/null || echo no)"
+fi
+
+if [ "$NEED_BUILD" = "yes" ]; then
+    echo "[1/3] 检测到前端源码更新或首次运行，正在构建前端界面 ..."
     if ! command -v npm >/dev/null 2>&1; then
         echo "[WARN] 没找到 npm，跳过构建。页面会提示如何手动构建。"
         echo
@@ -160,7 +167,7 @@ if [ ! -f "frontend/dist/index.html" ]; then
         )
     fi
 else
-    echo "[1/3] 前端已构建，跳过。"
+    echo "[1/3] 前端已是最新构建，跳过。"
 fi
 
 echo "[2/3] 启动服务，端口 $PORT ..."
