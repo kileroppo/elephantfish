@@ -99,6 +99,7 @@ export interface SearchProgress {
 
 export interface SearchResult {
   status: string
+  engine?: string
   move?: string
   chinese?: string
   depth?: number
@@ -126,6 +127,15 @@ export interface Settings {
   max_depth: number
   think_ms: number
   auto_reply: boolean
+  engine_type?: 'pikafish' | 'builtin'
+  threads?: number
+  hash_mb?: number
+}
+
+export interface EngineInfo {
+  active: 'pikafish' | 'builtin'
+  pikafish_available: boolean
+  pikafish_path?: string
 }
 
 export interface OpponentConfig {
@@ -177,6 +187,7 @@ export interface AppState {
   game: GameSnapshot
   task: SearchTask | null
   settings: Settings
+  engine_info?: EngineInfo
   opponent: OpponentConfig
   stats: EngineStats
   game_stats: GameStats

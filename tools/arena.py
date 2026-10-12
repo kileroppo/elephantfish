@@ -43,6 +43,7 @@ def play(red, black, start_fen=None, max_ply=200):
         board, red_to_move, _, _ = notation.from_fen(start_fen)
     pos = core.make_position(board, red_to_move)
     history = [pos.board]
+    checks = []
     seen = {pos.board: 1}
 
     for ply in range(max_ply):
@@ -57,10 +58,29 @@ def play(red, black, start_fen=None, max_ply=200):
 
         pos = pos.move(move)
         history.append(pos.board)
+        checks.append(core.fast_is_check(pos))
         red_to_move = not red_to_move
 
         seen[pos.board] = seen.get(pos.board, 0) + 1
         if seen[pos.board] >= 3:
+            # 依中国象棋竞赛规则判定单方长将：
+            # 找出最近一个循环周期内双方各自行棋的将军情况
+            cur_key = pos.board
+            prev_indices = [idx for idx, b in enumerate(history) if b == cur_key]
+            if len(prev_indices) >= 2:
+                start_i = prev_indices[-2]
+                end_i = prev_indices[-1]
+                cycle_checks = checks[start_i:end_i]
+                red_checks = [cycle_checks[k - start_i] for k in range(start_i, end_i) if k % 2 == 0]
+                black_checks = [cycle_checks[k - start_i] for k in range(start_i, end_i) if k % 2 == 1]
+                red_perp = bool(red_checks and all(red_checks))
+                black_perp = bool(black_checks and all(black_checks))
+
+                if red_perp and not black_perp:
+                    return 'black', ply, f'{red[0]} 单方长将犯规判负，{black[0]} 胜'
+                elif black_perp and not red_perp:
+                    return 'red', ply, f'{black[0]} 单方长将犯规判负，{red[0]} 胜'
+
             return 'draw', ply, '三次重复局面'
 
     return 'draw', max_ply, '到达步数上限'
@@ -70,8 +90,9 @@ def make_new(depth):
     searcher = Searcher()
 
     def think(pos, history):
+        root_is_red = (len(history) % 2 == 1)
         move, _ = searcher.think(pos, max_depth=depth, time_limit=None,
-                                 game_history=history)
+                                 game_history=history, root_is_red=root_is_red)
         return move
     return think
 
@@ -101,13 +122,12 @@ def main():
     rng = random.Random(args.seed)
     books = [] if args.fresh else load_openings(args.openings)
 
-    new_fn = make_new(args.depth)
-    old_fn = make_old(args.depth)
-
     tally = {'new': 0, 'old': 0, 'draw': 0}
     t0 = time.time()
 
     for g in range(args.games):
+        new_fn = make_new(args.depth)
+        old_fn = make_old(args.depth)
         if g % 2 == 0:
             red, black = ('new', new_fn), ('old', old_fn)
         else:

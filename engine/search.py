@@ -25,7 +25,9 @@ import time
 
 from .core import (
     MATE_LOWER, MATE_UPPER, INF, flip_move, opponent_can_take_king,
+    fast_is_check, evaluate,
 )
+from .opening import GLOBAL_BOOK
 
 EXACT, LOWER, UPPER = 0, 1, 2
 
@@ -78,6 +80,15 @@ class Searcher:
         self.path = []
         self.path_set = set()
 
+    def reset(self):
+        """完全重置搜索引擎内部状态（新对局开局使用）。"""
+        self.tt.clear()
+        self.gen = 0
+        self.killers = [[None, None] for _ in range(MAX_PLY)]
+        self.history = [0] * (256 * 256)
+        self.nodes = 0
+        self.stop = False
+
     # ------------------------------------------------------------------ #
     # 时间与中断
     # ------------------------------------------------------------------ #
@@ -129,11 +140,30 @@ class Searcher:
         if pos.score <= -MATE_LOWER:
             return -MATE_UPPER + ply
 
+        in_check = fast_is_check(pos)
+        if in_check:
+            # 象棋规则：若当前局面处于被将军状态，必须立即应将，绝无 stand-pat
+            # 若无任何合法应将着法，判定为绝杀死棋
+            has_legal = False
+            for m in pos.gen_moves():
+                if not opponent_can_take_king(pos.move(m)):
+                    has_legal = True
+                    break
+            if not has_legal:
+                return -MATE_UPPER + ply
+
         key = pos.board
         if key in self.path_set:
+            if in_check:
+                return MATE_UPPER - ply
+            s = evaluate(pos)
+            if s > 30:
+                return -min(260, max(50, int(s * 0.7)))
+            if s < -60:
+                return min(200, int(-s * 0.5))
             return 0
 
-        stand = pos.score
+        stand = evaluate(pos)
         if stand >= beta:
             return stand
         if stand > alpha:
@@ -142,7 +172,6 @@ class Searcher:
         self.path.append(key)
         self.path_set.add(key)
         try:
-            board = pos.board
             value = pos.value
             caps = []
             for m in pos.gen_moves():
@@ -155,7 +184,10 @@ class Searcher:
 
             best = stand
             for _, m in caps:
-                score = -self._qsearch(pos.move(m), -beta, -alpha, ply + 1)
+                nxt = pos.move(m)
+                if opponent_can_take_king(nxt):
+                    continue
+                score = -self._qsearch(nxt, -beta, -alpha, ply + 1)
                 if self.stop:
                     return best
                 if score > best:
@@ -173,7 +205,7 @@ class Searcher:
     # 主搜索
     # ------------------------------------------------------------------ #
 
-    def _negamax(self, pos, depth, alpha, beta, ply):
+    def _negamax(self, pos, depth, alpha, beta, ply, ext=0):
         self.nodes += 1
         if not (self.nodes & 1023):
             self._tick()
@@ -184,8 +216,17 @@ class Searcher:
             return -MATE_UPPER + ply
 
         key = pos.board
-        # 搜索路径上出现重复局面 -> 判和，免得引擎在均势里空转
         if key in self.path_set:
+            # 1. 象棋国标裁决：若重复局面伴随将军，造成重复的上一手行棋方（对手）单方长将犯规判负
+            # 从当前被将方视角判定为胜（+MATE）；对手视角则反转为必败（-MATE），彻底根除自身长将
+            if fast_is_check(pos):
+                return MATE_UPPER - ply
+            # 2. 动态自适应厌和（Contempt）：优势方视和棋为大劣，主动变招撕破防线拒绝和棋
+            s = evaluate(pos)
+            if s > 30:
+                return -min(260, max(50, int(s * 0.7)))
+            if s < -60:
+                return min(200, int(-s * 0.5))
             return 0
 
         tt_move = None
@@ -207,6 +248,12 @@ class Searcher:
                 # 但那一步棋依然是最好的排序提示，白送的信息不用白不用。
                 tt_move = entry[4]
 
+        in_check = fast_is_check(pos)
+        # 将军延伸（Check Extension）：单分支最多延伸 1 层，防止连续将军导致树爆炸
+        if in_check and ext < 1 and ply < MAX_PLY - 10:
+            depth += 1
+            ext += 1
+
         if depth <= 0:
             return self._qsearch(pos, alpha, beta, ply)
 
@@ -214,9 +261,9 @@ class Searcher:
         self.path_set.add(key)
         try:
             # ---- 空着裁剪：假设我白让一手对方都拿我没办法，那我更输不了 ----
-            # 用零窗口（-beta, -beta+1）验证，所以宽窗口下也安全。
-            if depth >= 3 and any(c in pos.board for c in 'RNC'):
-                val = -self._negamax(pos.nullmove(), depth - 3, -beta, -beta + 1, ply + 1)
+            # 用零窗口（-beta, -beta+1）验证，仅在未被将军时有效
+            if not in_check and depth >= 3 and any(c in pos.board for c in 'RNC'):
+                val = -self._negamax(pos.nullmove(), depth - 3, -beta, -beta + 1, ply + 1, ext)
                 if self.stop:
                     return alpha
                 if val >= beta:
@@ -230,7 +277,7 @@ class Searcher:
 
             # ---- 1) 先试置换表走法：命中就直接剪掉，省下整轮走法生成 ----
             if tt_move is not None:
-                score = -self._negamax(pos.move(tt_move), depth - 1, -beta, -alpha, ply + 1)
+                score = -self._negamax(pos.move(tt_move), depth - 1, -beta, -alpha, ply + 1, ext)
                 if self.stop:
                     return alpha
                 first = False
@@ -251,26 +298,26 @@ class Searcher:
                     nd = depth - 1
 
                     if first:
-                        score = -self._negamax(pos.move(m), nd, -beta, -alpha, ply + 1)
+                        score = -self._negamax(pos.move(m), nd, -beta, -alpha, ply + 1, ext)
                         first = False
                     else:
-                        # 无效着法裁剪：深度只剩一层，且当前静态分已经远低于
-                        # 窗口下界，那么任何不吃子、不将军的走法都救不回来。
-                        if depth == 1 and not capture and pos.score + 180 <= alpha \
-                                and alpha > -MATE_LOWER:
-                            continue
+                        # 无效着法裁剪：未被将军、深度只剩一层、非将军且静态分远落后于下界
+                        if depth == 1 and not capture and not in_check:
+                            nxt_p = pos.move(m)
+                            if not fast_is_check(nxt_p) and evaluate(pos) + 180 <= alpha and alpha > -MATE_LOWER:
+                                continue
                         # PVS：零窗口试探
                         r = 0
-                        if not capture and depth >= 3 and idx >= 4:
+                        if not in_check and not capture and depth >= 3 and idx >= 4:
                             r = 1 + (idx >= 8) + (depth >= 6)
                             if r >= nd:
                                 r = max(0, nd - 1)
-                        score = -self._negamax(pos.move(m), nd - r, -alpha - 1, -alpha, ply + 1)
+                        score = -self._negamax(pos.move(m), nd - r, -alpha - 1, -alpha, ply + 1, ext)
                         # 削减之后还超出窗口，可能被误伤，老老实实重搜
                         if score > alpha and r:
-                            score = -self._negamax(pos.move(m), nd, -alpha - 1, -alpha, ply + 1)
+                            score = -self._negamax(pos.move(m), nd, -alpha - 1, -alpha, ply + 1, ext)
                         if alpha < score < beta:
-                            score = -self._negamax(pos.move(m), nd, -beta, -alpha, ply + 1)
+                            score = -self._negamax(pos.move(m), nd, -beta, -alpha, ply + 1, ext)
 
                     if self.stop:
                         return alpha
@@ -374,7 +421,8 @@ class Searcher:
     # ------------------------------------------------------------------ #
 
     def search(self, pos, max_depth=32, time_limit=None,
-               game_history=(), external_stop=None, root_is_red=True):
+               game_history=(), external_stop=None, root_is_red=True,
+               use_book=True):
         """迭代加深搜索，每完成一层 yield 一次快照。
 
         产出字段：
@@ -398,6 +446,11 @@ class Searcher:
         if len(self.tt) > TABLE_SIZE:
             self.tt.clear()
 
+        # 若为全新对局（棋谱历史为空或仅1步），自动清空杀手走法与历史启发，杜绝前序对局残留污染
+        if len(game_history) <= 1:
+            self.killers = [[None, None] for _ in range(MAX_PLY)]
+            self.history = [0] * (256 * 256)
+
         # 把真实对局走过的局面喂进路径集合，让重复检测同时覆盖棋谱
         seed = [b if isinstance(b, str) else b.board for b in game_history]
         self.path = list(seed)
@@ -414,6 +467,27 @@ class Searcher:
 
         value = pos.value
         moves.sort(key=value, reverse=True)
+
+        # 优先查询开局库
+        if use_book:
+            abs_board = pos.board if root_is_red else pos.rotate().board
+            abs_m, pv_line = GLOBAL_BOOK.get_book_move(abs_board, root_is_red)
+            if abs_m is not None:
+                engine_m = abs_m if root_is_red else flip_move(abs_m)
+                if engine_m in moves:
+                    elapsed = time.time() - self._start
+                    yield {
+                        'depth': 1,
+                        'move': engine_m,
+                        'score': 20,
+                        'mate': False,
+                        'nodes': 1,
+                        'time': max(0.001, elapsed),
+                        'nps': 1000,
+                        'pv': pv_line,
+                        'book': True,
+                    }
+                    return
 
         best_move = moves[0]
         best_score = -INF
@@ -475,10 +549,13 @@ class Searcher:
     # ------------------------------------------------------------------ #
 
     def think(self, pos, max_depth=8, time_limit=2.0, game_history=(),
-              root_is_red=True):
+              root_is_red=None, use_book=True):
         """一次性拿到最好的一步，返回 ``(move, info)``。"""
+        if root_is_red is None:
+            root_is_red = (len(game_history) % 2 == 1) if game_history else True
         last = None
         for info in self.search(pos, max_depth=max_depth, time_limit=time_limit,
-                                game_history=game_history, root_is_red=root_is_red):
+                                game_history=game_history, root_is_red=root_is_red,
+                                use_book=use_book):
             last = info
         return (last['move'] if last else None), (last or {})

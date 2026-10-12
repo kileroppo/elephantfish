@@ -59,7 +59,11 @@ class Game:
     def pieces(self):
         out = core.pieces_of(self.board)
         for p in out:
-            p['id'] = self.ids.get(p['index'], 0)
+            idx = p['index']
+            if idx not in self.ids:
+                self.ids[idx] = self._next_id
+                self._next_id += 1
+            p['id'] = self.ids[idx]
         return out
 
     # ------------------------------------------------------------------ #
@@ -223,6 +227,22 @@ class Game:
                 'reason': ('将死' if checking else '困毙') + f'，{self._cn(self.turn)}方负',
             }
         if self.repetition.get(self.board, 0) >= 3:
+            # 依中国象棋竞赛规则判定单方长将：
+            prev_indices = [idx for idx, b in enumerate(self.boards) if b == self.board]
+            if len(prev_indices) >= 2:
+                start_i = prev_indices[-2]
+                end_i = prev_indices[-1]
+                cycle_records = self.records[start_i:end_i]
+                red_checks = [r['check'] for r in cycle_records if r['side'] == RED]
+                black_checks = [r['check'] for r in cycle_records if r['side'] == BLACK]
+                red_perp = bool(red_checks and all(red_checks))
+                black_perp = bool(black_checks and all(black_checks))
+                if red_perp and not black_perp:
+                    return {'state': 'perpetual_check', 'winner': BLACK,
+                            'reason': '红方单方长将，判负'}
+                elif black_perp and not red_perp:
+                    return {'state': 'perpetual_check', 'winner': RED,
+                            'reason': '黑方单方长将，判负'}
             return {'state': 'draw_repetition', 'winner': None, 'reason': '三次重复局面，判和'}
         if self.halfmove >= 120:
             return {'state': 'draw_moves', 'winner': None, 'reason': '连续 60 回合无吃子，判和'}

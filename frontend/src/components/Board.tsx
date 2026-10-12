@@ -5,9 +5,8 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from 'react'
-import type { GameSnapshot, PieceInfo } from '../types'
+import type { GameSnapshot, Side } from '../types'
 import {
   BOARD_H,
   BOARD_W,
@@ -23,28 +22,6 @@ import {
   palaceDiagonals,
   parseSquare,
 } from '../lib/board'
-
-interface Ghost {
-  id: string
-  glyph: string
-  side: 'red' | 'black'
-  x: number
-  y: number
-  /** 吃子方向的单位向量（棋盘像素系），决定被吃的子往哪边飞 */
-  kx: number
-  ky: number
-}
-
-/** 一子落定的那一下。落子本身有滑动，但滑动只是「移动」；
- *  真正让人感觉到「这一步走完了」的是落点散开的那圈涟漪。
- *  吃子时涟漪升级为「冲击环 + 白闪 + 碎屑」三段。 */
-interface Impact {
-  id: string
-  x: number
-  y: number
-  by: string
-  capture: boolean
-}
 
 /** 正在被拖拽的一颗子。bx/by 是棋盘坐标系里的像素位置，
  *  渲染时换算成百分比，所以不需要在渲染期读 getBoundingClientRect。 */
@@ -81,15 +58,9 @@ export function Board({
   thinking,
   pv = [],
 }: BoardProps) {
-  const prevPieces = useRef<PieceInfo[]>([])
-  const [ghosts, setGhosts] = useState<Ghost[]>([])
-  const ghostSeq = useRef(0)
   const surfaceRef = useRef<HTMLDivElement>(null)
-  const [impact, setImpact] = useState<Impact | null>(null)
-  const lastPly = useRef(game.ply)
 
   // 拖拽：从「按下一颗子」到「松手」之间的全部状态都在这里。
-  // 用 ref 记指针起点（高频、不需要重渲染），用 state 记棋盘坐标（要重渲染）。
   const [drag, setDrag] = useState<DragState | null>(null)
   const dragRef = useRef<{
     from: string | null
@@ -99,9 +70,20 @@ export function Board({
     moved: boolean
   } | null>(null)
 
-  // 棋盘上的所有尺寸（棋子直径、字号、标记宽度）都锚定在「棋盘宽度」上。
-  // 用 ResizeObserver 把比例写进 --u，CSS 里一律 calc(var(--u) * Npx)。
-  // 不用 em/百分比，是因为字号一旦跟着父级 font-size 走，换个体就全乱。
+  // 本地预判位移：落子瞬间立即启动位移，不等网络往返，杜绝子回弹与闪烁
+  const [pendingMove, setPendingMove] = useState<{ from: string; to: string } | null>(null)
+
+  useEffect(() => {
+    setPendingMove(null)
+  }, [game.ply, game.pieces, game.turn])
+
+  useEffect(() => {
+    if (!pendingMove) return
+    const timer = window.setTimeout(() => setPendingMove(null), 800)
+    return () => window.clearTimeout(timer)
+  }, [pendingMove])
+
+  // 棋盘比例锚定
   useLayoutEffect(() => {
     const el = surfaceRef.current
     if (!el) return
@@ -115,56 +97,13 @@ export function Board({
     return () => ro.disconnect()
   }, [])
 
-  // 被吃掉的棋子已经从数据里消失了，要留住它做一段善后动画
-  useEffect(() => {
-    const prev = prevPieces.current
-    const nowIds = new Set(game.pieces.map((p) => p.id))
-    const last = game.last_move
-    if (last?.captured && prev.length) {
-      const dead = prev.filter((p) => !nowIds.has(p.id) && p.square === last.to)
-      if (dead.length) {
-        // 方向 = 吃子方来向 → 被吃方去向。被吃的子沿这个方向被甩出去，
-        // 而不是原地打转 —— 一眼看得出「被谁打飞」。
-        const fa = toPixel(parseSquare(last.from).file, parseSquare(last.from).rank, flipped)
-        const ta = toPixel(parseSquare(last.to).file, parseSquare(last.to).rank, flipped)
-        const rad = Math.atan2(ta.y - fa.y, ta.x - fa.x)
-        const kx = Math.cos(rad) * 1.5
-        const ky = Math.sin(rad) * 1.5
-        const fresh: Ghost[] = dead.map((p) => {
-          ghostSeq.current += 1
-          const { x, y } = toPercent(p.file, p.rank, flipped)
-          return { id: `g${ghostSeq.current}`, glyph: p.glyph, side: p.side, x, y, kx, ky }
-        })
-        setGhosts((g) => [...g, ...fresh])
-        window.setTimeout(() => {
-          setGhosts((g) => g.filter((item) => !fresh.some((f) => f.id === item.id)))
-        }, 700)
-      }
-    }
-    prevPieces.current = game.pieces
-  }, [game.pieces, game.last_move, flipped])
-
-  // 落点涟漪。只在「真的多走了一步」时放 —— 悔棋（ply 变小）、
-  // 载入局面（一步跳过好几手）、只是翻转视角，都不该有落子的一下。
-  useEffect(() => {
-    const prev = lastPly.current
-    lastPly.current = game.ply
-    const last = game.last_move
-    if (!last || game.ply !== prev + 1) return
-    const { file, rank } = parseSquare(last.to)
-    const { x, y } = toPercent(file, rank, flipped)
-    setImpact({ id: `${game.ply}-${last.to}`, x, y, by: last.by, capture: !!last.captured })
-    const timer = window.setTimeout(() => setImpact(null), 760)
-    return () => window.clearTimeout(timer)
-  }, [game.ply, game.last_move, flipped])
-
   const kingInCheck = useMemo(() => {
     if (!game.in_check) return null
     const king = game.pieces.find((p) => p.char.toLowerCase() === 'k' && p.side === game.turn)
     return king ? king.square : null
   }, [game.in_check, game.pieces, game.turn])
 
-  // 胜方的王：终局时亮起一圈朱砂余光（镜头 a 的第 2 步）
+  // 胜方的王：终局时亮起一圈朱砂余光
   const victorKing = useMemo(() => {
     if (game.status.state === 'playing' || !game.status.winner) return null
     const king = game.pieces.find(
@@ -173,32 +112,55 @@ export function Board({
     return king ? king.square : null
   }, [game.status.state, game.status.winner, game.pieces])
 
-  // 将军全盘响应：in_check 从 false → true 的那一下，四角暗角加深再退回，
-  // 让「将军」是盘面的事件，不只是被将的王自己在报警。
-  const [checkPulse, setCheckPulse] = useState<string | null>(null)
-  const prevInCheck = useRef(false)
-  useEffect(() => {
-    const was = prevInCheck.current
-    prevInCheck.current = game.in_check
-    if (!game.in_check || was) return
-    setCheckPulse(`c${game.ply}`)
-    const timer = window.setTimeout(() => setCheckPulse(null), 900)
-    return () => window.clearTimeout(timer)
-  }, [game.in_check, game.ply])
+  // 吃子物理动量反应：记录被吃掉的棋子残影
+  const [capturedGhost, setCapturedGhost] = useState<{
+    id: string
+    square: string
+    glyph: string
+    side: Side
+    kx: number
+    ky: number
+    kr: number
+  } | null>(null)
 
-  // 开局铺盘：只在「新的一局、一手未走」时放一次。
-  // 棋子按与河界的距离错峰落下，中线最远、底线最近。
-  const [intro, setIntro] = useState(false)
-  const wasStart = useRef(false)
   useEffect(() => {
-    const atStart = !!game.is_start && game.ply === 0
-    const fresh = atStart && !wasStart.current
-    wasStart.current = atStart
-    if (!fresh) return
-    setIntro(true)
-    const timer = window.setTimeout(() => setIntro(false), 1500)
+    if (!game.last_move || !game.last_move.captured) {
+      return
+    }
+    const { from, to } = game.last_move
+    const fromP = parseSquare(from)
+    const toP = parseSquare(to)
+    const df = toP.file - fromP.file
+    const dr = toP.rank - fromP.rank
+    const dist = Math.hypot(df, dr) || 1
+    // 屏幕坐标系：df 向右为正，dr 在非翻转下 rank 增加（向上）即 Y 变小（向上）
+    const screenKx = df / dist
+    const screenKy = (flipped ? dr : -dr) / dist
+    const kr = (Math.random() > 0.5 ? 1 : -1) * (3 + Math.random() * 4)
+
+    // 找到被吃掉的棋子 glyph 和 side
+    const lastRec = game.records[game.ply - 1]
+    const glyph = lastRec?.captured_glyph || game.last_move.captured || '子'
+    const moverPiece = game.pieces.find((p) => p.square === to)
+    const moverSide = moverPiece ? moverPiece.side : (game.turn === 'red' ? 'black' : 'red')
+    const victimSide: Side = moverSide === 'red' ? 'black' : 'red'
+
+    const ghostId = `ghost-${game.ply}-${to}`
+    setCapturedGhost({
+      id: ghostId,
+      square: to,
+      glyph,
+      side: victimSide,
+      kx: screenKx,
+      ky: screenKy,
+      kr,
+    })
+
+    const timer = window.setTimeout(() => {
+      setCapturedGhost((curr) => (curr?.id === ghostId ? null : curr))
+    }, 240)
     return () => window.clearTimeout(timer)
-  }, [game.is_start, game.ply])
+  }, [game.ply, game.last_move, flipped, game.pieces, game.records, game.turn])
 
   const pvSquares = useMemo(() => {
     const out: { from: string; to: string }[] = []
@@ -289,17 +251,25 @@ export function Board({
   const endPointer = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = dragRef.current
     dragRef.current = null
+    const wasDrag = d?.moved && d?.from
+    const fromSq = d?.from
     setDrag(null)
     if (!d) return
     if (e.currentTarget.hasPointerCapture(d.id)) e.currentTarget.releasePointerCapture(d.id)
     const sq = squareAtPoint(e.clientX, e.clientY)
-    if (d.moved && d.from) {
-      // 拖动结束：落点合法才落子，非法就当没发生过 —— 子一直留在原位，
-      // 松手时跟随的那颗消失，看起来就是自然弹回。
-      if (sq && sq !== d.from) onDragDrop(d.from, sq)
+    if (wasDrag && fromSq) {
+      if (sq && sq !== fromSq && targets.includes(sq)) {
+        setPendingMove({ from: fromSq, to: sq })
+        onDragDrop(fromSq, sq)
+      }
       return
     }
-    if (sq) onSquareClick(sq)
+    if (sq) {
+      if (selected && selected !== sq && targets.includes(sq)) {
+        setPendingMove({ from: selected, to: sq })
+      }
+      onSquareClick(sq)
+    }
   }
 
   const cancelPointer = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -312,7 +282,6 @@ export function Board({
 
   /** 拖拽时指针底下的那一格，用来把落点标记点亮 */
   const dragSquare = drag ? squareFromBoard(drag.bx, drag.by) : null
-  const dragPiece = drag ? game.pieces.find((p) => p.square === drag.from) ?? null : null
 
   // ---- 键盘：方向键移光标、回车选中/落子、Esc 取消 ---------------------- //
   //
@@ -360,6 +329,9 @@ export function Board({
         const sq = cursor ?? initialCursor()
         setCursor(sq)
         setKbdOn(true)
+        if (selected && selected !== sq && targets.includes(sq)) {
+          setPendingMove({ from: selected, to: sq })
+        }
         onSquareClick(sq) // 上层自己判断这是选中还是落子
         break
       }
@@ -372,7 +344,7 @@ export function Board({
   return (
     <div className={`board ${thinking ? 'is-thinking' : ''}`}>
       <div
-        className={`board-surface ${drag ? 'is-dragging' : ''} ${intro ? 'board-intro' : ''}`}
+        className={`board-surface ${drag ? 'is-dragging' : ''}`}
         ref={surfaceRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -385,9 +357,6 @@ export function Board({
         aria-label="棋盘。方向键移动光标，回车选中或落子，Esc 取消选中。"
       >
         <BoardArtwork />
-
-        {/* 将军全盘暗角脉冲 */}
-        {checkPulse && <span key={checkPulse} className="check-pulse" />}
 
         {/* 主变预览：引擎盘算的下一步，淡淡的，不抢戏 */}
         {pvSquares.map((step, i) => {
@@ -442,10 +411,61 @@ export function Board({
           />
         )}
 
-        {/* 上一步的起终点 */}
+        {/* 移动轨迹（墨痕）：棋子走过后的渐隐笔锋，700ms 淡没 */}
+        {game.last_move && (() => {
+          const fromP = parseSquare(game.last_move.from)
+          const toP = parseSquare(game.last_move.to)
+          const a = toPercent(fromP.file, fromP.rank, flipped)
+          const b = toPercent(toP.file, toP.rank, flipped)
+          const dx = ((b.x - a.x) / 100) * BOARD_W
+          const dy = ((b.y - a.y) / 100) * BOARD_H
+          const len = Math.hypot(dx, dy)
+          const angle = Math.atan2(dy, dx)
+          // 刚走完那步的棋子颜色（turn 已经翻过了，所以反过来取）
+          const moverSide = game.turn === 'red' ? 'black' : 'red'
+          return (
+            <div
+              key={`trail-${game.ply}`}
+              className={`move-trail move-trail-${moverSide}`}
+              style={{
+                left: `${a.x}%`,
+                top: `${a.y}%`,
+                width: `${len}px`,
+                transform: `rotate(${angle}rad)`,
+              }}
+              aria-hidden="true"
+            />
+          )
+        })()}
+
+        {/* 选中棋子周围的三段红色旋转弧环（参考图风格） */}
+        {selected && (() => {
+          const { file, rank } = parseSquare(selected)
+          const { x, y } = toPercent(file, rank, flipped)
+          return (
+            <span
+              key={`selected-arc-${selected}`}
+              className="selected-arc-ring"
+              style={{
+                left: `${x}%`,
+                top: `${y}%`,
+              }}
+              aria-hidden="true"
+            >
+              <svg className="last-to-spinner" viewBox="0 0 100 100" aria-hidden="true">
+                <circle className="spinner-arcs selected-arcs" cx="50" cy="50" r="43" />
+              </svg>
+            </span>
+          )
+        })()}
+
+        {/* 上一步的起终点：
+            起点：柔光白圈点（指示从何处起步）
+            终点：三段围绕棋子的朱红色半透弧环 */}
         {game.last_move && (
           <>
             <span
+              key={`from-${game.ply}-${game.last_move.from}`}
               className="last-marker last-from"
               style={{
                 left: `${toPercent(parseSquare(game.last_move.from).file, parseSquare(game.last_move.from).rank, flipped).x}%`,
@@ -453,6 +473,7 @@ export function Board({
               }}
             />
             <span
+              key={`to-${game.ply}-${game.last_move.to}`}
               className={`last-marker last-to last-to-${game.last_move.by}${
                 game.last_move.captured ? ' last-to-capture' : ''
               }`}
@@ -460,77 +481,55 @@ export function Board({
                 left: `${toPercent(parseSquare(game.last_move.to).file, parseSquare(game.last_move.to).rank, flipped).x}%`,
                 top: `${toPercent(parseSquare(game.last_move.to).file, parseSquare(game.last_move.to).rank, flipped).y}%`,
               }}
-            />
-          </>
-        )}
-
-        {/* 落点涟漪：对方的棋落下一圈墨，我方的棋落下一圈朱砂。
-            吃子时追加三段：冲击环、白闪、木屑。 */}
-        {impact && (
-          <>
-            <span
-              key={impact.id}
-              className={`land-ripple land-${impact.by}`}
-              style={{ left: `${impact.x}%`, top: `${impact.y}%` }}
-            />
-            {impact.capture && (
-              <>
-                <span
-                  className="capture-flash"
-                  style={{ left: `${impact.x}%`, top: `${impact.y}%` }}
-                />
-                <span
-                  className="shock-ring"
-                  style={{ left: `${impact.x}%`, top: `${impact.y}%` }}
-                />
-                <span
-                  className="debris"
-                  style={{ left: `${impact.x}%`, top: `${impact.y}%` }}
-                >
-                  {Array.from({ length: 8 }, (_, i) => (
-                    <i key={i} style={{ '--i': i } as CSSProperties} />
-                  ))}
-                </span>
-              </>
-            )}
-          </>
-        )}
-
-        {/* 被吃掉的棋子：沿吃子方向甩出、旋转、缩小、淡出 */}
-        {ghosts.map((g) => (
-          <div
-            key={g.id}
-            className={`piece ghost ${g.side}`}
-            style={
-              {
-                left: `${g.x}%`,
-                top: `${g.y}%`,
-                '--kx': g.kx,
-                '--ky': g.ky,
-              } as CSSProperties
-            }
-          >
-            <span className="piece-face">
-              <span className="piece-glyph">{g.glyph}</span>
+            >
+              <svg className="last-to-spinner" viewBox="0 0 100 100" aria-hidden="true">
+                <circle className="spinner-arcs" cx="50" cy="50" r="43" />
+              </svg>
             </span>
-          </div>
-        ))}
+          </>
+        )}
 
-        {/* 棋子 */}
+        {/* 被吃棋子的物理受力击退滑移 */}
+        {capturedGhost && (() => {
+          const { file, rank } = parseSquare(capturedGhost.square)
+          const { x, y } = toPercent(file, rank, flipped)
+          return (
+            <div
+              key={capturedGhost.id}
+              className={`piece ${capturedGhost.side} piece-ghost-knockback`}
+              style={{
+                left: `${x}%`,
+                top: `${y}%`,
+                ['--kx' as any]: capturedGhost.kx,
+                ['--ky' as any]: capturedGhost.ky,
+                ['--kr' as any]: `${capturedGhost.kr}deg`,
+              }}
+              aria-hidden="true"
+            >
+              <span className="piece-face">
+                <span className="piece-glyph">{capturedGhost.glyph}</span>
+              </span>
+            </div>
+          )
+        })()}
+        {/* 棋子：纯净位移，其它棋子保持绝对静止 */}
         {game.pieces.map((p) => {
-          // 位置写成 --px/--py（棋盘像素，720×800 坐标系），CSS 乘 --u 换算。
-          // 这样位移走合成层 transform 插值，不再每帧 layout。
-          const { x, y } = toPixel(p.file, p.rank, flipped)
+          // 被吃掉的子立即隐藏（被预判吃掉或被服务端吃掉）
+          if (pendingMove && p.square === pendingMove.to && p.side !== game.turn) {
+            return null
+          }
+
+          const isDragging = drag?.from === p.square
+          const effectiveSquare = pendingMove && p.square === pendingMove.from ? pendingMove.to : p.square
+          const { file, rank } = parseSquare(effectiveSquare)
+          const { x, y } = toPercent(file, rank, flipped)
+
+          const posX = isDragging && drag ? (drag.bx / BOARD_W) * 100 : x
+          const posY = isDragging && drag ? (drag.by / BOARD_H) * 100 : y
+
           const canGrab = !thinking && game.status.state === 'playing' && p.side === game.turn
-          // 铺盘入场：离河界越远越晚落下，同排加一点确定性抖动，不像机器盖章
-          const introDelay = intro
-            ? Math.abs(p.rank - 4.5) * 70 + ((p.file * 37 + p.rank * 11) % 40)
-            : 0
-          // 极小随机旋转（±2°，由稳定 id 决定）：一排棋子不再像盖章
-          const idStr = String(p.id)
-          let hash = 0
-          for (let i = 0; i < idStr.length; i++) hash = (hash * 31 + idStr.charCodeAt(i)) | 0
-          const tilt = ((((hash % 41) + 41) % 41) - 20) / 10
+          const isLanding = game.last_move && game.last_move.to === effectiveSquare && !isDragging
+
           return (
             <div
               key={p.id}
@@ -540,43 +539,24 @@ export function Board({
                 selected === p.square ? 'is-selected' : '',
                 kingInCheck === p.square ? 'is-check' : '',
                 victorKing === p.square ? 'is-victor' : '',
-                game.last_move?.to === p.square ? 'is-last' : '',
-                drag?.from === p.square ? 'is-lifted' : '',
+                isDragging ? 'dragging' : '',
                 canGrab ? 'is-grabbable' : '',
+                isLanding ? 'is-landing' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
-              style={
-                {
-                  '--px': `${x}px`,
-                  '--py': `${y}px`,
-                  '--intro-delay': `${introDelay}ms`,
-                  '--tilt': `${tilt}deg`,
-                } as CSSProperties
-              }
-              aria-label={`${p.side === 'red' ? '红' : '黑'}${p.glyph}于 ${p.square}`}
+              style={{
+                left: `${posX}%`,
+                top: `${posY}%`,
+              }}
+              aria-label={`${p.side === 'red' ? '红' : '黑'}${p.glyph}于 ${effectiveSquare}`}
             >
-              <span className="piece-face">
+              <span className="piece-face" key={`face-${p.id}-${effectiveSquare}`}>
                 <span className="piece-glyph">{p.glyph}</span>
               </span>
             </div>
           )
         })}
-
-        {/* 拖动中的那颗子：跟着指针走，原位留一道淡影 */}
-        {drag && dragPiece && (
-          <div
-            className={`piece dragging ${dragPiece.side}`}
-            style={{
-              left: `${(drag.bx / BOARD_W) * 100}%`,
-              top: `${(drag.by / BOARD_H) * 100}%`,
-            }}
-          >
-            <span className="piece-face">
-              <span className="piece-glyph">{dragPiece.glyph}</span>
-            </span>
-          </div>
-        )}
 
         {/* 棋盘坐标：只在悬停时显形，平时不打扰 */}
         <div className="coord-layer">

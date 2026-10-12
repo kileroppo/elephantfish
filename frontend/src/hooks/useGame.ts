@@ -91,10 +91,13 @@ export function useGame(): UseGame {
       if (ply === lastPly.current + 1 && lastPly.current >= 0) {
         const rec = game.records[ply - 1]
         if (rec) {
-          if (rec.mate) play('win')
-          else if (rec.check) play('check')
-          else if (rec.captured) play('capture')
-          else play('move')
+          // 物理音画精确同步：位移耗时 240ms，在 t=210ms 触盘瞬间精准敲击发声
+          window.setTimeout(() => {
+            if (rec.mate) play('win')
+            else if (rec.check) play('check')
+            else if (rec.captured) play('capture')
+            else play('move')
+          }, 210)
           // 引擎的应手不再另外弹 toast —— 它本来就会显示在转述台②里，
           // 每次出招都在右下角弹一下会让人以为界面在抖。
           // 声音留着：那是「走了一步」的提示，不占视觉。

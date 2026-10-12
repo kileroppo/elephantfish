@@ -9,20 +9,24 @@
 
 from .core import (          # noqa: F401
     Position, initial, pst, piece, parse, render, flip, flip_move,
-    eval_abs, make_position, legal_moves, is_in_check, apply_move,
-    PIECE_CHAR, PIECE_NAME, SQUARE_NAME, index_of,
+    eval_abs, make_position, legal_moves, is_in_check, fast_is_check,
+    evaluate, apply_move, PIECE_CHAR, PIECE_NAME, SQUARE_NAME, index_of,
     board_grid, grid_to_board, pieces_of,
     MATE_LOWER, MATE_UPPER, INF, ROWS, COLS,
 )
 from .search import Searcher          # noqa: F401
+from .opening import GLOBAL_BOOK, OpeningBook  # noqa: F401
+from .pikafish_engine import PikafishEngine, find_pikafish_binary  # noqa: F401
 from . import notation                # noqa: F401
 from .game import Game, RED, BLACK    # noqa: F401
 
 __all__ = [
     'Position', 'initial', 'parse', 'render', 'flip', 'flip_move',
-    'eval_abs', 'make_position', 'legal_moves', 'is_in_check', 'apply_move',
-    'PIECE_CHAR', 'PIECE_NAME', 'SQUARE_NAME', 'index_of',
+    'eval_abs', 'make_position', 'legal_moves', 'is_in_check', 'fast_is_check',
+    'evaluate', 'apply_move', 'PIECE_CHAR', 'PIECE_NAME', 'SQUARE_NAME', 'index_of',
     'board_grid', 'grid_to_board', 'pieces_of',
     'MATE_LOWER', 'MATE_UPPER', 'INF', 'ROWS', 'COLS',
-    'Searcher', 'notation', 'Game', 'RED', 'BLACK',
+    'Searcher', 'PikafishEngine', 'find_pikafish_binary',
+    'GLOBAL_BOOK', 'OpeningBook', 'notation', 'Game', 'RED', 'BLACK',
 ]
+

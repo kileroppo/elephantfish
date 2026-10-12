@@ -9,7 +9,6 @@ import { HelpOverlay, Toasts } from './components/Overlays'
 import { useGame } from './hooks/useGame'
 import { isSoundEnabled, play, setSoundEnabled, unlockAudio } from './lib/sound'
 import { sideName } from './lib/format'
-import { api } from './api'
 
 const LS_FLIP = 'ef.flipped'
 const LS_SOUND = 'ef.sound'
@@ -22,14 +21,14 @@ export default function App() {
   const [flipped, setFlipped] = useState(() => localStorage.getItem(LS_FLIP) === '1')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem(LS_SOUND) !== '0')
   const [help, setHelp] = useState(false)
-  // 专注模式：左右两栏默认收起，只留棋盘和转述台。下棋时不需要看设置和分析，
-  // 想看的时候点边缘的耳片展开，选择会被记住。
+
+  // 默认专注模式：默认左右两栏全收起，只留棋盘和应手区
   const [railL, setRailL] = useState(() => localStorage.getItem(LS_RAIL_L) === '1')
   const [railR, setRailR] = useState(() => localStorage.getItem(LS_RAIL_R) === '1')
 
   const game = g.state?.game
 
-  // 引擎执黑时默认把黑方摆在下面 —— 那才是「我方」
+  // 引擎执黑时默认把黑方摆在下面 —— 归属我方视角
   useEffect(() => {
     if (!game) return
     const stored = localStorage.getItem(LS_FLIP)
@@ -53,7 +52,7 @@ export default function App() {
     localStorage.setItem(LS_RAIL_R, railR ? '1' : '0')
   }, [railR])
 
-  // 浏览器要求先有用户手势才允许出声
+  // 浏览器音频手势解锁
   useEffect(() => {
     const unlock = () => unlockAudio()
     window.addEventListener('pointerdown', unlock, { once: true })
@@ -64,19 +63,34 @@ export default function App() {
     }
   }, [])
 
-  // 终局提示音
+  // 终局弹窗延迟 3 秒弹出：给最后一手杀棋、吃子动画和盘面定格留出 3 秒充足时间看清走子
+  const [showOverModal, setShowOverModal] = useState(false)
+  const [dismissedOver, setDismissedOver] = useState(false)
+  const isPlaying = game?.status.state === 'playing'
+
   useEffect(() => {
-    if (!game || game.status.state === 'playing') return
-    if (game.status.winner === null) return
-    play(game.status.winner === game.engine_side ? 'win' : 'lose')
-  }, [game?.status.state, game?.status.winner, game?.engine_side]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!game) return
+    if (isPlaying) {
+      setShowOverModal(false)
+      setDismissedOver(false)
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowOverModal(true)
+      if (game.status.winner !== null) {
+        play(game.status.winner === game.engine_side ? 'win' : 'lose')
+      }
+    }, 3000)
+
+    return () => window.clearTimeout(timer)
+  }, [isPlaying, game?.status.winner, game?.engine_side])
 
   useEffect(() => {
     setSelected(null)
   }, [game?.ply, game?.engine_side, game?.status.state])
 
-  // 打开页面时如果正好轮到引擎、又没有在算的活，就替它起个头。
-  // 只做一次，避免和「自动应手」关开后的手动流程打架。
+  // 页面加载引擎执红先行时自动起手
   const autoStarted = useRef(false)
   useEffect(() => {
     if (!game || autoStarted.current) return
@@ -91,33 +105,26 @@ export default function App() {
     return game.legal_moves.filter((m) => m.from === selected).map((m) => m.to)
   }, [selected, game])
 
-  // 录入有两条路：在棋盘上直接摆子，或者在框里敲记谱。这两件事的节奏不一样 ——
-  // 敲键盘的人希望焦点一直留在框里；玩棋盘的人最烦的恰恰是每落一手焦点被抢走。
-  // 所以记一下最后一次用的是哪种，只对「键盘流」自动聚焦。
-  const [inputMode, setInputMode] = useState<'type' | 'board'>('type')
-
   const onBoardSelect = useCallback((square: string) => {
-    setInputMode('board')
     setSelected(square)
   }, [])
 
-  /** 拖拽落子：起点终点都由棋盘给，这里再校验一次合法性。 */
+  /** 拖拽落子 */
   const onBoardDrop = useCallback(
     (from: string, to: string) => {
       if (!game || g.thinking || game.status.state !== 'playing') return
       const mv = game.legal_moves.find((m) => m.from === from && m.to === to)
       if (!mv) return
-      setInputMode('board')
       setSelected(null)
       void g.submitMove(mv.iccs)
     },
     [game, g],
   )
 
+  /** 单击选子或落子 */
   const onSquareClick = useCallback(
     (square: string) => {
       if (!game || g.thinking || game.status.state !== 'playing') return
-      setInputMode('board')
       if (selected) {
         const mv = game.legal_moves.find((m) => m.from === selected && m.to === square)
         if (mv && mv.from !== mv.to) {
@@ -136,8 +143,7 @@ export default function App() {
     [game, g, selected],
   )
 
-  // ---- 键盘 ---------------------------------------------------------- //
-
+  // ---- 键盘快捷键 ----
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
@@ -151,11 +157,7 @@ export default function App() {
       }
       if (typing) return
 
-      if (e.key === '/' ) {
-        e.preventDefault()
-        document.querySelector<HTMLInputElement>('.relay-field input')?.focus()
-        return
-      }
+      // '/' 由 RelayConsole 自己接管：它能先把折叠的录入框展开再聚焦
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         void g.undoRound()
@@ -183,8 +185,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [g, game])
 
-  // ---- 首屏 ---------------------------------------------------------- //
-
   if (g.booting && !g.state) {
     return (
       <div className="boot">
@@ -200,7 +200,7 @@ export default function App() {
         <div className="boot-mark dim">象</div>
         <h2>连不上引擎服务</h2>
         <p className="hint">
-          先在项目根目录跑起后端：<code>python server/app.py</code>，然后刷新本页。
+          先在项目根目录运行：<code>python server/app.py</code>，然后刷新本页。
         </p>
         <button type="button" className="btn btn-primary" onClick={() => void g.refresh()}>
           重试
@@ -209,16 +209,25 @@ export default function App() {
     )
   }
 
-  const over = game.status.state !== 'playing'
+  const turnText = isPlaying
+    ? g.thinking
+      ? '引擎深度计算中…'
+      : `轮到${sideName(game.turn)}${game.turn === game.engine_side ? '（我方引擎）' : '（对方，请在盘面点选）'}`
+    : game.status.reason || '对局结束'
 
   return (
-    <div className="app">
+    <div className={`app${g.thinking ? ' is-thinking' : ''}`}>
       <TopBar
         game={game}
+        engineInfo={g.state?.engine_info}
         connected={g.connected}
-        thinking={g.thinking}
         flipped={flipped}
         soundOn={soundOn}
+        onToggleEngine={() => {
+          const current = g.state?.settings.engine_type ?? 'pikafish'
+          const next = current === 'pikafish' ? 'builtin' : 'pikafish'
+          void g.updateSettings({ engine_type: next })
+        }}
         onFlip={() => setFlipped((v) => !v)}
         onToggleSound={() => setSoundOn((v) => !v)}
         onHelp={() => setHelp(true)}
@@ -226,88 +235,72 @@ export default function App() {
       />
 
       <main className={`workspace${railL ? '' : ' no-left'}${railR ? '' : ' no-right'}`}>
-        {/* 收起的两栏各留一枚耳片，贴着屏幕边缘，不抢戏但摸得到 */}
-        {!railL && (
-          <button
-            type="button"
-            className="rail-tab rail-tab-left"
-            onClick={() => setRailL(true)}
-            aria-label="展开对局设置"
-          >
-            设置
-          </button>
-        )}
-        {railL && (
-          <button
-            type="button"
-            className="rail-tab rail-tab-left is-open"
-            onClick={() => setRailL(false)}
-            aria-label="收起对局设置"
-          >
-            收起
-          </button>
-        )}
-        {!railR && (
-          <button
-            type="button"
-            className="rail-tab rail-tab-right"
-            onClick={() => setRailR(true)}
-            aria-label="展开分析与棋谱"
-          >
-            分析
-          </button>
-        )}
-        {railR && (
-          <button
-            type="button"
-            className="rail-tab rail-tab-right is-open"
-            onClick={() => setRailR(false)}
-            aria-label="收起分析与棋谱"
-          >
-            收起
-          </button>
-        )}
+        {/* 侧栏把手：一边一个，跟着抽屉边缘走 —— 收起时贴屏幕边，展开时贴在栏外沿 */}
+        <button
+          type="button"
+          className={`rail-tab rail-tab-left${railL ? ' is-open' : ''}`}
+          onClick={() => setRailL((v) => !v)}
+          aria-label={railL ? '收起对局设置' : '展开对局设置'}
+          aria-expanded={railL}
+        >
+          <span className="rail-tab-chev" aria-hidden="true">
+            <svg viewBox="0 0 10 10" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M3.5 2 6.5 5 3.5 8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span className="rail-tab-text">{railL ? '收起' : '设置'}</span>
+        </button>
+        <button
+          type="button"
+          className={`rail-tab rail-tab-right${railR ? ' is-open' : ''}`}
+          onClick={() => setRailR((v) => !v)}
+          aria-label={railR ? '收起分析与棋谱' : '展开分析与棋谱'}
+          aria-expanded={railR}
+        >
+          <span className="rail-tab-chev" aria-hidden="true">
+            <svg viewBox="0 0 10 10" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M6.5 2 3.5 5 6.5 8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span className="rail-tab-text">{railR ? '收起' : '棋谱'}</span>
+        </button>
 
-        {railL && (
-          <ControlRail
-            state={g.state}
-            onNewGame={(side) => void g.newGame(side)}
-            onUndo={() => void g.undoRound()}
-            onResign={() => void g.resign()}
-            onSettings={(patch) => void g.updateSettings(patch)}
-            onLoadFen={(fen) => void g.loadPosition(fen)}
-            onOpponentConfig={(patch) => {
-              void api
-                .opponentConfig(patch)
-                .then((r) => r.state && g.refresh())
-                .catch(() => g.pushToast('对手接入配置失败', 'error'))
-            }}
-            onOpponentPoll={() => {
-              void api
-                .opponentPoll()
-                .then((r) => {
-                  if (r.message) g.pushToast(r.message, 'ok')
-                  void g.refresh()
-                })
-                .catch((err) => g.pushToast(err.message || '拉取失败', 'error'))
-            }}
-          />
-        )}
+        <ControlRail
+          open={railL}
+          state={g.state}
+          onNewGame={(side) => void g.newGame(side)}
+          onUndo={() => void g.undoRound()}
+          onResign={() => void g.resign()}
+          onSettings={(patch) => void g.updateSettings(patch)}
+        />
 
         <div className="stage">
+          {/* 单一状态核心 HUD：全屏唯一的局面指示 */}
           <div className="stage-head">
-            <span className={`turn-badge side-${game.turn}`}>
+            <span
+              className={[
+                'turn-badge',
+                `side-${game.turn}`,
+                isPlaying ? '' : 'is-over',
+                isPlaying && game.turn === game.engine_side ? 'is-engine' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
               <span className="turn-disc" />
-              {game.status.state === 'playing'
-                ? `轮到${sideName(game.turn)}${game.turn === game.engine_side ? '（我方引擎）' : '（对方）'}`
-                : game.status.reason || '对局结束'}
+              {/* key = 文案本身：换一次状态，文字就淡入一次；文案不变时不打扰 */}
+              <span key={turnText} className="turn-text">
+                {turnText}
+              </span>
             </span>
-            {game.in_check && game.status.state === 'playing' && (
-              <span className="check-flag">将军</span>
+            {game.in_check && isPlaying && (
+              <span key={`chk${game.ply}`} className="check-flag">
+                将军！
+              </span>
             )}
           </div>
 
-          <div className={`board-wrap ${over ? 'is-over' : ''}`}>
+          <div className={`board-wrap ${showOverModal ? 'is-over' : ''}`}>
             <Board
               game={game}
               flipped={flipped}
@@ -319,14 +312,20 @@ export default function App() {
               thinking={g.thinking}
               pv={[]}
             />
-            {over && (
+            {showOverModal && !dismissedOver && (
               <div className={`result-veil winner-${game.status.winner ?? 'none'}`}>
-                {/* 终局镜头：棋盘先下压降饱和、胜方的王亮余光，
-                    然后这枚印章盖下来，墨渍散开，遮罩和按钮最后才浮出来 */}
                 <div className="seal" aria-hidden="true">
                   <span>{game.status.winner === null ? '和' : '胜'}</span>
                 </div>
                 <div className="result-card">
+                  <button
+                    type="button"
+                    className="modal-close-btn"
+                    onClick={() => setDismissedOver(true)}
+                    title="收起弹窗，仔细查看棋盘"
+                  >
+                    ✕
+                  </button>
                   <span className="result-kicker">
                     {game.status.winner === null
                       ? '和棋'
@@ -336,8 +335,7 @@ export default function App() {
                   </span>
                   <h2>{game.status.reason || '对局结束'}</h2>
                   <p className="hint">
-                    共 {game.ply} 手 · 引擎出招 {g.state.stats.moves} 次 · 累计搜索{' '}
-                    {g.state.stats.think_time.toFixed(1)} 秒
+                    共 {game.ply} 手 · 引擎应手 {g.state.stats.moves} 次
                   </p>
                   <div className="result-actions">
                     <button
@@ -348,7 +346,14 @@ export default function App() {
                       再来一局
                     </button>
                     <button type="button" className="btn btn-ghost" onClick={() => void g.undoRound()}>
-                      退回去接着下
+                      退回一步
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => setDismissedOver(true)}
+                    >
+                      查看残局
                     </button>
                   </div>
                 </div>
@@ -360,8 +365,6 @@ export default function App() {
             game={game}
             thinking={g.thinking}
             queued={g.queued}
-            autoFocus={inputMode === 'type'}
-            onTypeInput={() => setInputMode('type')}
             onSubmit={g.submitMove}
             onClearQueue={g.clearQueue}
             onStop={() => void g.stopThinking()}
@@ -369,12 +372,15 @@ export default function App() {
           />
         </div>
 
-        {railR && (
-          <aside className="rail rail-right">
-            <AnalysisPanel game={game} task={g.task} thinking={g.thinking} />
-            <MoveList game={game} />
-          </aside>
-        )}
+        <aside
+          className={`rail rail-right${railR ? ' is-open' : ''}`}
+          aria-label="分析与棋谱"
+          aria-hidden={!railR}
+          {...(railR ? {} : { inert: '' })}
+        >
+          <AnalysisPanel game={game} task={g.task} thinking={g.thinking} />
+          <MoveList game={game} />
+        </aside>
       </main>
 
       <Toasts items={g.toasts} onDismiss={g.dismissToast} />

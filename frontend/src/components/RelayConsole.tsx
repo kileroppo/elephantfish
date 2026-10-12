@@ -6,72 +6,27 @@ import type { SubmitOutcome } from '../hooks/useGame'
 interface Props {
   game: GameSnapshot
   thinking: boolean
-  /** 已排队、等引擎收手就自动录入的那一步 */
   queued: string | null
-  /** 是否自动把焦点交给输入框。用户改在棋盘上摆子之后，就不该再抢。 */
-  autoFocus: boolean
-  onTypeInput: () => void
   onSubmit: (text: string) => Promise<SubmitOutcome>
   onClearQueue: () => void
   onStop: () => void
   onEngineMove: () => void
 }
 
-/**
- * 转述台：整个界面的心脏。
- *
- * 左边是「对方走了什么」，右边是「我们回什么」。整个软件存在的意义就是把
- * 这两件事之间的摩擦降到零。
- *
- * 录入有两条路，**棋盘优先**：在盘上点一下子、再点落点（或者直接按住拖过去）
- * 是手最快的，不需要把棋步翻译成任何符号；只有习惯键盘的人，才在①里敲
- * 坐标或中文记谱。焦点策略跟着这个优先级走 —— 见 autoFocus 的用法。
- *
- * 有一点是刻意的：**引擎算棋的时候，输入框照样能打字**。人是从另一个窗口
- * 读对手的棋，没道理被我们这边的计算时间卡住；抢先录入的那一步会排队，
- * 引擎一收手立刻自动落子。
- */
 export function RelayConsole({
   game,
   thinking,
   queued,
-  autoFocus,
-  onTypeInput,
   onSubmit,
   onClearQueue,
   onStop,
   onEngineMove,
 }: Props) {
   const [text, setText] = useState('')
-  const [shake, setShake] = useState(0)
+  const [showTypeInput, setShowTypeInput] = useState(false)
   const [copied, setCopied] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  // ①→② 传送带的相位机：对方走法进来，墨点从①走到②；
-  // 应手给出，朱砂点从②回到①。
-  // 它把「转述」这个动作变成可见的物理过程。
-  // 注意：引擎思考时墨点不动 —— 下棋的人不需要看着机器算，
-  // 只有「走法到了」和「应手出来了」这两下值得被看见。
-  type RelayPhase = 'idle' | 'inbound' | 'outbound'
-  const [phase, setPhase] = useState<RelayPhase>('idle')
-  const prevPly = useRef(game.ply)
-
-  useEffect(() => {
-    const prev = prevPly.current
-    prevPly.current = game.ply
-    const last = game.last_move
-    if (!last || game.ply !== prev + 1) return
-    if (last.by === 'opponent') {
-      setPhase('inbound')
-      const t = window.setTimeout(() => setPhase((p) => (p === 'inbound' ? 'idle' : p)), 640)
-      return () => window.clearTimeout(t)
-    }
-    if (last.by === 'engine') {
-      setPhase('outbound')
-      const t = window.setTimeout(() => setPhase((p) => (p === 'outbound' ? 'idle' : p)), 640)
-      return () => window.clearTimeout(t)
-    }
-  }, [game.ply, game.last_move])
+  const [rejected, setRejected] = useState(0)
+  const copyTimer = useRef<number>()
 
   const lastEngineMove = useMemo(() => {
     for (let i = game.records.length - 1; i >= 0; i -= 1) {
@@ -81,186 +36,163 @@ export function RelayConsole({
   }, [game.records])
 
   const playing = game.status.state === 'playing'
-  const myTurnToRelay = game.opponent_to_move && !thinking && playing
-  const canType = playing && !queued
 
-  // 焦点只在「键盘流」手里自动收回来。用户一旦开始在棋盘上摆子，
-  // 每落一手就把焦点抢进输入框会让人烦到放弃用棋盘 —— 那恰好是我们最想推的路。
+  // '/'：在任何地方（输入框外）按下都展开录入栏并聚焦
   useEffect(() => {
-    if (autoFocus && myTurnToRelay) inputRef.current?.focus()
-  }, [autoFocus, myTurnToRelay, game.ply])
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
+      e.preventDefault()
+      setShowTypeInput(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
-  // 排队那一步落地之后把焦点收回来，接着录下一步
+  useEffect(() => () => window.clearTimeout(copyTimer.current), [])
+
+  // 换了一手，复制态归零 —— 「已复制」只属于那一手
   useEffect(() => {
-    if (autoFocus && !queued && playing) inputRef.current?.focus()
-  }, [autoFocus, queued, playing])
+    setCopied(false)
+  }, [lastEngineMove?.ply])
 
-  const suggestions = useMemo(() => {
-    const q = text.trim()
-    if (!q || q.length > 6) return []
-    const lower = q.toLowerCase()
-    return game.legal_moves
-      .filter((m) => m.iccs.startsWith(lower) || m.chinese.startsWith(q))
-      .slice(0, 6)
-  }, [text, game.legal_moves])
-
-  const submit = async (value?: string) => {
-    const payload = (value ?? text).trim()
+  const submit = async () => {
+    const payload = text.trim()
     if (!payload) return
     const outcome = await onSubmit(payload)
-    if (outcome === 'ok') {
+    if (outcome === 'ok' || outcome === 'queued') {
       setText('')
-      setShake(0)
-    } else if (outcome === 'queued') {
-      setText('')
-      setShake(0)
+      setShowTypeInput(false)
     } else {
-      setShake((s) => s + 1)
+      // 走法不合法：输入框横向抖一下，比只弹一条 toast 更贴手
+      setRejected((n) => n + 1)
     }
   }
 
   const copyMove = async (iccs: string, chinese: string) => {
     try {
-      await navigator.clipboard.writeText(`${iccs}  ${chinese}`)
+      await navigator.clipboard.writeText(`${iccs} ${chinese}`)
       setCopied(true)
-      window.setTimeout(() => setCopied(false), 1600)
+      window.clearTimeout(copyTimer.current)
+      copyTimer.current = window.setTimeout(() => setCopied(false), 1600)
     } catch {
       setCopied(false)
     }
   }
 
   return (
-    <section className="relay" aria-label="转述台">
-      <div className={`relay-input ${myTurnToRelay ? 'is-active' : ''}`}>
-        <header className="relay-head">
-          <span className="relay-step">①</span>
-          <h2>录入对方走法</h2>
-          <span className="relay-sub">
-            {!playing
-              ? '对局已结束'
-              : queued
-                ? '已排队，等引擎收手'
-                : myTurnToRelay
-                  ? '点棋盘落子，或输入记谱'
-                  : '引擎思考中，可先输入'}
-          </span>
-        </header>
-
-        <div className="relay-field" key={shake}>
-          <input
-            ref={inputRef}
-            value={text}
-            spellCheck={false}
-            autoComplete="off"
-            disabled={!canType}
-            placeholder={canType ? 'h2e2  或  炮二平五' : '—'}
-            onChange={(e) => setText(e.target.value)}
-            onFocus={onTypeInput}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void submit()
-              if (e.key === 'Escape') setText('')
-              if (e.key === 'Tab' && suggestions.length) {
-                e.preventDefault()
-                setText(suggestions[0].iccs)
-              }
-            }}
-            aria-label="对方走法，可输入坐标或中文记谱"
-          />
-          <button
-            type="button"
-            className="relay-go"
-            disabled={!canType || !text.trim()}
-            onClick={() => void submit()}
-          >
-            落子
-          </button>
-        </div>
-
-        <div className="relay-hints">
-          {queued ? (
-            <button type="button" className="queue-chip" onClick={onClearQueue}>
-              <span className="queue-dot" />
-              <span className="queue-text">已排队 {queued}</span>
-              <span className="queue-x">撤销</span>
-            </button>
-          ) : suggestions.length > 0 ? (
-            suggestions.map((m) => (
-              <button
-                key={m.iccs}
-                type="button"
-                className="chip"
-                onClick={() => void submit(m.iccs)}
-              >
-                <span className="chip-iccs">{m.iccs}</span>
-                <span className="chip-cn">{m.chinese}</span>
-              </button>
-            ))
-          ) : (
-            <span className="relay-tip">
-              <b>直接点棋盘上的棋子落子</b>（也可以按住拖过去）；或输入坐标 <code>h2e2</code>、
-              记谱 <code>炮二平五</code>。
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className={`relay-link phase-${phase}`} aria-hidden="true">
-        <span className="relay-link-line" />
-        <span className="relay-link-dot" />
-        <span className="relay-link-line" />
-        {/* 旅行墨点：key 带相位与手数，连续同相位也能重新触发 */}
-        <span key={`${phase}-${game.ply}`} className="relay-link-ink" />
-      </div>
-
-      <div className={`relay-output ${thinking ? 'is-live' : ''}`}>
-        <header className="relay-head">
-          <span className="relay-step">②</span>
-          <h2>引擎应手</h2>
-          <span className="relay-sub">
-            {thinking ? '思考中' : lastEngineMove ? `深度 ${lastEngineMove.depth}` : '尚未出招'}
-          </span>
-        </header>
-
+    <section className="relay-compact" aria-label="应手与控制">
+      {/* 核心应手展示区 */}
+      <div className={`engine-hero ${thinking ? 'is-thinking' : ''}`}>
         {thinking ? (
-          /* 思考过程全部不显示：没有跳动的数字、没有爬的进度条。
-             只有一句静态的话和一个随时可用的「就用现在这步」。 */
-          <div className="relay-thinking is-calm">
-            <p className="relay-thinking-text">引擎思考中，出招后会显示在这里。</p>
+          <div className="hero-thinking">
+            {/* 静态的「算」字印：思考期间全站停摆，这里也不转圈 */}
+            <span className="hero-think-seal" aria-hidden="true">
+              算
+            </span>
+            <span className="thinking-title">引擎正在深度计算应手…</span>
             <button type="button" className="btn btn-ghost btn-sm" onClick={onStop}>
-              就用现在这步
+              采用当前最优步
+              <kbd className="btn-kbd">Space</kbd>
             </button>
           </div>
         ) : lastEngineMove ? (
-          <div className="relay-move">
+          <div className="hero-content">
+            <div className="hero-label">引擎下一步应手</div>
             <button
+              key={lastEngineMove.ply}
               type="button"
-              className="relay-move-main"
+              className={`hero-action-card${copied ? ' is-copied' : ''}`}
               onClick={() => void copyMove(lastEngineMove.iccs, lastEngineMove.chinese)}
-              title="点击复制"
+              title="点击复制走法"
             >
-              <span className="relay-move-cn">{lastEngineMove.chinese}</span>
-              <span className="relay-move-iccs">{lastEngineMove.iccs}</span>
+              <span className="hero-move-cn">{lastEngineMove.chinese}</span>
+              <span className="hero-move-iccs">{lastEngineMove.iccs}</span>
+              <span className="hero-copy-pill">
+                <svg
+                  className="hero-copy-icon"
+                  viewBox="0 0 12 12"
+                  width="10"
+                  height="10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  aria-hidden="true"
+                >
+                  {copied ? (
+                    <path d="M2.5 6.4 5 8.8 9.6 3.4" strokeLinecap="round" strokeLinejoin="round" />
+                  ) : (
+                    <>
+                      <rect x="3.8" y="3.8" width="6" height="6" rx="1.2" />
+                      <path d="M8.2 2.2H3.4c-.7 0-1.2.5-1.2 1.2v4.8" strokeLinecap="round" />
+                    </>
+                  )}
+                </svg>
+                {copied ? '已复制' : '复制'}
+              </span>
             </button>
-            <div className="relay-move-foot">
-              <span className="relay-move-meta">
-                深度 {lastEngineMove.depth} · {seconds(lastEngineMove.time)} ·{' '}
-                {lastEngineMove.eval !== null
-                  ? `评分 ${scoreText(lastEngineMove.eval)}`
-                  : ''}
-              </span>
-              <span className={`copy-flag ${copied ? 'on' : ''}`}>
-                {copied ? '已复制' : '点击复制'}
-              </span>
+            <div key={`m${lastEngineMove.ply}`} className="hero-meta">
+              深度 {lastEngineMove.depth} · 耗时 {seconds(lastEngineMove.time)}
+              {lastEngineMove.eval !== null && ` · 评估 ${scoreText(lastEngineMove.eval)}`}
             </div>
           </div>
         ) : (
-          <div className="relay-empty">
-            <p>还没有应手。</p>
+          <div className="hero-idle">
+            <span>对局初始，等待走子或引擎出招</span>
             {game.engine_to_move && playing && (
               <button type="button" className="btn btn-primary btn-sm" onClick={onEngineMove}>
-                让引擎出招
+                让引擎先出招
               </button>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* 排队步提醒 */}
+      {queued && (
+        <div className="queued-strip">
+          <span>已排队录入对方走法：<strong>{queued}</strong>（等待计算结束）</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClearQueue}>
+            撤销
+          </button>
+        </div>
+      )}
+
+      {/* 极轻量录入栏（默认折叠，支持快捷键 / 触发） */}
+      <div className="type-toggle-bar">
+        {!showTypeInput ? (
+          <button
+            type="button"
+            className="type-toggle-btn"
+            onClick={() => setShowTypeInput(true)}
+          >
+            <span>键盘文本录入</span>
+            <kbd>/</kbd>
+          </button>
+        ) : (
+          <div key={`box${rejected}`} className={`type-inline-box${rejected ? ' is-rejected' : ''}`}>
+            <input
+              autoFocus
+              value={text}
+              placeholder="输入记谱 (如 炮二平五 或 h2e2)"
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void submit()
+                if (e.key === 'Escape') setShowTypeInput(false)
+              }}
+            />
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={!text.trim()}
+              onClick={() => void submit()}
+            >
+              提交
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowTypeInput(false)}>
+              收起
+            </button>
           </div>
         )}
       </div>

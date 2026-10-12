@@ -51,13 +51,56 @@ if not exist "frontend\dist\index.html" (
 )
 
 :serve
+rem 端口被占用不等于「服务已经在跑」。8010 这类端口上常驻着别的项目的服务，
+rem 只看占用就把浏览器开过去，页面只会剩一句 {"detail":"Not Found"}。
+rem 所以拿本服务独有的 /api/health 认个脸，再决定是复用还是换端口。
+set "INUSE="
+set "OURS="
 netstat -ano | findstr ":!PORT! " | findstr "LISTENING" >nul
-if not errorlevel 1 (
-    echo [INFO] 端口 !PORT! 已被占用，认为服务已经在跑，只打开页面。
+if not errorlevel 1 set "INUSE=1"
+
+if defined INUSE (
+    where curl >nul 2>nul
+    if errorlevel 1 (
+        rem 老系统没有 curl，没法确认身份，退回旧行为
+        echo [INFO] 端口 !PORT! 已被占用，认为服务已经在跑，只打开页面。
+        echo.
+        start "" "!URL!"
+        pause
+        exit /b 0
+    )
+    set "HEALTH="
+    for /f "delims=" %%R in ('curl -s --max-time 2 http://127.0.0.1:!PORT!/api/health 2^>nul') do set "HEALTH=%%R"
+    echo !HEALTH! | findstr /c:"elephantfish" >nul
+    if not errorlevel 1 set "OURS=1"
+)
+
+if defined OURS (
+    echo [INFO] elephantfish 已经在端口 !PORT! 上跑着，直接打开页面。
     echo.
     start "" "!URL!"
     pause
     exit /b 0
+)
+
+if defined INUSE (
+    echo [WARN] 端口 !PORT! 被别的程序占着（不是 elephantfish），换一个端口。
+    set "FREE="
+    for /l %%P in (!PORT!,1,8050) do (
+        if not defined FREE (
+            netstat -ano | findstr ":%%P " | findstr "LISTENING" >nul
+            if errorlevel 1 set "FREE=%%P"
+        )
+    )
+    if not defined FREE (
+        echo [ERROR] 找不到空闲端口，请手动指定，例如 start.bat 8060
+        pause
+        exit /b 1
+    )
+    set "PORT=!FREE!"
+    set "URL=http://localhost:!PORT!/"
+    echo        改用端口 !PORT!。
+    echo.
 )
 
 echo [2/3] 启动服务，端口 !PORT! ...

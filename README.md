@@ -46,7 +46,16 @@ elephahtfish 自包含在 `elephantfish.py` 文件中，只是用了python的自
 
 ## 转述对局台（Web UI）
 
-如果以 Web UI 方式下棋，直接双击 `start.bat`（首次会自动构建前端），或者手动：
+如果以 Web UI 方式下棋，直接用启动脚本（首次会自动构建前端）：
+
+```bash
+start.bat           # Windows：双击即可
+./start.sh          # macOS / Linux：可指定端口，如 ./start.sh 8020
+```
+
+脚本会自动找 Python、按需构建前端、拉起服务并打开浏览器。默认端口 8010；若它已被别的程序占用，脚本会先认出占用者不是本服务，再自动往后顺延一个空闲端口，不会把页面开到别人的接口上。服务跑在当前窗口，按 `Ctrl+C` 停止（Windows 下关掉那个最小化的窗口）。
+
+也可以完全手动：
 
 ```bash
 cd frontend && npm install && npm run build     # 构建前端，只需要一次
@@ -84,11 +93,15 @@ tools/verify.py    引擎一致性回归自检（棋规 / 记谱 / 主变 / 战�
 review/            自检与质量迭代报告
 ```
 
-# 本仓库相比原版做了什么
-
 原版 `elephantfish.py` 原样保留，作为棋力基准。新增的是 `engine/`、`server/`、`frontend/`。
 
-**搜索内核**（`engine/search.py`）：MTD(f) 二分换成 PVS + 胜负窗 + 迭代加深；置换表加代际计数器（O(1) 失效，不再 `dict.clear()`）；置换表着法优先试、其余着法懒生成；空着裁剪、LMR、futility 裁剪、静态搜索。着法生成只遍历 90 个真实格点而不是 256 格。
+**双引擎内核支持**：
+- **⚡ 皮卡鱼（Pikafish · NNUE）**：接入世界顶级开源中国象棋引擎（Stockfish 架构 + 官方 NNUE 神经网络评估）。棋力高达 Elo 3500+，通过内置 UCI 驱动长驻运行，每秒搜索数百万至千万节点，中残局压制力极强，与任何对手大模型对弈时拥有绝对的碾压胜率。已随项目内置 macOS（通用二进制）、Windows、Linux 原生支持及 `pikafish.nnue` 权重文件，开箱即用。
+- **🐘 象鱼内置（Elephantfish · 纯 Python）**：轻量级自包含教学/实验引擎，无任何外部二进制依赖。
+
+在 Web 界面左侧控制栏的「引擎内核」即可随时一键切换两者。
+
+**内置 Python 搜索优化**（`engine/search.py`）：MTD(f) 二分换成 PVS + 胜负窗 + 迭代加深；置换表加代际计数器（O(1) 失效，不再 `dict.clear()`）；置换表着法优先试、其余着法懒生成；空着裁剪、LMR、futility 裁剪、静态搜索。着法生成只遍历 90 个真实格点而不是 256 格。
 
 用 `tools/arena.py` 在 1000 个随机开局上跑 50 局回归（深度 5，交换先后手）：
 

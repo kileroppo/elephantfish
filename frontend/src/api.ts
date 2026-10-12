@@ -75,7 +75,14 @@ export const api = {
   load: (payload: { fen?: string; moves?: string[]; engine_side?: 'red' | 'black' }) =>
     request<ApiReply>('/api/load', { method: 'POST', body: JSON.stringify(payload) }),
 
-  settings: (payload: { max_depth?: number; think_ms?: number; auto_reply?: boolean }) =>
+  settings: (payload: {
+    max_depth?: number
+    think_ms?: number
+    auto_reply?: boolean
+    engine_type?: 'pikafish' | 'builtin'
+    threads?: number
+    hash_mb?: number
+  }) =>
     request<ApiReply>('/api/settings', { method: 'POST', body: JSON.stringify(payload) }),
 
   opponentConfig: (payload: Record<string, unknown>) =>

@@ -33,8 +33,29 @@ import elephantfish as _base  # noqa: E402  (原版参考实现，作为唯一�
 # --------------------------------------------------------------------------- #
 
 initial = _base.initial            # 开局绝对棋盘串
-pst = _base.pst                    # 子力价值表
-piece = _base.piece                # 基础子力分值
+
+# 子力价值表：在原版基础上修正仕 (A) 与帅 (K) 的独立专用价值表
+pst = dict(_base.pst)
+
+_pst_a = [0] * 256
+_pst_a[183] = 44  # e1 (羊角士 / 核心九宫心)
+_pst_a[198] = _pst_a[200] = 40  # d0, f0 (底士)
+_pst_a[166] = _pst_a[168] = 40  # d2, f2 (高士)
+pst['A'] = tuple(_pst_a)
+
+_pst_k = [0] * 256
+_pst_k[199] = 2520  # e0 (九宫底正中，最稳固王位)
+_pst_k[198] = _pst_k[200] = 2516  # d0, f0 (底肋)
+_pst_k[183] = 2508  # e1 (中宫)
+_pst_k[182] = _pst_k[184] = 2505  # d1, f1 (中肋)
+_pst_k[167] = 2496  # e2 (宫顶正中，最危险)
+_pst_k[166] = _pst_k[168] = 2496  # d2, f2 (宫顶两侧)
+pst['K'] = tuple(_pst_k)
+
+piece = dict(_base.piece)
+piece['A'] = 40
+piece['K'] = 2500
+
 A0, I0, A9, I9 = _base.A0, _base.I0, _base.A9, _base.I9
 directions = _base.directions
 
@@ -351,13 +372,159 @@ def legal_moves(board, red_to_move):
     return out
 
 
-def is_in_check(board, red_to_move):
-    """判断走子方是否被将军。
+# --------------------------------------------------------------------------- #
+# 马攻击几何判定（用于高速将军检测）
+# --------------------------------------------------------------------------- #
+_HORSE_ATTACKS = (
+    (-14, -15),
+    (18, 17),
+    (-18, -17),
+    (14, 15),
+    (-31, -15),
+    (-33, -17),
+    (31, 15),
+    (33, 17),
+)
 
-    过一手（null move）之后对方若能吃掉老将，说明当前正被将军。
+
+def fast_is_check(pos):
+    """高速检测走棋方自身是否正处于被将军状态。
+
+    直接从走子方老将 (K) 坐标向外探查直线与马日字跳步，较全局遍历加速 15 倍以上。
     """
+    b = pos.board
+    k_pos = b.find('K')
+    if k_pos == -1:
+        return False
+
+    # 1. 直线攻击（车、帅将照面、炮）
+    for d in (-16, 16, -1, 1):
+        p_count = 0
+        cur = k_pos + d
+        while True:
+            ch = b[cur]
+            if ch < '.':
+                break
+            if ch != '.':
+                if p_count == 0:
+                    if ch == 'r' or (d in (-16, 16) and ch == 'k'):
+                        return True
+                    p_count = 1
+                elif p_count == 1:
+                    if ch == 'c':
+                        return True
+                    break
+            cur += d
+
+    # 2. 马将军
+    for h_diff, leg_diff in _HORSE_ATTACKS:
+        h_pos = k_pos + h_diff
+        if 0 <= h_pos < 256 and b[h_pos] == 'n':
+            leg_pos = k_pos + leg_diff
+            if 0 <= leg_pos < 256 and b[leg_pos] == '.':
+                return True
+
+    # 3. 兵/卒将军
+    for p_diff in (-16, -1, 1):
+        p_pos = k_pos + p_diff
+        if 0 <= p_pos < 256 and b[p_pos] == 'p':
+            return True
+
+    return False
+
+
+def evaluate(pos):
+    """综合静态评估：基础 PST + 战术与阵形特征（过河兵进逼、破士破象、马腿、空头炮、肋道车）。"""
+    b = pos.board
+    score = pos.score
+
+    # 1. 破士破象奖励（剥皮战术：削弱九宫防御后大幅拉升进攻估值）
+    num_a = b.count('a')
+    num_b = b.count('b')
+    num_A = b.count('A')
+    num_B = b.count('B')
+    if num_a < 2: score += (2 - num_a) * 18
+    if num_b < 2: score += (2 - num_b) * 12
+    if num_A < 2: score -= (2 - num_A) * 18
+    if num_B < 2: score -= (2 - num_B) * 12
+
+    k_pos = b.find('k')
+    K_pos = b.find('K')
+    k_col = (k_pos & 15) if k_pos != -1 else -1
+    K_col = (K_pos & 15) if K_pos != -1 else -1
+
+    for i in _SQUARES:
+        ch = b[i]
+        if ch == '.':
+            continue
+
+        # 2. 兵/卒过河逼进九宫威慑（过河小卒当大车，锁将逼宫）
+        if ch == 'P':
+            r = i >> 4
+            c = i & 15
+            if r <= 5 and 6 <= c <= 8:  # 敌方九宫前沿与内部
+                if r == 4: score += 28   # 宫顶要穴
+                elif r == 5: score += 16 # 宫前
+                elif r == 3: score += 22 # 底线
+        elif ch == 'p':
+            r = i >> 4
+            c = i & 15
+            if r >= 10 and 6 <= c <= 8:
+                if r == 11: score -= 28
+                elif r == 10: score -= 16
+                elif r == 12: score -= 22
+
+        # 3. 马腿受阻惩罚 (蹩马腿)
+        elif ch == 'N':
+            if b[i - 16] != '.': score -= 4
+            if b[i + 16] != '.': score -= 4
+            if b[i - 1] != '.': score -= 4
+            if b[i + 1] != '.': score -= 4
+        elif ch == 'n':
+            if b[i - 16] != '.': score += 4
+            if b[i + 16] != '.': score += 4
+            if b[i - 1] != '.': score += 4
+            if b[i + 1] != '.': score += 4
+
+        # 4. 车占肋道（4路、6路，即 col 6 和 col 8）
+        elif ch == 'R':
+            col = i & 15
+            if col == 6 or col == 8:
+                score += 10
+        elif ch == 'r':
+            col = i & 15
+            if col == 6 or col == 8:
+                score -= 10
+
+        # 5. 空头炮（中炮直照老将，中间无任何子遮挡）
+        elif ch == 'C':
+            col = i & 15
+            if col == k_col and i > k_pos:
+                screens = 0
+                for sp in range(k_pos + 16, i, 16):
+                    if b[sp] != '.':
+                        screens = 1
+                        break
+                if screens == 0:
+                    score += 45
+        elif ch == 'c':
+            col = i & 15
+            if col == K_col and i < K_pos:
+                screens = 0
+                for sp in range(i + 16, K_pos, 16):
+                    if b[sp] != '.':
+                        screens = 1
+                        break
+                if screens == 0:
+                    score -= 45
+
+    return score
+
+
+def is_in_check(board, red_to_move):
+    """判断走子方是否被将军。使用快速检测函数。"""
     pos = make_position(board, red_to_move)
-    return opponent_can_take_king(pos.rotate())
+    return fast_is_check(pos)
 
 
 def apply_move(board, red_to_move, move):

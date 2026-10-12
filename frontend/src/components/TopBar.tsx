@@ -1,12 +1,12 @@
-import type { GameSnapshot } from '../types'
-import { sideName } from '../lib/format'
+import type { GameSnapshot, EngineInfo } from '../types'
 
 interface Props {
   game: GameSnapshot
+  engineInfo?: EngineInfo
   connected: boolean
-  thinking: boolean
   flipped: boolean
   soundOn: boolean
+  onToggleEngine?: () => void
   onFlip: () => void
   onToggleSound: () => void
   onHelp: () => void
@@ -14,35 +14,22 @@ interface Props {
 }
 
 export function TopBar({
-  game,
+  engineInfo,
   connected,
-  thinking,
-  flipped,
   soundOn,
+  onToggleEngine,
   onFlip,
   onToggleSound,
   onHelp,
   onRefresh,
 }: Props) {
-  const state = game.status.state
-  const over = state !== 'playing'
-
-  const pill = over
-    ? {
-        tone: game.status.winner === game.engine_side ? 'win' : game.status.winner ? 'lose' : 'draw',
-        text: statusText(game),
-      }
-    : thinking
-      ? { tone: 'think', text: '引擎思考中' }
-      : game.opponent_to_move
-        ? { tone: 'wait', text: '等你录入对方走法' }
-        : { tone: 'idle', text: '待命' }
+  const isPikafish = engineInfo?.active === 'pikafish'
 
   return (
     <header className="topbar">
       <div className="brand">
         <span className="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 40 40" width="34" height="34">
+          <svg viewBox="0 0 40 40" width="30" height="30">
             <circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" strokeWidth="2" />
             <circle cx="20" cy="20" r="12.5" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.55" />
             <text
@@ -58,32 +45,42 @@ export function TopBar({
           </svg>
         </span>
         <div className="brand-text">
-          <h1>转述台</h1>
-          <p>
-            elephantfish 引擎 · 你执{sideName(game.opponent_side).replace('方', '')}对面那台大模型
-          </p>
+          <h1>Elephantfish</h1>
         </div>
-      </div>
-
-      <div className="topbar-center">
-        <span className={`pill pill-${pill.tone}`}>
-          {pill.tone === 'think' && <span className="pill-spin" />}
-          {pill.text}
-        </span>
-        <span className="side-indicator" title="棋盘下方是哪一方">
-          <span className={`side-dot ${flipped ? game.turn : other(game.turn)}`} />
-          视角 {flipped ? '已翻转' : '标准'}
-        </span>
+        {engineInfo && (
+          <button
+            key={engineInfo.active}
+            type="button"
+            className={`engine-badge is-clickable${isPikafish ? ' is-pikafish' : ''}`}
+            onClick={onToggleEngine}
+            title={
+              isPikafish
+                ? `当前引擎：皮卡鱼 Pikafish (NNUE 神经网络)\n点击切换为内置纯 Python 引擎`
+                : '当前引擎：内置纯 Python 引擎\n点击切换为皮卡鱼 Pikafish NNUE'
+            }
+          >
+            <span className="engine-badge-icon" aria-hidden="true">
+              {isPikafish ? '⚡' : '🐘'}
+            </span>
+            <span className="engine-badge-name">
+              {isPikafish ? '皮卡鱼 NNUE' : '纯 Python'}
+            </span>
+            <span className="engine-badge-switch" aria-hidden="true">
+              ⇄
+            </span>
+          </button>
+        )}
       </div>
 
       <div className="topbar-actions">
         {!connected && (
-          <button type="button" className="icon-btn warn" onClick={onRefresh} title="重新连接">
+          <button type="button" className="icon-btn warn" onClick={onRefresh} title="服务未连接，点击重试">
+            <span className="warn-dot" aria-hidden="true" />
             断线
           </button>
         )}
-        <button type="button" className="icon-btn" onClick={onFlip} title="翻转视角">
-          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <button type="button" className="icon-btn icon-flip" onClick={onFlip} title="翻转视角 (快捷键 F)">
+          <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6">
             <path d="M4 7a6 6 0 0 1 10-3.5M16 13a6 6 0 0 1-10 3.5" />
             <path d="M14 1v3h-3M6 19v-3h3" strokeLinecap="round" />
           </svg>
@@ -91,29 +88,23 @@ export function TopBar({
         </button>
         <button
           type="button"
-          className="icon-btn"
+          className={`icon-btn icon-sound${soundOn ? ' is-on' : ''}`}
           onClick={onToggleSound}
-          title={soundOn ? '关闭音效' : '打开音效'}
+          title={soundOn ? '静音' : '开启音效'}
+          aria-pressed={soundOn}
         >
-          {soundOn ? '♪' : '♪̸'}
+          <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3.5 7.5h2.8L10 4.5v11l-3.7-3H3.5z" />
+            <path className="sound-wave w1" d="M12.8 8a2.8 2.8 0 0 1 0 4" />
+            <path className="sound-wave w2" d="M15 5.8a6 6 0 0 1 0 8.4" />
+            <path className="sound-mute" d="m13 8 4 4m0-4-4 4" />
+          </svg>
+          <span>{soundOn ? '音效' : '静音'}</span>
         </button>
-        <button type="button" className="icon-btn" onClick={onHelp} title="怎么用（快捷键）">
+        <button type="button" className="icon-btn" onClick={onHelp} title="快捷键帮助 (?)">
           ?
         </button>
       </div>
     </header>
   )
-}
-
-function other(side: 'red' | 'black') {
-  return side === 'red' ? 'black' : 'red'
-}
-
-function statusText(game: GameSnapshot) {
-  const s = game.status
-  if (s.state === 'playing') return '进行中'
-  if (s.state === 'resign') return `${s.winner === 'red' ? '红方' : '黑方'}认输`
-  if (s.state === 'checkmate') return `将死 · ${s.winner === 'red' ? '红胜' : '黑胜'}`
-  if (s.state === 'stalemate') return `困毙 · ${s.winner === 'red' ? '红胜' : '黑胜'}`
-  return s.state === 'draw_repetition' ? '三次重复 · 和' : '六十回合无吃子 · 和'
 }

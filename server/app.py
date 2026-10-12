@@ -35,16 +35,19 @@ if _ROOT not in sys.path:
 
 from engine import Game, RED, BLACK, notation as nt, core          # noqa: E402
 from engine.search import Searcher                                  # noqa: E402
+from engine.pikafish_engine import PikafishEngine, find_pikafish_binary  # noqa: E402
 
 STATIC_DIR = os.path.join(_ROOT, 'frontend', 'dist')
 LEGACY_DIR = os.path.join(_ROOT, 'ui')
 
-# 深度与耗时的默认值。迭代加深每层耗时指数增长（实测深度 6≈0.5s、7≈3s、8≈6s），
-# 所以用「时间」做主控，深度只作为上限，保证响应时间可预期。
+# 深度与耗时的默认值。
 DEFAULT_SETTINGS = {
-    'max_depth': 12,
+    'max_depth': 20,
     'think_ms': 2500,
     'auto_reply': True,
+    'engine_type': 'pikafish',
+    'threads': 2,
+    'hash_mb': 64,
 }
 
 
@@ -105,7 +108,11 @@ class Session:
         self.lock = threading.RLock()
         self.game = Game(engine_side=RED)
         self.searcher = Searcher()
+        self.pikafish = PikafishEngine(threads=DEFAULT_SETTINGS['threads'], hash_mb=DEFAULT_SETTINGS['hash_mb'])
         self.settings = dict(DEFAULT_SETTINGS)
+        # 自动判定引擎：Pikafish 可用则优先，否则降级为纯 Python 内置引擎
+        if not self.pikafish.is_available:
+            self.settings['engine_type'] = 'builtin'
         self.task = None
         self.opponent = {
             'mode': 'manual',       # manual | http
@@ -195,33 +202,61 @@ class Session:
         red_to_move = game.red_to_move
         pos = core.make_position(game.board, red_to_move)
         history = list(game.boards)
+        moves_history = [r['iccs'] for r in game.records]
+        start_fen = getattr(game, 'start_fen', None)
         settings = dict(self.settings)
+        use_pikafish = (settings.get('engine_type') == 'pikafish' and self.pikafish.is_available)
 
         def worker():
             try:
                 deadline = time.time() + settings['think_ms'] / 1000.0
-                searcher = self.searcher
                 last = None
-                for info in searcher.search(
-                        pos,
-                        max_depth=settings['max_depth'],
-                        time_limit=settings['think_ms'] / 1000.0,
-                        game_history=history,
-                        external_stop=task.stop_event.is_set,
-                        root_is_red=red_to_move):
-                    last = info
-                    task.progress = {
-                        'depth': info['depth'],
-                        'score': info['score'],
-                        'mate': info['mate'],
-                        'nodes': info['nodes'],
-                        'time': round(info['time'], 3),
-                        'nps': info['nps'],
-                        'pv': [nt.to_iccs(m) for m in info['pv']],
-                        'pv_detail': pv_detail(game.board, red_to_move, info['pv']),
-                    }
-                    if task.stop_event.is_set():
-                        break
+
+                if use_pikafish:
+                    for info in self.pikafish.search(
+                            game.board,
+                            red_to_move,
+                            move_history_iccs=moves_history,
+                            max_depth=settings['max_depth'],
+                            time_limit=settings['think_ms'] / 1000.0,
+                            external_stop=task.stop_event.is_set,
+                            start_fen=start_fen):
+                        last = info
+                        pv_tuples = info['pv']
+                        task.progress = {
+                            'depth': info['depth'],
+                            'score': info['score'],
+                            'mate': info['mate'],
+                            'nodes': info['nodes'],
+                            'time': round(info['time'], 3),
+                            'nps': info['nps'],
+                            'pv': info.get('pv_iccs') or [nt.to_iccs(m) for m in pv_tuples],
+                            'pv_detail': pv_detail(game.board, red_to_move, pv_tuples),
+                        }
+                        if task.stop_event.is_set():
+                            break
+                else:
+                    searcher = self.searcher
+                    for info in searcher.search(
+                            pos,
+                            max_depth=settings['max_depth'],
+                            time_limit=settings['think_ms'] / 1000.0,
+                            game_history=history,
+                            external_stop=task.stop_event.is_set,
+                            root_is_red=red_to_move):
+                        last = info
+                        task.progress = {
+                            'depth': info['depth'],
+                            'score': info['score'],
+                            'mate': info['mate'],
+                            'nodes': info['nodes'],
+                            'time': round(info['time'], 3),
+                            'nps': info['nps'],
+                            'pv': [nt.to_iccs(m) for m in info['pv']],
+                            'pv_detail': pv_detail(game.board, red_to_move, info['pv']),
+                        }
+                        if task.stop_event.is_set():
+                            break
 
                 if last is None or last.get('move') is None:
                     task.status = 'done'
@@ -237,7 +272,11 @@ class Session:
                     task.error = '搜索期间局面发生了变化，已放弃这步棋'
                     return
 
-                abs_move = engine_move if red_to_move else core.flip_move(engine_move)
+                if use_pikafish:
+                    abs_move = engine_move
+                else:
+                    abs_move = engine_move if red_to_move else core.flip_move(engine_move)
+
                 if abs_move not in self.game.legal_moves():
                     task.status = 'error'
                     task.error = '引擎给出的走法非法，已放弃'
@@ -254,6 +293,7 @@ class Session:
                 task.move = rec['iccs']
                 task.result = {
                     'status': 'ok',
+                    'engine': 'pikafish' if use_pikafish else 'elephantfish',
                     'move': rec['iccs'],
                     'chinese': rec['chinese'],
                     'depth': last['depth'],
@@ -304,10 +344,16 @@ class Session:
 
     def state(self):
         with self.lock:
+            active_engine = 'pikafish' if (self.settings.get('engine_type') == 'pikafish' and self.pikafish.is_available) else 'builtin'
             return {
                 'game': self.game.snapshot(),
                 'task': self.task.to_dict() if self.task else None,
                 'settings': dict(self.settings),
+                'engine_info': {
+                    'active': active_engine,
+                    'pikafish_available': self.pikafish.is_available,
+                    'pikafish_path': self.pikafish.binary_path,
+                },
                 'opponent': dict(self.opponent),
                 'stats': dict(self.engine_stats),
                 'game_stats': dict(self.game_stats),
@@ -330,6 +376,8 @@ def act_new(payload):
         SESSION.stop_search()
         SESSION.game = Game(engine_side=engine_side)
         SESSION.searcher = Searcher()
+        if SESSION.pikafish.is_available:
+            SESSION.pikafish.new_game()
         SESSION.task = None
         SESSION.pending = None
         SESSION.game_stats = _blank_stats()
@@ -339,6 +387,8 @@ def act_new(payload):
             SESSION.settings['think_ms'] = int(payload['think_ms'])
         if 'auto_reply' in payload:
             SESSION.settings['auto_reply'] = bool(payload['auto_reply'])
+        if 'engine_type' in payload:
+            SESSION.settings['engine_type'] = payload['engine_type']
         task = None
         if SESSION.game.engine_to_move:
             task = SESSION.start_search()
@@ -475,6 +525,8 @@ def act_load(payload):
                         'state': SESSION.state()}, 400
         SESSION.game = game
         SESSION.game_stats = _blank_stats()
+        if SESSION.pikafish.is_available:
+            SESSION.pikafish.new_game()
         if SESSION.game.engine_to_move and not SESSION.game.is_over():
             SESSION.start_search()
     return {'ok': True, 'state': SESSION.state(), 'message': '局面已载入'}
@@ -483,13 +535,25 @@ def act_load(payload):
 def act_settings(payload):
     with SESSION.lock:
         if 'max_depth' in payload:
-            SESSION.settings['max_depth'] = max(2, min(40, int(payload['max_depth'])))
+            SESSION.settings['max_depth'] = max(2, min(50, int(payload['max_depth'])))
         if 'think_ms' in payload:
             SESSION.settings['think_ms'] = max(120, min(60000, int(payload['think_ms'])))
         if 'auto_reply' in payload:
             SESSION.settings['auto_reply'] = bool(payload['auto_reply'])
+        if 'engine_type' in payload:
+            engine_type = str(payload['engine_type']).lower()
+            if engine_type in ('pikafish', 'builtin'):
+                SESSION.settings['engine_type'] = engine_type
+        if 'threads' in payload:
+            threads = max(1, min(16, int(payload['threads'])))
+            SESSION.settings['threads'] = threads
+            SESSION.pikafish.set_options(threads=threads)
+        if 'hash_mb' in payload:
+            hash_mb = max(16, min(1024, int(payload['hash_mb'])))
+            SESSION.settings['hash_mb'] = hash_mb
+            SESSION.pikafish.set_options(hash_mb=hash_mb)
     return {'ok': True, 'state': SESSION.state(),
-            'message': f'思考时间已设为 {SESSION.settings["think_ms"]} 毫秒'}
+            'message': f'设置已更新（当前引擎：{"皮卡鱼" if SESSION.settings.get("engine_type") == "pikafish" else "象鱼内置"}）'}
 
 
 def act_opponent_config(payload):
@@ -549,7 +613,9 @@ ROUTES = {
 }
 GET_ROUTES = {
     '/api/state': lambda _: {'ok': True, 'state': SESSION.state()},
-    '/api/health': lambda _: {'ok': True, 'engine': 'elephantfish',
+    '/api/health': lambda _: {'ok': True,
+                              'engine': 'pikafish' if (SESSION.settings.get('engine_type') == 'pikafish' and SESSION.pikafish.is_available) else 'elephantfish',
+                              'pikafish_available': SESSION.pikafish.is_available,
                               'python': sys.version.split()[0]},
 }
 
@@ -725,7 +791,7 @@ class Handler(SimpleHTTPRequestHandler):
 class Server(ThreadingHTTPServer):
     # 不给 SO_REUSEADDR 钻空子的机会：Windows 上 0.0.0.0:8010 和 127.0.0.1:8010
     # 可以同时存在，请求会随机落到其中一个，排查起来非常费劲。宁可让 bind 直接失败。
-    allow_reuse_address = False
+    allow_reuse_address = sys.platform != 'win32'
     daemon_threads = True
 
 

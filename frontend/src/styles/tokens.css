@@ -75,6 +75,12 @@
   --shadow-contact: rgba(58, 41, 18, 0.34);
   --shadow-contact-fade: rgba(58, 41, 18, 0);
 
+  /* ---- 移动轨迹（墨痕） ---- */
+  --trail-red: rgba(169, 44, 36, 0.35);
+  --trail-red-fade: rgba(169, 44, 36, 0.06);
+  --trail-black: rgba(34, 29, 24, 0.30);
+  --trail-black-fade: rgba(34, 29, 24, 0.05);
+
   /* ---- 动效 ---- */
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.32, 0.46, 1);
@@ -93,18 +99,6 @@
   }
 }
 
-/* 棋子位移走合成层：注册成 <length> 才能被 transition 插值。
-   Board.tsx 写入棋盘像素值（720×800 坐标系），CSS 里乘 --u 得到渲染像素。 */
-@property --px {
-  syntax: '<length>';
-  inherits: false;
-  initial-value: 0px;
-}
-@property --py {
-  syntax: '<length>';
-  inherits: false;
-  initial-value: 0px;
-}
 
 /* 棋子掠射光的角度：注册成 <angle> 才能被 keyframes 插值 */
 @property --sweep {
