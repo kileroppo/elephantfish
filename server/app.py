@@ -761,6 +761,15 @@ class Handler(SimpleHTTPRequestHandler):
             self.path = '/index.html'
         super().do_GET()
 
+    def end_headers(self):
+        # 避免 html 页面被浏览器强缓存导致前端发版后无法加载最新 JS/CSS
+        path = getattr(self, 'path', '')
+        if path.endswith('.html') or path in ('', '/'):
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
+        super().end_headers()
+
     def _serve_legacy(self, path):
         """前端还没构建时，退回到原版页面，至少不是白屏。"""
         self.directory = LEGACY_DIR

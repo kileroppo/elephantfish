@@ -525,7 +525,17 @@ export function Board({
                       </feMerge>
                     </filter>
                   </defs>
-                  <circle className="spinner-arcs" cx="50" cy="50" r="43" filter="url(#softArcGlow)" />
+                  <g>
+                    <animateTransform
+                      attributeName="transform"
+                      type="rotate"
+                      from="0 50 50"
+                      to="360 50 50"
+                      dur="8s"
+                      repeatCount="indefinite"
+                    />
+                    <circle className="spinner-arcs" cx="50" cy="50" r="43" filter="url(#softArcGlow)" />
+                  </g>
                 </svg>
               </span>
             </span>
