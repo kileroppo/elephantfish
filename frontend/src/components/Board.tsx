@@ -513,7 +513,11 @@ export function Board({
                 left: `${toPercent(parseSquare(game.last_move.to).file, parseSquare(game.last_move.to).rank, flipped).x}%`,
                 top: `${toPercent(parseSquare(game.last_move.to).file, parseSquare(game.last_move.to).rank, flipped).y}%`,
               }}
-            />
+            >
+              <svg className="last-to-spinner" viewBox="0 0 100 100" aria-hidden="true">
+                <circle className="spinner-arcs" cx="50" cy="50" r="43" />
+              </svg>
+            </span>
           </>
         )}
 
