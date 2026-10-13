@@ -43,13 +43,22 @@
   /* 木纹不是颜色，是两条 feTurbulence 噪声，写在 Board.tsx 的 <defs> 里。
      feColorMatrix 的 values 属性不吃 CSS 变量，所以那两处颜色只能硬编码。 */
 
-  /* ---- 棋子 ---- */
-  --disc-face-1: #fdf8ec;
-  --disc-face-2: #f0e5cd;
-  --disc-face-3: #ddcfaf;
+  /* ---- 棋子（漆器升级版） ---- */
+  /* 盘面：左上受光偏亮、右下背光偏暗，温暖红棕漆器调 */
+  --disc-face-1: #fef9f0;    /* 受光面 — 近白暖调 */
+  --disc-face-2: #ecdcbe;    /* 中间过渡 */
+  --disc-face-3: #c9ad84;    /* 背光面 — 深棕 */
+  --disc-face-deep: #a68658; /* 最深暗部（漆器底色） */
+  /* 漆面高光 */
+  --disc-specular: rgba(255, 255, 255, 0.95); /* 镜面高光点 */
+  --disc-rim-light: rgba(255, 240, 210, 0.6); /* 倒角水线 */
   --piece-red: #a92c24;
   --piece-black: #221d18;
-  --disc-shadow: 0 3px 6px rgba(58, 41, 18, 0.28), 0 10px 22px rgba(58, 41, 18, 0.16);
+  /* 阴影：三层叠加——接触影（硬）、中层扩散影、远层羽化大影 */
+  --disc-shadow:
+    0 1px 2px rgba(40, 24, 8, 0.55),
+    0 4px 10px rgba(58, 34, 12, 0.38),
+    0 12px 28px rgba(58, 34, 12, 0.20);
 
   /* ---- 字体 ---- */
   --font-display: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC",

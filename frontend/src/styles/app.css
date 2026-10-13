@@ -1432,50 +1432,81 @@ kbd {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: conic-gradient(
-      from var(--sweep, -120deg) at 50% 50%,
-      rgba(255, 252, 244, 0) 0deg,
-      rgba(255, 252, 244, 0.3) 22deg,
-      rgba(255, 252, 244, 0) 44deg
+  /* 漆器盘面：四段径向渐变——左上受光→中间色→背光→最深暗部，强化立体感 */
+  background:
+    /* 掠射光扫光层：漆面那道随角度闪烁的彩虹光晕 */
+    conic-gradient(
+      from var(--sweep, -120deg) at 38% 28%,
+      rgba(255, 255, 255, 0) 0deg,
+      rgba(255, 255, 255, 0.55) 14deg,
+      rgba(255, 255, 255, 0.1) 30deg,
+      rgba(255, 255, 255, 0) 50deg
     ),
+    /* 漆面年轮纹：极细的同心环，比木纹更密、更亮，体现抛光感 */
     repeating-radial-gradient(
       circle at 50% 50%,
-      rgba(109, 80, 40, 0.05) 0 calc(var(--u) * 0.9px),
-      rgba(255, 255, 255, 0.06) calc(var(--u) * 0.9px) calc(var(--u) * 2.1px)
+      rgba(180, 130, 70, 0.04) 0 calc(var(--u) * 0.6px),
+      rgba(255, 255, 255, 0.07) calc(var(--u) * 0.6px) calc(var(--u) * 1.4px)
     ),
+    /* 主盘面：左上受光白 → 暖棕中间 → 右下深棕（漆器强对比） */
     radial-gradient(
-      circle at 34% 26%,
+      circle at 32% 24%,
       var(--disc-face-1) 0%,
-      var(--disc-face-2) 56%,
-      var(--disc-face-3) 100%
+      var(--disc-face-2) 42%,
+      var(--disc-face-3) 72%,
+      var(--disc-face-deep) 100%
     );
-  box-shadow: inset 0 calc(var(--u) * 1.5px) calc(var(--u) * 2px) rgba(255, 255, 255, 0.85),
-    inset 0 calc(var(--u) * -2px) calc(var(--u) * 5px) rgba(109, 80, 40, 0.24),
+  /* 内嵌阴影：顶部亮边 + 底部暗边（模拟圆形表面受光） + 外部三层投影 */
+  box-shadow:
+    inset 0 calc(var(--u) * 2px) calc(var(--u) * 3px) rgba(255, 255, 255, 0.9),
+    inset 0 calc(var(--u) * -2.5px) calc(var(--u) * 6px) rgba(80, 50, 15, 0.38),
+    inset calc(var(--u) * -1.5px) calc(var(--u) * -1.5px) calc(var(--u) * 4px) rgba(60, 36, 10, 0.22),
     var(--disc-shadow);
 }
 
-/* 顶上那道光：木棋子是圆的，受光的那一条近乎白色 */
+/* 漆器高光核心：左上方强镜面高光点 + 向右下渐隐 */
 .piece-face::before {
   content: '';
   position: absolute;
-  left: 22%;
-  right: 30%;
-  top: 8%;
-  height: 26%;
-  border-radius: 50%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0));
-  filter: blur(calc(var(--u) * 2.4px));
+  /* 高光椭圆：偏左上，体现光源从左上打来 */
+  left: 16%;
+  right: 36%;
+  top: 7%;
+  height: 30%;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  /* 双层渐变：内核近白镜面点 + 外晕柔和散开 */
+  background: radial-gradient(
+    ellipse at 38% 30%,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.88) 18%,
+    rgba(255, 255, 255, 0.45) 45%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  filter: blur(calc(var(--u) * 1.6px));
   pointer-events: none;
 }
 
-/* 内圈：仿实体棋子上车出来的一道浅槽 */
+/* 倒角水线：漆器边缘受光那一圈细亮线，顶部最亮、底部渐隐 */
 .piece-face::after {
   content: '';
   position: absolute;
-  inset: calc(var(--u) * 7px);
+  inset: calc(var(--u) * 6.5px);
   border-radius: 50%;
-  border: calc(var(--u) * 1.1px) solid rgba(109, 80, 40, 0.3);
-  box-shadow: inset 0 calc(var(--u) * 1px) calc(var(--u) * 1.5px) rgba(255, 255, 255, 0.6);
+  /* 顶部亮线（漆器倒角水线）+ 底部微暗槽 */
+  border: calc(var(--u) * 1.2px) solid transparent;
+  background:
+    linear-gradient(135deg, rgba(255, 248, 230, 0.0), rgba(255, 248, 230, 0.0)) padding-box,
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.85) 0%,
+      rgba(255, 248, 220, 0.55) 25%,
+      rgba(200, 160, 90, 0.15) 55%,
+      rgba(80, 50, 15, 0.35) 80%,
+      rgba(50, 30, 8, 0.5) 100%
+    ) border-box;
+  box-shadow:
+    inset 0 calc(var(--u) * 0.8px) calc(var(--u) * 2px) rgba(255, 255, 255, 0.65),
+    inset 0 calc(var(--u) * -0.8px) calc(var(--u) * 1.5px) rgba(60, 36, 10, 0.28);
   pointer-events: none;
 }
 
@@ -1486,28 +1517,49 @@ kbd {
   font-size: calc(var(--u) * 42px);
   line-height: 1;
   transform: translateY(-1%);
-  text-shadow: 0 calc(var(--u) * -0.9px) calc(var(--u) * 1.1px) rgba(58, 41, 18, 0.42),
-    0 calc(var(--u) * 0.9px) 0 rgba(255, 255, 255, 0.72);
+  /* 字体墨迹：顶部高光反光（笔锋受光面） + 底部微阴影（笔锋背光面） */
+  text-shadow:
+    0 calc(var(--u) * -1px) calc(var(--u) * 1px) rgba(255, 255, 255, 0.85),
+    0 calc(var(--u) * 1.2px) calc(var(--u) * 2px) rgba(40, 22, 8, 0.55),
+    0 calc(var(--u) * 2px) calc(var(--u) * 4px) rgba(40, 22, 8, 0.22);
 }
 
 .piece.red .piece-face {
-  box-shadow: inset 0 0 0 calc(var(--u) * 3.2px) var(--piece-red),
-    inset 0 0 0 calc(var(--u) * 7px) rgba(255, 255, 255, 0.6),
-    inset 0 calc(var(--u) * -2px) calc(var(--u) * 5px) rgba(109, 80, 40, 0.24),
+  box-shadow:
+    /* 朱砂边环 */
+    inset 0 0 0 calc(var(--u) * 3.5px) var(--piece-red),
+    /* 朱砂环内侧亮边 */
+    inset 0 0 0 calc(var(--u) * 4.8px) rgba(255, 255, 255, 0.55),
+    /* 朱砂环内侧底部阴影 */
+    inset 0 calc(var(--u) * -2px) calc(var(--u) * 6px) rgba(100, 30, 20, 0.30),
+    /* 外投影 */
     var(--disc-shadow);
 }
 .piece.red .piece-glyph {
   color: var(--piece-red);
+  text-shadow:
+    0 calc(var(--u) * -1px) calc(var(--u) * 1px) rgba(255, 220, 210, 0.7),
+    0 calc(var(--u) * 1.2px) calc(var(--u) * 2px) rgba(80, 15, 10, 0.60),
+    0 calc(var(--u) * 2px) calc(var(--u) * 4px) rgba(80, 15, 10, 0.25);
 }
 
 .piece.black .piece-face {
-  box-shadow: inset 0 0 0 calc(var(--u) * 3.2px) var(--piece-black),
-    inset 0 0 0 calc(var(--u) * 7px) rgba(255, 255, 255, 0.6),
-    inset 0 calc(var(--u) * -2px) calc(var(--u) * 5px) rgba(109, 80, 40, 0.24),
+  box-shadow:
+    /* 黑色边环 */
+    inset 0 0 0 calc(var(--u) * 3.5px) var(--piece-black),
+    /* 黑色环内侧亮边 */
+    inset 0 0 0 calc(var(--u) * 4.8px) rgba(255, 255, 255, 0.45),
+    /* 黑色环内侧底部阴影 */
+    inset 0 calc(var(--u) * -2px) calc(var(--u) * 6px) rgba(10, 8, 5, 0.38),
+    /* 外投影 */
     var(--disc-shadow);
 }
 .piece.black .piece-glyph {
   color: var(--piece-black);
+  text-shadow:
+    0 calc(var(--u) * -1px) calc(var(--u) * 1px) rgba(255, 255, 255, 0.55),
+    0 calc(var(--u) * 1.2px) calc(var(--u) * 2px) rgba(10, 8, 5, 0.65),
+    0 calc(var(--u) * 2px) calc(var(--u) * 4px) rgba(10, 8, 5, 0.30);
 }
 
 .piece.is-selected {
@@ -1518,27 +1570,32 @@ kbd {
 }
 
 .piece.is-selected .piece-face {
-  transform: scale(1.02);
-  filter: brightness(1.04);
-  /* 棋子本体不受杂白光遮蔽，仅在顶部边缘有清脆高光反光 */
+  transform: scale(1.03);
+  filter: brightness(1.06);
+  /* 选中浮空：顶部更强的漆器镜面高光（棋子离开棋盘面，光线更直射） */
   box-shadow:
-    0 calc(var(--u) * -2px) calc(var(--u) * 5px) rgba(255, 255, 255, 0.75),
-    inset 0 calc(var(--u) * 2px) calc(var(--u) * 3px) rgba(255, 255, 255, 0.95),
-    inset 0 calc(var(--u) * -2px) calc(var(--u) * 4px) rgba(109, 80, 40, 0.28),
+    /* 顶部强镜面散射 */
+    0 calc(var(--u) * -3px) calc(var(--u) * 6px) rgba(255, 255, 255, 0.65),
+    /* 内侧顶部高光条 */
+    inset 0 calc(var(--u) * 2.5px) calc(var(--u) * 4px) rgba(255, 255, 255, 0.98),
+    /* 内侧底部漆器深阴影 */
+    inset 0 calc(var(--u) * -2.5px) calc(var(--u) * 6px) rgba(70, 42, 12, 0.35),
+    /* 左侧微光 */
+    inset calc(var(--u) * 1.5px) 0 calc(var(--u) * 3px) rgba(255, 255, 255, 0.35),
     var(--disc-shadow);
   transition: transform var(--dur-fast) var(--ease-spring), filter var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
 /* 选中态浮空深投影：棋子抬升后，深色影子向右下方沉降、略微扩散，形成强烈的悬浮高度感 */
 .piece.is-selected::after {
-  transform: translate(calc(var(--u) * 6px), calc(var(--u) * 11px)) scale(0.96);
-  opacity: 0.72;
-  filter: blur(calc(var(--u) * 2.8px));
+  transform: translate(calc(var(--u) * 7px), calc(var(--u) * 13px)) scale(0.92);
+  opacity: 0.80;
+  filter: blur(calc(var(--u) * 3.5px));
   background: radial-gradient(
-    ellipse at 50% 50%,
-    rgba(20, 10, 4, 0.75) 0%,
-    rgba(30, 16, 6, 0.5) 45%,
-    rgba(40, 22, 10, 0.18) 70%,
+    ellipse at 48% 48%,
+    rgba(15, 8, 2, 0.85) 0%,
+    rgba(25, 14, 4, 0.62) 40%,
+    rgba(35, 20, 8, 0.25) 68%,
     transparent 100%
   );
   transition: transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out);
@@ -1575,27 +1632,32 @@ kbd {
 }
 
 .piece.dragging .piece-face {
-  transform: scale(1.08);
-  filter: brightness(1.10);
+  transform: scale(1.1);
+  filter: brightness(1.14);
   box-shadow:
-    inset 0 calc(var(--u) * 2.5px) calc(var(--u) * 3.5px) rgba(255, 255, 255, 0.98),
-    inset 0 calc(var(--u) * -2.5px) calc(var(--u) * 5px) rgba(109, 80, 40, 0.25),
+    /* 内侧顶部极强高光：棋子完全离地，顶光最强 */
+    inset 0 calc(var(--u) * 3px) calc(var(--u) * 4px) rgba(255, 255, 255, 1),
+    /* 内侧底部深漆器阴影 */
+    inset 0 calc(var(--u) * -3px) calc(var(--u) * 7px) rgba(70, 42, 12, 0.42),
+    /* 左侧受光边缘 */
+    inset calc(var(--u) * 2px) 0 calc(var(--u) * 4px) rgba(255, 255, 255, 0.42),
     var(--disc-shadow);
 }
 
-/* 拿起时顶光高光条变亮 */
+/* 拿起时漆器高光点更锐利更集中 */
 .piece.dragging .piece-face::before {
-  filter: blur(calc(var(--u) * 2px));
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.95) 0%,
-    rgba(255, 255, 255, 0.3) 50%,
-    transparent 80%
+  filter: blur(calc(var(--u) * 1.2px));
+  background: radial-gradient(
+    ellipse at 35% 28%,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.92) 12%,
+    rgba(255, 255, 255, 0.58) 38%,
+    rgba(255, 255, 255, 0) 100%
   );
-  height: 32%;
-  left: 20%;
-  right: 20%;
-  top: 6%;
+  height: 34%;
+  left: 14%;
+  right: 34%;
+  top: 5%;
 }
 
 /* 拖拽时的右下方落盘大阴影：随高度抬高，影子拉得更远、更大、更虚 */
