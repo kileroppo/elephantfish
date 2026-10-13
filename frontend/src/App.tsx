@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Board } from './components/Board'
 import { RelayConsole } from './components/RelayConsole'
 import { AnalysisPanel } from './components/AnalysisPanel'
@@ -17,7 +17,6 @@ const LS_RAIL_R = 'ef.rail-right'
 
 export default function App() {
   const g = useGame()
-  const [selected, setSelected] = useState<string | null>(null)
   const [flipped, setFlipped] = useState(() => localStorage.getItem(LS_FLIP) === '1')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem(LS_SOUND) !== '0')
   const [help, setHelp] = useState(false)
@@ -86,10 +85,6 @@ export default function App() {
     return () => window.clearTimeout(timer)
   }, [isPlaying, game?.status.winner, game?.engine_side])
 
-  useEffect(() => {
-    setSelected(null)
-  }, [game?.ply, game?.engine_side, game?.status.state])
-
   // 页面加载引擎执红先行时自动起手
   const autoStarted = useRef(false)
   useEffect(() => {
@@ -100,47 +95,13 @@ export default function App() {
     }
   }, [game, g])
 
-  const targets = useMemo(() => {
-    if (!selected || !game) return []
-    return game.legal_moves.filter((m) => m.from === selected).map((m) => m.to)
-  }, [selected, game])
-
-  const onBoardSelect = useCallback((square: string) => {
-    setSelected(square)
-  }, [])
-
-  /** 拖拽落子 */
-  const onBoardDrop = useCallback(
-    (from: string, to: string) => {
-      if (!game || g.thinking || game.status.state !== 'playing') return
-      const mv = game.legal_moves.find((m) => m.from === from && m.to === to)
-      if (!mv) return
-      setSelected(null)
-      void g.submitMove(mv.iccs)
+  /** 落子的唯一出口。走哪一步算一步、合法不合法，都由 Board 自己认完了才报上来 ——
+   *  上层不再算一遍合法性，也就不会有「两处判得不一样」的余地。 */
+  const onBoardMove = useCallback(
+    (iccs: string) => {
+      void g.submitMove(iccs)
     },
-    [game, g],
-  )
-
-  /** 单击选子或落子 */
-  const onSquareClick = useCallback(
-    (square: string) => {
-      if (!game || g.thinking || game.status.state !== 'playing') return
-      if (selected) {
-        const mv = game.legal_moves.find((m) => m.from === selected && m.to === square)
-        if (mv && mv.from !== mv.to) {
-          void g.submitMove(mv.iccs)
-          setSelected(null)
-          return
-        }
-      }
-      const piece = game.pieces.find((p) => p.square === square)
-      if (piece && piece.side === game.turn) {
-        setSelected((prev) => (prev === square ? null : square))
-      } else {
-        setSelected(null)
-      }
-    },
-    [game, g, selected],
+    [g],
   )
 
   // ---- 键盘快捷键 ----
@@ -151,7 +112,8 @@ export default function App() {
 
       if (e.key === 'Escape') {
         setHelp(false)
-        setSelected(null)
+        // 棋盘的选中态归 Board 自己管（它也有自己的 Escape 分支）；
+        // 这里只负责关帮助、把焦点从输入框上收回来。
         if (typing) (target as HTMLInputElement).blur()
         return
       }
@@ -304,13 +266,11 @@ export default function App() {
             <Board
               game={game}
               flipped={flipped}
-              selected={selected}
-              targets={targets}
-              onSquareClick={onSquareClick}
-              onSelect={onBoardSelect}
-              onDragDrop={onBoardDrop}
               thinking={g.thinking}
-              pv={[]}
+              /* 主变直接接引擎算出来的那一条（以前这里写死 pv={[]}，
+                 于是 Board 里那段虚线渲染从来没亮过） */
+              pv={g.task?.progress?.pv ?? []}
+              onMove={onBoardMove}
             />
             {showOverModal && !dismissedOver && (
               <div className={`result-veil winner-${game.status.winner ?? 'none'}`}>

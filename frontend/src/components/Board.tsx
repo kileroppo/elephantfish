@@ -10,7 +10,6 @@ import type { GameSnapshot, Side } from '../types'
 import {
   BOARD_H,
   BOARD_W,
-  CELL,
   COLS,
   MARGIN,
   MARK_POINTS,
@@ -21,6 +20,7 @@ import {
   toPercent,
   palaceDiagonals,
   parseSquare,
+  pixelToSquare,
 } from '../lib/board'
 
 /** 正在被拖拽的一颗子。bx/by 是棋盘坐标系里的像素位置，
@@ -34,30 +34,14 @@ interface DragState {
 interface BoardProps {
   game: GameSnapshot
   flipped: boolean
-  selected: string | null
-  targets: string[]
-  /** 单击（不拖）：由上层决定这是「选中」还是「落子」 */
-  onSquareClick: (square: string) => void
-  /** 拖拽开始时选中起点，好让可走点提前显形 */
-  onSelect: (square: string) => void
-  /** 拖拽结束落在 to 上：由上层校验合法性并提交 */
-  onDragDrop: (from: string, to: string) => void
   thinking: boolean
-  /** 主变占位（ICCS），在盘面上淡淡地铺一条「引擎打算这么走」的虚线 */
+  /** 主变（ICCS）：在盘面上淡淡地铺一条「引擎打算这么走」的虚线 */
   pv?: string[]
+  /** 落子唯一的出口。走哪一步算一步由 Board 自己认，上层只收 ICCS。 */
+  onMove: (iccs: string) => void
 }
 
-export function Board({
-  game,
-  flipped,
-  selected,
-  targets,
-  onSquareClick,
-  onSelect,
-  onDragDrop,
-  thinking,
-  pv = [],
-}: BoardProps) {
+export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) {
   const surfaceRef = useRef<HTMLDivElement>(null)
 
   // 拖拽：从「按下一颗子」到「松手」之间的全部状态都在这里。
@@ -73,9 +57,28 @@ export function Board({
   // 本地预判位移：落子瞬间立即启动位移，不等网络往返，杜绝子回弹与闪烁
   const [pendingMove, setPendingMove] = useState<{ from: string; to: string } | null>(null)
 
+  // 选中哪一格归 Board 自己管。以前它住在上层，于是「点一下到底算选中还是落子」
+  // 要绕一圈：Board 把格子报上去，上层判完再把 selected/targets 传回来。走这条
+  // 环路的代价是合法性判两遍（Board 判 targets.includes，上层再 find 一次），
+  // 两处一旦有一处改了就静默不一致。
+  const [picked, setPicked] = useState<string | null>(null)
+
+  // 可走点：从合法着法里现算。不再由上层算好传下来 —— 传下来就意味着上层也得
+  // 知道「哪一格能被选中」，那正是要收窄掉的那部分知识。
+  const targets = useMemo(() => {
+    if (!picked) return []
+    return game.legal_moves.filter((m) => m.from === picked).map((m) => m.to)
+  }, [picked, game.legal_moves])
+
   useEffect(() => {
     setPendingMove(null)
   }, [game.ply, game.pieces, game.turn])
+
+  // 局面换了就把选中清掉。**只认这几个字段**：直接依赖 game.pieces 会在每次
+  // 轮询/state 刷新时都拿到新数组，于是每一轮都把选中清掉，选子根本立不住。
+  useEffect(() => {
+    setPicked(null)
+  }, [game.ply, game.engine_side, game.status.state])
 
   useEffect(() => {
     if (!pendingMove) return
@@ -170,16 +173,12 @@ export function Board({
     return out
   }, [pv])
 
-  /** 棋盘像素坐标 -> 格子名；落在盘外返回 null。翻转只在这一步发生。 */
+  /** 棋盘像素坐标 -> 格子名；落在盘外返回 null。
+   *  坐标换算只有 lib/board.ts 的 pixelToSquare 一份 —— 这里以前自己又写了一遍
+   *  同样的四则运算，两份迟早会走岔。 */
   const squareFromBoard = (x: number, y: number): string | null => {
-    let file = Math.round((x - MARGIN) / CELL)
-    let rank = 9 - Math.round((y - MARGIN) / CELL)
-    if (file < 0 || file > 8 || rank < 0 || rank > 9) return null
-    if (flipped) {
-      file = 8 - file
-      rank = 9 - rank
-    }
-    return String.fromCharCode(97 + file) + rank
+    const p = pixelToSquare(x, y, flipped)
+    return p ? squareAt(p.file, p.rank) : null
   }
 
   const squareAtPoint = (clientX: number, clientY: number): string | null => {
@@ -209,11 +208,33 @@ export function Board({
     return !!piece && piece.side === game.turn
   }
 
+  /** 现在能不能动棋。三个入口（拖、点、键盘）都过这一道。 */
+  const canPlay = (): boolean => !thinking && game.status.state === 'playing'
+
+  /** 落子。**合法性只在这一处判**，上层收到的永远是已经核对过的一步。 */
+  const commitMove = (from: string, to: string): boolean => {
+    if (!canPlay()) return false
+    const mv = game.legal_moves.find((m) => m.from === from && m.to === to)
+    if (!mv || mv.from === mv.to) return false
+    setPendingMove({ from, to }) // 先本地预判位移，不等网络往返
+    setPicked(null)
+    onMove(mv.iccs)
+    return true
+  }
+
+  /** 单击一格：能落子就落子；点到自己轮到的子就选中／取消；点别处清掉选中。 */
+  const tapSquare = (sq: string) => {
+    if (!canPlay()) return
+    if (picked && picked !== sq && commitMove(picked, sq)) return
+    if (grabbable(sq)) setPicked((prev) => (prev === sq ? null : sq))
+    else setPicked(null)
+  }
+
   // ---- 指针：按下 / 移动 / 松开 -------------------------------------- //
   //
   // 落子有两条路，共用同一套坐标反查：
   //   拖   —— 按住子、挪过 5px 就进入拖拽，松手落在合法点就落子；
-  //   点   —— 没挪动，当单击处理，交给上层决定是选中还是落子。
+  //   点   —— 没挪动，当单击处理（选中／落子由 tapSquare 一处认）。
   // 之所以把点击也画进指针事件里，是因为一个 <div> 上同时挂 onClick 和
   // pointerdown，拖拽结束时浏览器补的那次 click 会把同一步走两遍。
 
@@ -242,7 +263,7 @@ export function Board({
       if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 5) return
       d.moved = true
       // 一旦真的拖动起来就先把起点选中，可走点提前显形
-      onSelect(d.from)
+      setPicked(d.from)
     }
     const { bx, by } = toBoardPixel(e.clientX, e.clientY)
     setDrag({ from: d.from, bx, by })
@@ -258,18 +279,11 @@ export function Board({
     if (e.currentTarget.hasPointerCapture(d.id)) e.currentTarget.releasePointerCapture(d.id)
     const sq = squareAtPoint(e.clientX, e.clientY)
     if (wasDrag && fromSq) {
-      if (sq && sq !== fromSq && targets.includes(sq)) {
-        setPendingMove({ from: fromSq, to: sq })
-        onDragDrop(fromSq, sq)
-      }
+      // 拖到哪落哪：不合法 commitMove 自己会落空，这里不必先问一遍 targets
+      if (sq && sq !== fromSq) commitMove(fromSq, sq)
       return
     }
-    if (sq) {
-      if (selected && selected !== sq && targets.includes(sq)) {
-        setPendingMove({ from: selected, to: sq })
-      }
-      onSquareClick(sq)
-    }
+    if (sq) tapSquare(sq)
   }
 
   const cancelPointer = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -292,7 +306,7 @@ export function Board({
   const [kbdOn, setKbdOn] = useState(false)
 
   const initialCursor = (): string => {
-    if (selected) return selected
+    if (picked) return picked
     if (game.last_move) return game.last_move.to
     return flipped ? 'e9' : 'e0' // 执棋一方的将/帅门口
   }
@@ -329,14 +343,11 @@ export function Board({
         const sq = cursor ?? initialCursor()
         setCursor(sq)
         setKbdOn(true)
-        if (selected && selected !== sq && targets.includes(sq)) {
-          setPendingMove({ from: selected, to: sq })
-        }
-        onSquareClick(sq) // 上层自己判断这是选中还是落子
+        tapSquare(sq)
         break
       }
       case 'Escape':
-        if (selected) onSquareClick(selected) // 再点一次已选中的子 = 取消选中
+        setPicked(null)
         break
     }
   }
@@ -453,12 +464,12 @@ export function Board({
         })()}
 
         {/* 选中棋子周围的清透月牙高光圆环（精准对齐图一） */}
-        {selected && (() => {
-          const { file, rank } = parseSquare(selected)
+        {picked && (() => {
+          const { file, rank } = parseSquare(picked)
           const { x, y } = toPercent(file, rank, flipped)
           return (
             <span
-              key={`selected-crescent-${selected}`}
+              key={`selected-crescent-${picked}`}
               className="selected-crescent-ring"
               style={{
                 left: `${x}%`,
@@ -603,7 +614,7 @@ export function Board({
               className={[
                 'piece',
                 p.side,
-                selected === p.square ? 'is-selected' : '',
+                picked === p.square ? 'is-selected' : '',
                 kingInCheck === p.square ? 'is-check' : '',
                 victorKing === p.square ? 'is-victor' : '',
                 isDragging ? 'dragging' : '',
@@ -620,7 +631,7 @@ export function Board({
               data-piece={p.piece}
               data-side={p.side}
               data-square={effectiveSquare}
-              data-selected={selected === p.square ? 'true' : 'false'}
+              data-selected={picked === p.square ? 'true' : 'false'}
               data-dragging={isDragging ? 'true' : 'false'}
             >
               <span className="piece-face" key={`face-${p.id}-${effectiveSquare}`}>
