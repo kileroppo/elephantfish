@@ -78,7 +78,7 @@ export function AnalysisPanel({ game, task, thinking }: Props) {
   }, [progress?.pv_detail, progress?.pv, lastEngineRecord?.iccs, thinking])
 
   return (
-    <section className="panel analysis" aria-label="引擎分析">
+    <section className="panel analysis" aria-label="引擎分析" data-analysis="">
       <header className="panel-head">
         <h2>引擎分析</h2>
         {thinking && <span className="live-dot" title="实时" />}

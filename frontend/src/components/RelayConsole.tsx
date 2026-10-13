@@ -82,7 +82,7 @@ export function RelayConsole({
   }
 
   return (
-    <section className="relay-compact" aria-label="应手与控制">
+    <section className="relay-compact" aria-label="应手与控制" data-relay="">
       {/* 核心应手展示区 */}
       <div className={`engine-hero ${thinking ? 'is-thinking' : ''}`}>
         {thinking ? (
@@ -151,7 +151,7 @@ export function RelayConsole({
 
       {/* 排队步提醒 */}
       {queued && (
-        <div className="queued-strip">
+        <div className="queued-strip" data-relay-queued={queued}>
           <span>已排队录入对方走法：<strong>{queued}</strong>（等待计算结束）</span>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClearQueue}>
             撤销
@@ -165,6 +165,7 @@ export function RelayConsole({
           <button
             type="button"
             className="type-toggle-btn"
+            data-relay-toggle=""
             onClick={() => setShowTypeInput(true)}
           >
             <span>键盘文本录入</span>
@@ -176,6 +177,7 @@ export function RelayConsole({
               autoFocus
               value={text}
               placeholder="输入记谱 (如 炮二平五 或 h2e2)"
+              data-relay-input=""
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void submit()

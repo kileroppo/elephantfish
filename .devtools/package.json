@@ -1,1 +1,14 @@
-{"name":"ef-devtools","private":true,"type":"module","dependencies":{"playwright-core":"^1.64.0"}}
+{
+  "name": "ef-devtools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node run.mjs",
+    "test:ui": "node run.mjs",
+    "test:api": "python ../tools/smoke_http.py",
+    "test:all": "node run.mjs && python ../tools/smoke_http.py"
+  },
+  "dependencies": {
+    "playwright-core": "^1.64.0"
+  }
+}

@@ -109,24 +109,55 @@ python tools/smoke_http.py  # HTTP 契约：路由 / 状态码 / 字段 / 排队
 
 ### 界面自检
 
-`.devtools/` 下是一套 Playwright 自检，跑之前先起服务：
+`.devtools/` 下是一套 Playwright 自检，一条命令跑完：
 
 ```bash
-python server/app.py 8010
-cd .devtools && npm install          # 只需要一次
-npm test                             # = audit + drag + kbd，全绿才算过
-npm test -- http://127.0.0.1:8020/   # 指定地址
+cd .devtools && npm install   # 只需要一次
+npm test                      # 自己起服务，跑完自己关掉
+```
+
+`npm test` 就是 `node run.mjs`：挑一个空闲端口起 `python server/app.py`、等 `/api/health`、
+依次跑三套脚本、汇总退出码（有失败就非零退出）。所以**不必先手动起服务** ——
+以前得先开服务再跑脚本，忘了开只会得到一堆连接错误。
+
+```bash
+node run.mjs --port 8040      # 指定端口
+node run.mjs --only drag      # 只跑一套
+EF_PYTHON=py node run.mjs     # 指定解释器（默认 python）
+npm run test:api              # HTTP 契约（tools/smoke_http.py）
+npm run test:all              # 界面 + HTTP 一起
 ```
 
 | 脚本 | 管什么 |
 |---|---|
-| `audit.mjs` | 四档视口的溢出 / 点击目标尺寸 / 控制台错误，外加五个交互场景与抢录竞态 |
+| `audit.mjs` | 四档视口的溢出 / 点击目标尺寸 / 控制台错误，外加交互场景与抢录竞态 |
 | `drag.mjs` | 拖拽落子与点击落子两条路，坐标由棋子包围盒反推，视角翻转后照样成立 |
 | `kbd.mjs` | 键盘走子通路（方向键移光标 → 回车选中 → 回车落子） |
 
-判据跨过的是**稳定的 DOM 契约**（`data-square` / `data-piece` / `role`）与服务端
-`/api/state` 的事实，**不绑定 CSS 类名** —— 类名归样式所有，可以随时改名，
-拿它当测试接缝会得到一套「看起来在跑、其实早就失效」的自检。详见 `review/quality-review.html`。
+三套脚本**只**通过 `_contract.mjs` 说话，不再各自记一套选择器。它导出的读状态
+（`getState` / `boardInfo` / `selectedSquare` / `cursorSquare` …）与找元素
+（`piece` / `target` / `relayInputOpen` / `queuedText` …）都跨在**稳定的 DOM 契约**上：
+
+| 契约 | 落在哪 |
+|---|---|
+| `data-board` `data-flipped` `data-thinking` `data-ply` `data-dragging` | 棋盘容器 |
+| `data-square` `data-piece` `data-side` `data-selected` `data-dragging` | 棋子 |
+| `data-target` `data-over` | 可落点 |
+| `data-kbd-cursor` `data-cursor` | 键盘光标 |
+| `data-relay` `data-relay-queued` `data-relay-toggle` `data-relay-input` | 转述台 |
+| `data-analysis` | 分析面板 |
+
+外加服务端 `/api/state` 的事实。**不绑定 CSS 类名** —— 类名归样式所有，可以随时改名。
+这条规矩不是洁癖，是修出来的：三个脚本原先全都断言过已经改名的类名
+（`.relay-field` / `.queue-chip` / `.relay-output` / `.piece.is-lifted` …），
+于是 `drag.mjs` 从界面重写那天起恒红、`kbd.mjs` 从不 `process.exit` 恒绿、
+`audit.mjs` 里「等服务端闲」的判据恒真 —— 「全绿」从来没有事实依据。
+详见 `review/quality-review.html`。
+
+还有一处更隐蔽的坑记在这里：**Playwright 的 `waitForFunction` 不会 await 异步谓词**。
+写成 `waitForFunction(async () => …)` 时它看到的是一个真值 Promise 对象，于是立即返回 ——
+实测同一个判据同步版等满 626ms、异步版 6ms 就回来了。所以 `_contract.mjs` 里
+「服务端闲 + 界面已同步」是**在 Node 侧轮询**实现的，不交给 `waitForFunction`。
 
 **双引擎内核支持**：
 - **⚡ 皮卡鱼（Pikafish · NNUE）**：接入世界顶级开源中国象棋引擎（Stockfish 架构 + 官方 NNUE 神经网络评估）。棋力高达 Elo 3500+，通过内置 UCI 驱动长驻运行，每秒搜索数百万至千万节点，中残局压制力极强，与任何对手大模型对弈时拥有绝对的碾压胜率。已随项目内置 macOS（通用二进制）、Windows、Linux 原生支持及 `pikafish.nnue` 权重文件，开箱即用。

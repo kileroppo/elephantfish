@@ -1,77 +1,114 @@
-// 键盘走子专项自检：聚焦棋盘 → 方向键移动光标 → 回车选中 → 方向键走到合法落点 → 回车落子，
-// 最后问服务端「这一步记上了没有」。
+// 键盘走子专项自检：聚焦棋盘 → 方向键移动光标 → 回车选中 → 方向键走到合法落点
+// → 回车落子，最后问服务端「这一步记上了没有」。
 //
 // 用法： node kbd.mjs [url]
-import { chromium } from 'playwright-core'
+//
+// 这个脚本以前**从不 `process.exit`** —— 结尾只有三行 console.log，无论发现
+// 什么问题都以 0 结束。一条永远不会失败的检查比没有检查更糟：它让人以为键盘
+// 通路有覆盖，而「有问题」只写在 stdout 上，没人读 stdout。
+//
+// 它以前还靠「连按 10 次左 + 12 次下把光标逼到 a0，再正向数步」来定位光标。
+// 现在光标在哪一格就写在 DOM 上（`data-cursor`），照着差值走即可 —— 不必
+// 假定初始位置，也不必赌按键会不会被边界钳住。
 
-const url = (process.argv[2] || 'http://127.0.0.1:8010/').replace(/\/$/, '') + '/'
+import {
+  openBrowser,
+  urlFromArgv,
+  watchConsole,
+  getState,
+  waitIdle,
+  waitOpponentTurn,
+  reset,
+  boardInfo,
+  cursorSquare,
+  selectedSquare,
+  report,
+  diagnose,
+  failFast,
+} from './_contract.mjs'
 
-const browser = await chromium.launch({ channel: 'chrome' })
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
-const page = await ctx.newPage()
-const consoleErrs = []
-page.on('console', (m) => m.type() === 'error' && consoleErrs.push(m.text()))
-page.on('pageerror', (e) => consoleErrs.push(String(e)))
+const url = urlFromArgv(process.argv)
+const { browser, page } = await openBrowser()
+const problems = watchConsole(page)
+failFast(browser, problems)
 
-await page.goto(url, { waitUntil: 'networkidle' })
-await page.waitForSelector('.board-surface', { timeout: 8000 })
+/**
+ * 把光标从当前位置走到目标格。
+ *
+ * 方向键走的是**屏幕**方向：组件内部在翻转视角时会把 dFile/dRank 取反
+ * （Board.tsx 的 moveCursor），所以这里算差值也要按屏幕方向算。
+ */
+async function walkTo(target) {
+  const cur = await cursorSquare(page)
+  if (!cur) throw new Error('光标还没显形，要先按一次方向键')
+  const info = await boardInfo(page)
+  const curF = cur.charCodeAt(0) - 97
+  const curR = Number(cur.slice(1))
+  const tF = target.charCodeAt(0) - 97
+  const tR = Number(target.slice(1))
+  const dFile = info.flipped ? curF - tF : tF - curF
+  const dRank = info.flipped ? curR - tR : tR - curR
 
-// 等引擎闲下来再动手，不然点击会被 thinking 挡掉
-await page.waitForFunction(() => !document.querySelector('.board.is-thinking'), { timeout: 30000 })
-
-// 初始光标 = 初始局面的 last_move 为空 → 落在 e0（红帅）。e0 是自家子，回车应选中。
-await page.focus('.board-surface')
-await page.keyboard.press('ArrowUp') // 触发光标显形：e0 → e1
-await page.waitForTimeout(120)
-const cursorVisible = (await page.locator('.kbd-cursor').count()) === 1
-
-// 走兵：初始局面红方兵在 c6？不——用通用策略：先点选一颗有合法步的子。
-// 直接问服务端合法着法，挑第一步，用键盘把光标挪到 from，回车；再挪到 to，回车。
-const snapRaw = await page.evaluate(async () => {
-  const r = await fetch('/api/state')
-  return r.json()
-}).catch(() => null)
-const snap = snapRaw?.state?.game ?? null
-const recordedBefore = (snap?.records ?? []).map((r) => r.iccs)
-
-let moveOk = false
-let tried = ''
-if (snap && snap.legal_moves && snap.legal_moves.length) {
-  const mv = snap.legal_moves.find((m) => m.from !== m.to)
-  tried = mv.iccs
-  const df = mv.to.charCodeAt(0) - mv.from.charCodeAt(0)
-  const dr = Number(mv.to.slice(1)) - Number(mv.from.slice(1))
-  // 先把光标精确挪到 from：光标现在在某未知格，用「从 initialCursor 推」不可靠，
-  // 干脆多点几次反方向键把光标逼到角上，再正向数步。
-  for (let i = 0; i < 10; i++) await page.keyboard.press('ArrowLeft')
-  for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowDown')
-  // 现在光标应在 a0（未翻转视角）
-  const fromF = mv.from.charCodeAt(0) - 97
-  const fromR = Number(mv.from.slice(1))
-  for (let i = 0; i < fromF; i++) await page.keyboard.press('ArrowRight')
-  for (let i = 0; i < fromR; i++) await page.keyboard.press('ArrowUp')
-  await page.keyboard.press('Enter') // 选中
-  await page.waitForTimeout(80)
-  for (let i = 0; i < Math.abs(df); i++) await page.keyboard.press(df > 0 ? 'ArrowRight' : 'ArrowLeft')
-  for (let i = 0; i < Math.abs(dr); i++) await page.keyboard.press(dr > 0 ? 'ArrowUp' : 'ArrowDown')
-  await page.keyboard.press('Enter') // 落子
-  await page.waitForTimeout(600)
-  const afterRaw = await page.evaluate(async () => {
-    const r = await fetch('/api/state')
-    return r.json()
-  })
-  const after = afterRaw?.state?.game
-  const recordedAfter = (after?.records ?? []).map((r) => r.iccs)
-  // 自动应手可能立刻把引擎的回应也记上，所以不能只看 last_move，
-  // 看「我们这一步有没有出现在新增记录里」。
-  moveOk = recordedAfter.length > recordedBefore.length && recordedAfter.includes(mv.iccs)
+  for (let i = 0; i < Math.abs(dFile); i += 1) {
+    await page.keyboard.press(dFile > 0 ? 'ArrowRight' : 'ArrowLeft')
+  }
+  for (let i = 0; i < Math.abs(dRank); i += 1) {
+    await page.keyboard.press(dRank > 0 ? 'ArrowUp' : 'ArrowDown')
+  }
+  const now = await cursorSquare(page)
+  if (now !== target) {
+    // 光标没走到该去的地方 —— 这是键盘导航本身的问题，不是脚本没等对
+    throw new Error(`光标没能走到 ${target}，停在 ${now}（方向键没生效或被钳住了）`)
+  }
 }
 
-// Esc 取消选中不应报错
-await page.keyboard.press('Escape')
+await page.goto(url, { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('[data-board]', { timeout: 10000 })
+await waitIdle(page)
 
-console.log(`光标显形：${cursorVisible}`)
-console.log(`键盘落子 ${tried}：${moveOk ? '已记录' : '未记录'}`)
-console.log(`控制台：${consoleErrs.length ? '有错误！\n' + consoleErrs.join('\n') : '干净'}`)
-console.log(cursorVisible && moveOk && !consoleErrs.length ? '—— 键盘走子通路 OK ——' : '—— 存在问题 ——')
+// 引擎执红先走一手，把局面交到对方（黑）手上 —— 这时键盘才有子可动
+await reset(page, 'red')
+const game = (await waitOpponentTurn(page)).game
+const mv = game.legal_moves.find((m) => m.from !== m.to)
+if (!mv) throw new Error('对方没有可试的合法着法')
+
+console.log(`局面：轮到${game.turn} · 试走 ${mv.from} -> ${mv.to}（${mv.iccs} ${mv.chinese}）`)
+
+// 聚焦棋盘并按一次方向键，光标才显形（初始 cursor 是 null，要按一下才出现）
+await page.locator('[data-board]').focus()
+await page.keyboard.press('ArrowUp')
+const revealed = await cursorSquare(page)
+console.log(`光标显形：${revealed}`)
+
+const before = (await getState(page)).game.records.map((r) => r.iccs)
+
+await walkTo(mv.from)
+await page.keyboard.press('Enter')
+await page.waitForTimeout(150)
+const picked = await selectedSquare(page)
+const targetCount = await page.locator('[data-target]').count()
+
+await walkTo(mv.to)
+await page.keyboard.press('Enter')
+await page.waitForTimeout(600)
+
+const after = (await getState(page)).game.records.map((r) => r.iccs)
+// 自动应手可能立刻把引擎的回应也记上，所以不能只看 last_move，
+// 要看「我们这一步有没有出现在新增记录里」。
+const landed = after.length > before.length && after.includes(mv.iccs)
+console.log(`回车选中了：${picked} · 可走点 ${targetCount} 个 · 键盘落子已记录：${landed}`)
+
+// Esc 取消选中不应报错（它会走到 watchConsole 里）
+await page.keyboard.press('Escape')
+await page.waitForTimeout(100)
+
+if (!revealed) problems.push('按了方向键之后光标没有显形（data-kbd-cursor 不存在）')
+if (picked !== mv.from) problems.push(`回车没有选中 ${mv.from}（选中了 ${picked}）`)
+if (!targetCount) problems.push(`选中 ${mv.from} 之后一个可走点都没显示`)
+if (!landed) problems.push(`键盘落子 ${mv.iccs} 没有被服务端记上（新增记录 ${after.length - before.length} 条）`)
+
+console.log(problems.length ? '有断言失败，现场如下' : '控制台与断言都干净')
+if (problems.length) console.log(`页面现场：${await diagnose(page)}`)
+
 await browser.close()
+process.exit(report(problems, [], '—— 键盘走子通路 OK ——'))

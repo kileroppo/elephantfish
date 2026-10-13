@@ -355,6 +355,15 @@ export function Board({
         tabIndex={0}
         role="application"
         aria-label="棋盘。方向键移动光标，回车选中或落子，Esc 取消选中。"
+        /* 自检脚本跨的稳定契约。类名归样式所有、可以随时改名，所以断言一律
+           读这些 data-*（以及 /api/state），不读 class。 */
+        data-board=""
+        data-flipped={flipped ? 'true' : 'false'}
+        data-thinking={thinking ? 'true' : 'false'}
+        /* 当前渲染的手数：脚本拿它跟服务端的 ply 比对，就知道界面追上来没有 */
+        data-ply={game.ply}
+        /* 正在拖的是哪一格（没在拖就不带这个属性） */
+        {...(drag ? { 'data-dragging': drag.from } : {})}
       >
         <BoardArtwork />
 
@@ -396,6 +405,9 @@ export function Board({
                 .filter(Boolean)
                 .join(' ')}
               style={{ left: `${x}%`, top: `${y}%` }}
+              data-target=""
+              data-square={sq}
+              data-over={dragSquare === sq ? 'true' : 'false'}
             />
           )
         })}
@@ -404,6 +416,8 @@ export function Board({
         {kbdOn && cursor && (
           <span
             className="kbd-cursor"
+            data-kbd-cursor=""
+            data-cursor={cursor}
             style={{
               left: `${toPercent(parseSquare(cursor).file, parseSquare(cursor).rank, flipped).x}%`,
               top: `${toPercent(parseSquare(cursor).file, parseSquare(cursor).rank, flipped).y}%`,
@@ -603,6 +617,11 @@ export function Board({
                 top: `${posY}%`,
               }}
               aria-label={`${p.side === 'red' ? '红' : '黑'}${p.glyph}于 ${effectiveSquare}`}
+              data-piece={p.piece}
+              data-side={p.side}
+              data-square={effectiveSquare}
+              data-selected={selected === p.square ? 'true' : 'false'}
+              data-dragging={isDragging ? 'true' : 'false'}
             >
               <span className="piece-face" key={`face-${p.id}-${effectiveSquare}`}>
                 <span className="piece-glyph">{p.glyph}</span>
