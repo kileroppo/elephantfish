@@ -222,6 +222,9 @@ class EngineSet:
     ``start_search``、``state()``、``/api/health``、``act_settings``、``act_new``
     六处，各自重判一遍 ``engine_type == 'pikafish' and is_available``。
     现在只有 ``active`` 一个地方知道。
+
+    （那六处里的前五处现属 ``server/session.py`` 的 ``GameSession``，最后两处
+    即它的 ``update_settings`` / ``new_game``。）
     """
 
     def __init__(self, builtin, pikafish=None, prefer: str = PIKAFISH):

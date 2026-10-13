@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""转述对局服务。
+"""转述对局服务 —— 只有 HTTP。
 
 这个服务的存在意义只有一个：**让人当信使**。
 
@@ -16,593 +16,81 @@
 
 搜索放在后台线程里跑，前端轮询进度，所以深度一层层涨上去的过程是看得见的，
 不会出现「点了没反应，三秒后突然蹦出一步棋」。
+
+**这个文件只管三件事：解析请求、路由、写响应。** 对局本身 —— 棋盘、引擎、
+排队的走法、战绩、那个后台搜索线程以及它要小心处理的竞态 —— 全在
+``server/session.py``。
+
+分开的理由是**测试面**。以前这些都挤在这里，于是想测「引擎收手后排队的那一步
+会不会落地」的代价是先起一个 HTTP 服务、构造请求体、再解析 JSON；``tools/verify.py``
+干脆绕开 HTTP 直接 new 一个会话，等于承认 HTTP 层零覆盖。现在两边各测各的：
+``tools/smoke_http.py`` 走真实 HTTP 测对外契约，``tools/verify.py`` 直接打会话测
+棋与并发，谁都不用将就谁。
+
+会话的每个动词都返回一个 ``Reply``（body + 状态码）。以前有的路由返回 dict、
+有的返回 ``(dict, status)`` 元组，HTTP 层得先 ``isinstance`` 猜一下 —— 那种双重
+形状是错的温床，现在没有了。
 """
 
 import functools
 import json
 import os
 import sys
-import threading
-import time
 import traceback
-import uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 
+# 让 `python server/app.py` 与 `import server.app` 两种用法都能找到包
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from engine import (                                                # noqa: E402
-    Game, RED, BLACK, notation as nt, core,
-    SearchRequest,
-    PIKAFISH, BUILTIN,
-    default_engines,
-)
+from server.session import GameSession, Reply                       # noqa: E402
 
 STATIC_DIR = os.path.join(_ROOT, 'frontend', 'dist')
 
-# 深度与耗时的默认值。
-#
-# 注意这里**没有** engine_type：引擎偏好的真值在 EngineSet 里（因为它还要
-# 迭上「装了没装」的降级结果）。再往这个字典里抄一份，就立刻有了两个真值。
-DEFAULT_SETTINGS = {
-    'max_depth': 20,
-    'think_ms': 2500,
-    'auto_reply': True,
-    'threads': 2,
-    'hash_mb': 64,
-}
-
-DEFAULT_ENGINE_PREFERENCE = PIKAFISH
+# 全进程就这一个对局会话。多对局要靠多开端口，不靠多实例。
+SESSION = GameSession()
 
 
 # --------------------------------------------------------------------------- #
-# 会话：一局棋 + 一个搜索引擎 + 一次在跑的搜索任务
+# 探活
 # --------------------------------------------------------------------------- #
 
-class SearchTask:
-    """一次后台搜索。前端靠轮询它拿到实时的深度与评分。"""
+def _health():
+    """探活。
 
-    def __init__(self, kind='engine-move'):
-        self.id = uuid.uuid4().hex[:12]
-        self.kind = kind            # engine-move / analyze
-        self.status = 'running'     # running / done / stopped / error
-        self.progress = None        # 最近一层的结果
-        self.result = None          # 最终结果
-        self.error = None
-        self.started = time.time()
-        self.stop_event = threading.Event()
-        self.thread = None
-        self.move = None            # 已经落子的走法（引擎应手）
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'kind': self.kind,
-            'status': self.status,
-            'progress': self.progress,
-            'result': self.result,
-            'error': self.error,
-            'elapsed': time.time() - self.started,
-        }
-
-
-def pv_detail(board, red_to_move, pv_moves):
-    """把主变翻译成前端能直接展示的样子（ICCS + 中文记谱）。
-
-    主变是一串连续的推演，所以要一路把局面推下去才能算对每一步的记谱。
+    ``python`` 由这里补上，因为它是**服务进程**的事实，不是对局的事实 ——
+    会话没有理由知道自己跑在哪个解释器里。
     """
-    out = []
-    b, red = board, red_to_move
-    for m in pv_moves:
-        out.append({'iccs': nt.to_iccs(m), 'chinese': nt.to_chinese(b, m)})
-        try:
-            b = core.apply_move(b, red, m)
-        except Exception:                                     # noqa: BLE001
-            break
-        red = not red
-    return out
-
-
-def _blank_stats():
-    return {'moves': 0, 'nodes': 0, 'think_time': 0.0, 'depth_max': 0}
-
-
-class Session:
-    def __init__(self):
-        self.lock = threading.RLock()
-        self.game = Game(engine_side=RED)
-        # 引擎接缝：两个 adapter + 「选哪个 / 谁可用 / 怎么降级」的规则，
-        # 全在 EngineSet 里。这个会话只知道「要一个引擎」，不知道有几个。
-        self.engines = default_engines(
-            prefer=DEFAULT_ENGINE_PREFERENCE,
-            threads=DEFAULT_SETTINGS['threads'],
-            hash_mb=DEFAULT_SETTINGS['hash_mb'],
-        )
-        # 皮卡鱼不在就把偏好落回内置：界面读的是 settings.engine_type，
-        # 不能让它显示一个实际不会生效的引擎。
-        if not self.engines.available(PIKAFISH):
-            self.engines.set_preference(BUILTIN)
-        self.settings = dict(DEFAULT_SETTINGS)
-        self.task = None
-        self.opponent = {
-            'mode': 'manual',       # manual | http
-            'url': '',
-            'method': 'GET',
-            'move_field': 'move',
-            'headers': {},
-            'auto': False,
-            'last_error': None,
-            'last_poll': None,
-        }
-        # 累计（跨局）与单局分开记：界面上「本局统计」必须真的是本局的。
-        self.engine_stats = {**_blank_stats(), 'wins': 0, 'losses': 0, 'draws': 0}
-        self.game_stats = _blank_stats()
-        # 引擎正在算棋时录进来的对方走法。不拒绝、不报错，先存着，
-        # 等引擎收手立刻落子 —— 人是从另一个窗口读棋的，没道理被我们卡住。
-        self.pending = None
-        # 服务端主动要告诉用户的一句话（排队那步的结果之类），
-        # 带序号，前端只在序号变化时弹一次。
-        self.notice = None
-        self._notice_seq = 0
-
-    # ---- 搜索任务管理 -------------------------------------------------- #
-
-    def task_busy(self):
-        return self.task is not None and self.task.status == 'running'
-
-    def say(self, text, tone='info'):
-        self._notice_seq += 1
-        self.notice = {'seq': self._notice_seq, 'text': text, 'tone': tone}
-
-    def settle(self):
-        """对局刚结束就把胜负记进累计战绩。重复调用只算一次。"""
-        if self.game_stats.get('settled'):
-            return
-        status = self.game.status()
-        if status['state'] == 'playing':
-            return
-        outcome = self._outcome(status)
-        self.game_stats['settled'] = outcome
-        self.engine_stats[outcome] += 1
-
-    def unsettle(self):
-        """悔棋/退回把已经记过的一场胜负撤销掉，免得战绩虚高。"""
-        outcome = self.game_stats.get('settled')
-        if outcome:
-            self.engine_stats[outcome] = max(0, self.engine_stats[outcome] - 1)
-            self.game_stats['settled'] = False
-
-    def _outcome(self, status):
-        if status['state'] == 'draw' or status['winner'] is None:
-            return 'draws'
-        return 'wins' if status['winner'] == self.game.engine_side else 'losses'
-
-    # ---- 排队的对方走法 ------------------------------------------------ #
-
-    def flush_pending(self):
-        """引擎收手了，把之前排队的那步对方走法落下去。调用方需持有锁。"""
-        pending = self.pending
-        self.pending = None
-        if not pending:
-            return
-        text = pending['text']
-        if self.game.is_over():
-            self.say(f'{text} 没能录入：对局已经结束了', 'warn')
-            return
-        if not self.game.opponent_to_move:
-            # 局面在这期间被改过（悔棋、载入、换边），这步不再适用
-            self.say(f'{text} 没有录入：局面已经变了', 'warn')
-            return
-        result = apply_move_locked(text, queued=True)
-        if not result.get('ok'):
-            self.say(result.get('message') or f'{text} 没能录入', 'error')
-
-    def start_search(self):
-        """在后台线程里让引擎出招。调用方需持有锁。"""
-        if self.task_busy():
-            return self.task
-        if self.game.is_over():
-            return None
-
-        game = self.game
-        task = SearchTask('engine-move')
-        self.task = task
-
-        # 开跑前就把搜索输入固化下来，避免搜索途中局面被动过。
-        # 两个引擎的差异（要棋盘串还是要 Position、要 ICCS 棋谱还是局面串、
-        # 怎么喊停）全在 adapter 里；这里只说一次「要什么」。
-        settings = dict(self.settings)
-        req = SearchRequest(
-            board=game.board,
-            red_to_move=game.red_to_move,
-            game_history=tuple(game.boards),
-            move_history_iccs=tuple(r['iccs'] for r in game.records),
-            start_fen=getattr(game, 'start_fen', None),
-            max_depth=settings['max_depth'],
-            time_limit=settings['think_ms'] / 1000.0,
-            stop=task.stop_event.is_set,
-        )
-        engine = self.engines.choose()
-        start_board = req.board
-        red_to_move = req.red_to_move
-
-        def worker():
-            try:
-                last = None
-                for info in engine.search(req):
-                    last = info
-                    task.progress = {
-                        'depth': info.depth,
-                        'score': info.score,
-                        'mate': info.mate,
-                        'nodes': info.nodes,
-                        'time': round(info.time, 3),
-                        'nps': info.nps,
-                        'pv': list(info.pv_iccs),
-                        'pv_detail': pv_detail(start_board, red_to_move, info.pv),
-                    }
-                    if task.stop_event.is_set():
-                        break
-
-                if last is None or last.move is None:
-                    task.status = 'done'
-                    task.result = {'status': 'no_move', 'message': '无着可走'}
-                    return
-
-                # 搜索期间局面理论上不会变（其它入口都被 task_busy 挡住），
-                # 但还是断言一下，宁可报错也不要走出一手对不上局面的棋。
-                if self.game.board != start_board or self.game.red_to_move != red_to_move:
-                    task.status = 'error'
-                    task.error = '搜索期间局面发生了变化，已放弃这步棋'
-                    return
-
-                # 接缝已经保证 move 是绝对坐标 —— 不用再按走子方翻一次
-                abs_move = last.move
-                if abs_move not in self.game.legal_moves():
-                    task.status = 'error'
-                    task.error = '引擎给出的走法非法，已放弃'
-                    return
-
-                with self.lock:
-                    rec = self.game.push(
-                        abs_move, by='engine',
-                        eval_red=last.eval_red,
-                        depth=last.depth,
-                        think_time=round(last.time, 3),
-                    )
-                task.move = rec['iccs']
-                task.result = {
-                    'status': 'ok',
-                    'engine': engine.name,
-                    'move': rec['iccs'],
-                    'chinese': rec['chinese'],
-                    'depth': last.depth,
-                    'score': last.eval_red,
-                    'mate': last.mate,
-                    'nodes': last.nodes,
-                    'time': round(last.time, 3),
-                    'nps': last.nps,
-                    'elapsed': round(time.time() - task.started, 3),
-                    'stopped': task.stop_event.is_set(),
-                }
-                with self.lock:
-                    self.engine_stats['moves'] += 1
-                    self.engine_stats['nodes'] += last.nodes
-                    self.engine_stats['think_time'] += last.time
-                    self.engine_stats['depth_max'] = max(
-                        self.engine_stats['depth_max'], last.depth)
-                    self.game_stats['moves'] += 1
-                    self.game_stats['nodes'] += last.nodes
-                    self.game_stats['think_time'] += last.time
-                    self.game_stats['depth_max'] = max(
-                        self.game_stats['depth_max'], last.depth)
-                    self.settle()
-                task.status = 'done'
-                # 引擎收手了：如果有排队的对方走法，现在就替它落下去
-                with self.lock:
-                    self.flush_pending()
-            except Exception as exc:                      # noqa: BLE001
-                traceback.print_exc()
-                task.status = 'error'
-                task.error = str(exc)
-
-        task.thread = threading.Thread(target=worker, name='engine-search', daemon=True)
-        task.thread.start()
-        return task
-
-    def stop_search(self, task_id=None):
-        if self.task is None:
-            return False
-        if task_id and self.task.id != task_id:
-            return False
-        if self.task.status != 'running':
-            return False
-        self.task.stop_event.set()
-        return True
-
-    # ---- 序列化 -------------------------------------------------------- #
-
-    def settings_snapshot(self):
-        """对外的设置快照。``engine_type`` 现从 EngineSet 取，不存第二份。"""
-        return {**self.settings, 'engine_type': self.engines.preference}
-
-    def state(self):
-        with self.lock:
-            return {
-                'game': self.game.snapshot(),
-                'task': self.task.to_dict() if self.task else None,
-                'settings': self.settings_snapshot(),
-                'engine_info': {
-                    'active': self.engines.active,
-                    'pikafish_available': self.engines.available(PIKAFISH),
-                    'pikafish_path': self.engines.pikafish_path,
-                },
-                'opponent': dict(self.opponent),
-                'stats': dict(self.engine_stats),
-                'game_stats': dict(self.game_stats),
-                'pending': dict(self.pending) if self.pending else None,
-                'notice': dict(self.notice) if self.notice else None,
-                'server_time': time.time(),
-            }
-
-
-SESSION = Session()
+    body = SESSION.health()
+    body['python'] = sys.version.split()[0]
+    return Reply(body)
 
 
 # --------------------------------------------------------------------------- #
-# 业务动作
+# 路由
 # --------------------------------------------------------------------------- #
 
-def act_new(payload):
-    engine_side = payload.get('engine_side', RED)
-    with SESSION.lock:
-        SESSION.stop_search()
-        SESSION.game = Game(engine_side=engine_side)
-        # 新对局的引擎清理（内置丢置换表、皮卡鱼发 ucinewgame）由接缝管，
-        # 调用方不用知道有几个引擎、各自要清什么。
-        SESSION.engines.new_game()
-        SESSION.task = None
-        SESSION.pending = None
-        SESSION.game_stats = _blank_stats()
-        if 'max_depth' in payload:
-            SESSION.settings['max_depth'] = int(payload['max_depth'])
-        if 'think_ms' in payload:
-            SESSION.settings['think_ms'] = int(payload['think_ms'])
-        if 'auto_reply' in payload:
-            SESSION.settings['auto_reply'] = bool(payload['auto_reply'])
-        if 'engine_type' in payload:
-            # 校验规则只有 EngineSet 一份：名字不认就原样不动
-            SESSION.engines.set_preference(payload['engine_type'])
-        task = None
-        if SESSION.game.engine_to_move:
-            task = SESSION.start_search()
-    return {'ok': True, 'state': SESSION.state(),
-            'message': f'新对局开始，引擎执{"红" if SESSION.game.engine_side == RED else "黑"}方'}
-
-
-def _parse_move(text):
-    """先把输入当 ICCS 试，再当中文记谱试。"""
-    move = nt.from_iccs(text)
-    source = 'iccs'
-    if move is None:
-        move = nt.from_chinese(SESSION.game.board, text,
-                               SESSION.game.red_to_move,
-                               legal=SESSION.game.legal_moves())
-        source = 'chinese'
-    return move, source
-
-
-def apply_move_locked(text, queued=False):
-    """真的把一步棋落到盘上。调用方必须已经持有锁。"""
-    if SESSION.game.is_over():
-        return {'ok': False, 'message': '对局已结束'}
-
-    move, source = _parse_move(text)
-    if move is None:
-        return {'ok': False, 'message': f'看不懂这一步：{text}'}
-    if move not in SESSION.game.legal_moves():
-        readable = nt.to_iccs(move) if source == 'iccs' else text
-        return {'ok': False, 'message': f'非法走法 {readable}'}
-
-    rec = SESSION.game.push(move)
-    prefix = '（排队中）' if queued else ''
-    message = f'{prefix}已录入 {rec["chinese"]}（{rec["iccs"]}）'
-    if rec['captured']:
-        message += f'，吃掉{rec["glyph"]}'
-    if rec['check']:
-        message += '，将军！'
-
-    task = None
-    if not SESSION.game.is_over() and SESSION.game.engine_to_move \
-            and SESSION.settings['auto_reply']:
-        task = SESSION.start_search()
-    SESSION.settle()
-
-    return {'ok': True, 'state': SESSION.state(), 'message': message,
-            'record': rec, 'queued': queued,
-            'auto_task': task.id if task else None}
-
-
-def act_move(payload):
-    """录入一步对方走法。
-
-    引擎正在算棋的时候**不报错、不拒绝**：把这步记下来，等引擎收手立刻落子。
-    转述的人是从另一个窗口读对手的棋的，本来就该比引擎快，没道理被卡住。
-    """
-    text = (payload.get('move') or '').strip()
-    if not text:
-        return {'ok': False, 'message': '没有收到走法'}, 400
-
-    with SESSION.lock:
-        if SESSION.task_busy():
-            SESSION.pending = {'text': text, 'at': time.time()}
-            return {'ok': True, 'queued': True, 'state': SESSION.state(),
-                    'message': f'引擎还在算，{text} 已排队'}
-        result = apply_move_locked(text)
-        if not result.get('ok'):
-            return result, 400
-        return result
-
-
-def act_engine_move(payload):
-    with SESSION.lock:
-        if SESSION.task_busy():
-            return {'ok': False, 'message': '引擎正在思考'}, 409
-        if SESSION.game.is_over():
-            return {'ok': False, 'message': '对局已结束'}, 400
-        if not SESSION.game.engine_to_move:
-            return {'ok': False, 'message': '现在不是引擎的回合'}, 400
-        task = SESSION.start_search()
-    return {'ok': True, 'state': SESSION.state(), 'task': task.to_dict() if task else None}
-
-
-def act_undo(payload):
-    with SESSION.lock:
-        SESSION.stop_search()
-        SESSION.task = None
-        SESSION.pending = None
-        SESSION.unsettle()
-        was_over = SESSION.game.is_over()
-        if payload.get('round', True):
-            n = SESSION.game.undo_round()
-        else:
-            n = SESSION.game.undo(int(payload.get('plies', 1)))
-        if n:
-            message = f'已回退 {n} 步'
-        elif was_over:
-            message = '已撤销终局判定，接着下'
-        else:
-            message = '没有可回退的棋步'
-    return {'ok': True, 'state': SESSION.state(), 'message': message, 'undone': n}
-
-
-def act_resign(payload):
-    with SESSION.lock:
-        SESSION.stop_search()
-        SESSION.pending = None
-        side = payload.get('side') or SESSION.game.turn
-        SESSION.game.resign(side)
-        SESSION.settle()
-    return {'ok': True, 'state': SESSION.state(), 'message': '已认输'}
-
-
-def act_clear_pending(_payload):
-    with SESSION.lock:
-        dropped = SESSION.pending
-        SESSION.pending = None
-    return {'ok': True, 'state': SESSION.state(),
-            'message': f'已撤销排队的 {dropped["text"]}' if dropped else '没有排队的棋步'}
-
-
-def act_load(payload):
-    with SESSION.lock:
-        SESSION.stop_search()
-        SESSION.task = None
-        SESSION.pending = None
-        game = Game(engine_side=payload.get('engine_side', SESSION.game.engine_side))
-        if payload.get('fen'):
-            game.load_fen(payload['fen'])
-        if payload.get('moves'):
-            applied, failed = game.load_moves(payload['moves'])
-            if failed:
-                return {'ok': False, 'message': f'第 {len(applied)+1} 步无法识别：{failed[0]}',
-                        'state': SESSION.state()}, 400
-        SESSION.game = game
-        SESSION.game_stats = _blank_stats()
-        SESSION.engines.new_game()
-        if SESSION.game.engine_to_move and not SESSION.game.is_over():
-            SESSION.start_search()
-    return {'ok': True, 'state': SESSION.state(), 'message': '局面已载入'}
-
-
-def act_settings(payload):
-    with SESSION.lock:
-        if 'max_depth' in payload:
-            SESSION.settings['max_depth'] = max(2, min(50, int(payload['max_depth'])))
-        if 'think_ms' in payload:
-            SESSION.settings['think_ms'] = max(120, min(60000, int(payload['think_ms'])))
-        if 'auto_reply' in payload:
-            SESSION.settings['auto_reply'] = bool(payload['auto_reply'])
-        if 'engine_type' in payload:
-            SESSION.engines.set_preference(payload['engine_type'])
-        if 'threads' in payload:
-            threads = max(1, min(16, int(payload['threads'])))
-            SESSION.settings['threads'] = threads
-            SESSION.engines.set_options(threads=threads)
-        if 'hash_mb' in payload:
-            hash_mb = max(16, min(1024, int(payload['hash_mb'])))
-            SESSION.settings['hash_mb'] = hash_mb
-            SESSION.engines.set_options(hash_mb=hash_mb)
-    return {'ok': True, 'state': SESSION.state(),
-            'message': f'设置已更新（当前引擎：{"皮卡鱼" if SESSION.engines.active == PIKAFISH else "象鱼内置"}）'}
-
-
-def act_opponent_config(payload):
-    with SESSION.lock:
-        for key in ('mode', 'url', 'method', 'move_field'):
-            if key in payload:
-                SESSION.opponent[key] = payload[key]
-        if 'headers' in payload and isinstance(payload['headers'], dict):
-            SESSION.opponent['headers'] = payload['headers']
-        if 'auto' in payload:
-            SESSION.opponent['auto'] = bool(payload['auto'])
-    return {'ok': True, 'state': SESSION.state(), 'message': '对手接入配置已更新'}
-
-
-def act_opponent_poll(payload):
-    """从配置的地址拉一步对手走法并录入。手动模式下这个接口用不上。"""
-    import urllib.request
-
-    cfg = SESSION.opponent
-    if not cfg.get('url'):
-        return {'ok': False, 'message': '未配置对手地址'}, 400
-
-    try:
-        req = urllib.request.Request(cfg['url'], method=cfg.get('method', 'GET'),
-                                     headers=cfg.get('headers') or {})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            raw = resp.read().decode('utf-8', 'replace')
-    except Exception as exc:                              # noqa: BLE001
-        cfg['last_error'] = str(exc)
-        return {'ok': False, 'message': f'拉取失败：{exc}'}, 502
-
-    move_text = raw.strip()
-    try:
-        data = json.loads(raw)
-        if isinstance(data, dict):
-            move_text = str(data.get(cfg.get('move_field') or 'move', '')).strip()
-        elif isinstance(data, list) and data:
-            move_text = str(data[-1]).strip()
-    except (ValueError, TypeError):
-        pass
-
-    cfg['last_poll'] = time.time()
-    if not move_text:
-        return {'ok': False, 'message': '对方接口没有返回走法'}, 400
-    return act_move({'move': move_text})
-
-
+# 动词直接绑会话的方法：没有一层「转发一下」的空壳函数。
 ROUTES = {
-    '/api/new': act_new,
-    '/api/move': act_move,
-    '/api/engine-move': act_engine_move,
-    '/api/undo': act_undo,
-    '/api/resign': act_resign,
-    '/api/load': act_load,
-    '/api/settings': act_settings,
-    '/api/clear-pending': act_clear_pending,
+    '/api/new': SESSION.new_game,
+    '/api/move': SESSION.submit_move,
+    '/api/engine-move': SESSION.engine_move,
+    '/api/undo': SESSION.undo,
+    '/api/resign': SESSION.resign,
+    '/api/load': SESSION.load,
+    '/api/settings': SESSION.update_settings,
+    '/api/clear-pending': SESSION.clear_pending,
+    '/api/clear-stats': SESSION.clear_stats,
+    '/api/opponent/config': SESSION.configure_opponent,
+    '/api/opponent/poll': SESSION.poll_opponent,
 }
+
+# 没有一条 GET 用得上查询串，所以这里不传 query —— 少一个没人看的参数。
 GET_ROUTES = {
-    '/api/state': lambda _: {'ok': True, 'state': SESSION.state()},
-    '/api/health': lambda _: {'ok': True,
-                              # 这里用的是**显示词表**（elephantfish / pikafish），
-                              # 与 settings.engine_type 的 builtin / pikafish 不同。
-                              # 两套词都是既有的 HTTP 契约，映射在 EngineSet 里做掉了。
-                              'engine': SESSION.engines.choose().name,
-                              'pikafish_available': SESSION.engines.available(PIKAFISH),
-                              'python': sys.version.split()[0]},
+    '/api/state': SESSION.state_reply,
+    '/api/health': _health,
 }
 
 
@@ -627,6 +115,10 @@ class Handler(SimpleHTTPRequestHandler):
         self._cors()
         self.end_headers()
         self.wfile.write(body)
+
+    def _reply(self, reply):
+        """会话动词都返回 Reply，这里只把它写出去。"""
+        self._json(reply.body, reply.status)
 
     def _cors(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -659,6 +151,15 @@ class Handler(SimpleHTTPRequestHandler):
             return
         sys.stderr.write('%s - %s\n' % (self.address_string(), line))
 
+    def _fail(self, exc):
+        """路由里冒出来的异常兜成 500。
+
+        不兜的话异常会冒到 socketserver，连接被掐掉，浏览器只看到一个空响应，
+        排查成本比看一条堆栈高得多。
+        """
+        traceback.print_exc()
+        self._json({'ok': False, 'message': str(exc)}, 500)
+
     # ---- 路由 ---- #
 
     def do_OPTIONS(self):
@@ -677,56 +178,39 @@ class Handler(SimpleHTTPRequestHandler):
                         'message': '请求体不是合法 JSON：' + payload['__parse_error__']}, 400)
             return
 
-        route = ROUTES.get(path)
-        if route is None:
-            if path == '/api/opponent/config':
-                route = act_opponent_config
-            elif path == '/api/opponent/poll':
-                route = act_opponent_poll
-            elif path.startswith('/api/task/') and path.endswith('/stop'):
-                task_id = path[len('/api/task/'):-len('/stop')]
-                self._json({'ok': SESSION.stop_search(task_id),
-                            'state': SESSION.state()})
-                return
-            elif path == '/api/clear-stats':
-                SESSION.engine_stats.update({'moves': 0, 'nodes': 0, 'think_time': 0})
-                self._json({'ok': True, 'state': SESSION.state()})
-                return
-            else:
-                self._json({'ok': False, 'message': f'未知接口 {path}'}, 404)
-                return
-
-        try:
-            result = route(payload)
-        except Exception as exc:                          # noqa: BLE001
-            traceback.print_exc()
-            self._json({'ok': False, 'message': str(exc)}, 500)
+        # 带路径参数的接口进不了静态路由表，单独认一下
+        if path.startswith('/api/task/') and path.endswith('/stop'):
+            task_id = path[len('/api/task/'):-len('/stop')]
+            self._reply(SESSION.stop_task(task_id))
             return
 
-        if isinstance(result, tuple):
-            self._json(result[0], result[1])
-        else:
-            self._json(result)
+        route = ROUTES.get(path)
+        if route is None:
+            self._json({'ok': False, 'message': f'未知接口 {path}'}, 404)
+            return
+
+        try:
+            self._reply(route(payload))
+        except Exception as exc:                          # noqa: BLE001
+            self._fail(exc)
 
     def do_GET(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
+        path = urlparse(self.path).path
 
-        if path in GET_ROUTES:
-            self._json(GET_ROUTES[path](parse_qs(parsed.query)))
+        route = GET_ROUTES.get(path)
+        if route is not None:
+            try:
+                self._reply(route())
+            except Exception as exc:                      # noqa: BLE001
+                self._fail(exc)
             return
 
         if path.startswith('/api/task/'):
             task_id = path[len('/api/task/'):]
-            task = SESSION.task
-            if task is None:
-                self._json({'ok': False, 'message': '任务不存在'}, 404)
-                return
-            # 搜索任务会被顶掉：比如排队的那一步落地后，服务端立刻替引擎
-            # 开了下一次搜索。前端手上还是旧 id，这时候不该丢它一个 404 ——
-            # 它只要一次就能从 state 里发现新任务，继续轮询就是了。
-            self._json({'ok': True, 'task': task.to_dict(), 'state': SESSION.state(),
-                        'stale': task.id != task_id})
+            try:
+                self._reply(SESSION.task_snapshot(task_id))
+            except Exception as exc:                      # noqa: BLE001
+                self._fail(exc)
             return
 
         if path.startswith('/api/'):

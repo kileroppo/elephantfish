@@ -13,20 +13,22 @@
     B  中文记谱 / ICCS 往返无损，覆盖随机局面里每一步合法走法
     C  困毙（无子可动而非被将）判负 —— 原版当和棋处理，是错的
     D  认输之后悔棋能撤销认输，回到「等对方出招」
-    E  累计战绩 settle / unsettle 可逆，且重复结算只记一次
+    E  累计战绩：认输计入、悔棋撤回，走公开动词不打内部
     F  主变每一步都合法、记谱往返一致，红黑两个视角都验
     G  快照性能（前端每 130ms 轮询一次的那个接口）
     H  引擎接缝：两个 adapter 产出同一套字段与参考系（含黑方走棋时的坐标翻转）
     H2 引擎接缝可替换：注入假引擎，EngineSet 照着用，降级与校验只有一份
+    I  会话并发：搜索在飞时换局 / 认输，那一步不该落地；排队的一步该落地
+    I2 拉对手走法时发请求不持锁（否则一次网络超时会把整个服务堵住）
 
 任何一条不过就以非零码退出，方便挂在提交钩子上。
 """
 
 import argparse
-import importlib.util
 import os
 import random
 import sys
+import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -40,6 +42,8 @@ from engine import (                                           # noqa: E402
     BuiltinEngine, PikafishAdapter, PIKAFISH, BUILTIN,
 )
 from engine.search import Searcher                              # noqa: E402
+import server.session as session_mod                            # noqa: E402
+from server.session import GameSession                          # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # 结果收集
@@ -238,50 +242,40 @@ def test_resign_undo():
 # E. 战绩结算
 # --------------------------------------------------------------------------- #
 
-def _load_server_module():
-    path = os.path.join(ROOT, 'server', 'app.py')
-    spec = importlib.util.spec_from_file_location('ef_server_app', path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 def test_scoreboard():
-    section('E. 累计战绩 settle / unsettle 可逆')
+    section('E. 累计战绩：认输计入、悔棋撤回（只走公开动词）')
 
-    app = _load_server_module()
-    sess = app.Session()
+    # 战绩逻辑住在 server/session.py，就从那里取，不再借道 server.app。
+    #
+    # 这里刻意只调公开动词（resign / undo），不碰 _settle / _unsettle：
+    # 内部拆成几个私有辅助函数是这个模块的家务事，不该让这个测试变红。
+    sess = GameSession()                   # 引擎执红
 
     check('初始战绩为零', sess.engine_stats['wins'] == 0
           and sess.engine_stats['losses'] == 0 and sess.engine_stats['draws'] == 0,
           f"wins={sess.engine_stats['wins']} losses={sess.engine_stats['losses']} "
           f"draws={sess.engine_stats['draws']}")
 
-    # 引擎执红，黑方认输 -> 引擎胜
-    sess.game.resign(BLACK)
-    sess.settle()
+    # 黑方认输 -> 引擎胜
+    sess.resign({'side': BLACK})
     check('黑方认输记为引擎胜', sess.engine_stats['wins'] == 1,
           f"wins={sess.engine_stats['wins']} settled={sess.game_stats.get('settled')}")
 
-    sess.settle()
-    check('重复 settle 只记一次', sess.engine_stats['wins'] == 1,
+    sess.resign({'side': BLACK})
+    check('对局已结束后再认输，战绩不重复记', sess.engine_stats['wins'] == 1,
           f"wins={sess.engine_stats['wins']}")
 
-    sess.unsettle()
-    check('unsettle 把战绩撤回', sess.engine_stats['wins'] == 0
+    sess.undo({})
+    check('悔棋把已经记过的胜负撤回', sess.engine_stats['wins'] == 0
           and not sess.game_stats.get('settled'),
           f"wins={sess.engine_stats['wins']} settled={sess.game_stats.get('settled')}")
 
-    # 和棋路径
-    sess2 = app.Session()
-    sess2.game.resign(BLACK)
-    sess2.settle()
-    sess2.game.resigned = None
-    sess2.game.resign(RED)          # 引擎执红认输 -> 负
-    sess2.game_stats['settled'] = False
-    sess2.settle()
-    check('引擎认输记为负', sess2.engine_stats['losses'] == 1,
-          f"losses={sess2.engine_stats['losses']}")
+    # 另一半：引擎自己认输 -> 记负
+    other = GameSession()                  # 同样引擎执红
+    other.resign({'side': RED})
+    check('引擎认输记为负', other.engine_stats['losses'] == 1
+          and other.engine_stats['wins'] == 0,
+          f"losses={other.engine_stats['losses']} wins={other.engine_stats['wins']}")
 
 
 # --------------------------------------------------------------------------- #
@@ -510,6 +504,204 @@ def test_engine_replacement():
 
 
 # --------------------------------------------------------------------------- #
+# I. 会话并发
+# --------------------------------------------------------------------------- #
+
+class _GatedEngine:
+    """听得懂「先别动」的假引擎。
+
+    每次 ``search()`` 都现开一对闸门：``started`` 立刻开（等于说「我进来了」），
+    ``release`` 交给测试来开。竞态全部发生在「引擎算完了」到「那步棋落到盘上」
+    之间，这对闸门正好把测试停在那个窗口里 —— 不需要 sleep 碰运气。
+    """
+
+    name = 'gated'
+
+    def __init__(self, move_iccs=None):
+        self.move_iccs = move_iccs
+        self.gates = []
+
+    def new_game(self):
+        pass
+
+    def search(self, req):
+        started, release = threading.Event(), threading.Event()
+        self.gates.append((started, release))
+        started.set()
+        release.wait(timeout=10)
+
+        if self.move_iccs:
+            move = nt.from_iccs(self.move_iccs)
+        else:
+            move = core.legal_moves(req.board, req.red_to_move)[0]
+        yield EngineInfo(
+            depth=3, move=move, score=9,
+            eval_red=9 if req.red_to_move else -9,
+            mate=False, nodes=1234, time=0.05, nps=24680,
+            pv=(move,), pv_iccs=(nt.to_iccs(move),),
+        )
+
+
+def _gated_session(move_iccs=None):
+    """一个装上了假引擎的会话 —— 不碰真搜索，也不碰子进程。"""
+    fake = _GatedEngine(move_iccs)
+    return GameSession(engines=EngineSet(builtin=fake, pikafish=None)), fake
+
+
+def _release_after(fake, index):
+    """等第 index 次搜索真的进了 search()，返回它那扇放行闸门。"""
+    deadline = time.time() + 5
+    while len(fake.gates) <= index and time.time() < deadline:
+        time.sleep(0.005)
+    if len(fake.gates) <= index:
+        raise AssertionError(f'第 {index + 1} 次搜索没起来')
+    fake.gates[index][0].wait(timeout=5)
+    return fake.gates[index][1]
+
+
+def test_session_races():
+    section('I. 搜索在飞的时候换局 / 认输 —— 那一步不该落地')
+
+    # ---- 换局：新旧局面一模一样 ----
+    #
+    # 这是「比对棋盘串」拦不住的那种情形。引擎执红、新开一局、执子方不变，
+    # 于是棋盘串与走子方**完全相同**。旧 worker 拿它一比：通过，然后把一手
+    # 棋落到新对局上。只有局面代数能认出「对象被换掉了」。
+    sess, fake = _gated_session()
+    sess.new_game({'engine_side': 'red'})
+    task1 = sess.task
+    release1 = _release_after(fake, 0)
+
+    sess.new_game({'engine_side': 'red'})
+    task2 = sess.task
+    check('换局后换了一个新任务', task2 is not None and task2.id != task1.id,
+          f'{task1.id} -> {task2 and task2.id}')
+    release2 = _release_after(fake, 1)
+
+    release1.set()
+    task1.thread.join(timeout=5)
+    check('旧搜索的结果被丢弃（没往新对局上落子）',
+          (task1.result or {}).get('status') == 'discarded',
+          f'result={task1.result} error={task1.error}')
+
+    release2.set()
+    task2.thread.join(timeout=5)
+    check('新搜索正常落子', (task2.result or {}).get('status') == 'ok',
+          f'result={task2.result} error={task2.error}')
+    check('盘上只有一手 —— 旧 worker 那手没混进来',
+          len(sess.game.records) == 1, f'{len(sess.game.records)} 手')
+
+    # ---- 认输：局面根本没变 ----
+    #
+    # 认输不改棋盘、不改走子方，所以「棋盘比对」同样拦不住，它会照常往一个
+    # 已经结束的对局里推一步。必须连同 is_over() 一起查。
+    sess2, fake2 = _gated_session()
+    sess2.new_game({'engine_side': 'red'})
+    task = sess2.task
+    release = _release_after(fake2, 0)
+
+    sess2.resign({'side': 'red'})
+    release.set()
+    task.thread.join(timeout=5)
+
+    check('认输后引擎那一步被丢弃（不往已结束的对局里推棋）',
+          (task.result or {}).get('status') == 'discarded',
+          f'result={task.result} error={task.error}')
+    check('认输之后盘上一步都没有', len(sess2.game.records) == 0,
+          f'{len(sess2.game.records)} 手')
+    check('认输照样记了负', sess2.engine_stats['losses'] == 1,
+          f"losses={sess2.engine_stats['losses']}")
+
+    # ---- 排队：引擎算棋时录进来的对方走法 ----
+    #
+    # auto_reply=False，只留引擎先手那一次搜索 —— 否则排队那步落地后会再
+    # 触发一次搜索，测试里就多出一个没人放行的线程。
+    sess3, fake3 = _gated_session(move_iccs='h2e2')      # 引擎执红，炮二平五
+    sess3.new_game({'engine_side': 'red', 'auto_reply': False})
+    task = sess3.task
+    release = _release_after(fake3, 0)
+
+    after_engine = core.apply_move(core.initial, True, nt.from_iccs('h2e2'))
+    black_move = nt.to_iccs(core.legal_moves(after_engine, False)[0])
+    queued = sess3.submit_move({'move': black_move})
+    check('引擎在算棋时录入走法 -> 排队，不报错',
+          queued.body.get('queued') is True,
+          f"queued={queued.body.get('queued')} msg={queued.body.get('message')}")
+
+    release.set()
+    task.thread.join(timeout=5)
+    check('引擎收手后排队那一步立刻落地',
+          len(sess3.game.records) == 2, f'{len(sess3.game.records)} 手')
+    if len(sess3.game.records) == 2:
+        check('落地的那一步正是排队的那一步',
+              sess3.game.records[1]['iccs'] == black_move,
+              f"{sess3.game.records[1]['iccs']} vs {black_move}")
+
+    return True
+
+
+def test_opponent_poll_not_under_lock():
+    section('I2. 拉对手走法时发请求不持锁（否则一次超时堵住整个服务）')
+
+    sess, _ = _gated_session()
+    sess.configure_opponent({'url': 'http://opponent.invalid/move'})
+
+    # 把那次出站请求替换成「进去就卡住」，于是测试可以稳稳地停在 I/O 中间。
+    # 真正的判据不是这个替换，而是卡住的那段时间里 snapshot() 还回不回得来。
+    entered, gate = threading.Event(), threading.Event()
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b'{"move": "h2e2"}'
+
+    original = session_mod.urllib.request.urlopen
+
+    def blocked_urlopen(req, timeout=None):
+        entered.set()
+        gate.wait(timeout=5)
+        return _Resp()
+
+    box = {}
+
+    def call_poll():
+        try:
+            box['reply'] = sess.poll_opponent({})
+        except Exception as exc:                          # noqa: BLE001
+            box['error'] = exc
+
+    session_mod.urllib.request.urlopen = blocked_urlopen
+    try:
+        poller = threading.Thread(target=call_poll, daemon=True)
+        poller.start()
+        entered.wait(timeout=5)
+
+        t0 = time.time()
+        sess.snapshot()
+        dt = time.time() - t0
+
+        gate.set()
+        poller.join(timeout=5)
+    finally:
+        session_mod.urllib.request.urlopen = original
+
+    check('出站请求卡住时，别的请求照常进得来（I/O 在锁外）',
+          dt < 0.3, f'snapshot 耗时 {dt * 1000:.0f}ms')
+    reply = box.get('reply')
+    check('卡住的那次拉取最终仍然把走法录了进来',
+          reply is not None and reply.body.get('ok') is True
+          and len(sess.game.records) == 1,
+          f"ok={reply and reply.body.get('ok')} err={box.get('error')} "
+          f"ply={len(sess.game.records)}")
+    return True
+
+
+# --------------------------------------------------------------------------- #
 # 入口
 # --------------------------------------------------------------------------- #
 
@@ -536,6 +728,8 @@ def main():
     test_snapshot()
     test_engine_seam(min(args.pv_time, 1.5))
     test_engine_replacement()
+    test_session_races()
+    test_opponent_poll_not_under_lock()
 
     elapsed = time.time() - t_start
     section('汇总')
