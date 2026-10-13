@@ -2,7 +2,7 @@
 
 ## 介绍 
 
-elephantfish 是受到 [sunfish](https://github.com/thomasahle/sunfish) 启发而撰写的纯python的中国象棋引擎， 整个象棋引擎核心代码只有124行（见[compressed.py](compressed.py)）,棋力方面我仅进行过其与象棋小巫师傻瓜难度的一场对局，在我测试的对剧中，elephantfish赢得了比赛。
+elephantfish 是受到 [sunfish](https://github.com/thomasahle/sunfish) 启发而撰写的纯python的中国象棋引擎，核心代码只有几百行（见 [elephantfish.py](elephantfish.py)）,棋力方面我仅进行过其与象棋小巫师傻瓜难度的一场对局，在我测试的对剧中，elephantfish赢得了比赛。
 
 在几天前看到了[sunfish](https://github.com/thomasahle/sunfish)这个项目(是一个国际象棋引擎，只有111行)，觉得很有意思，于是做了一个类似中国象棋版本，中国象棋和国际象棋略有不同，我仅仅单独完成了棋规部分，子力价值表直接的参考了 [象眼](https://www.xqbase.com/league/elephanteye.htm) ,mtd search部分的代码由于原版sunfish写的非常通用，我也就一行未改。
 
@@ -10,7 +10,7 @@ elephantfish 是受到 [sunfish](https://github.com/thomasahle/sunfish) 启发�
 
 elephantfish默认会进行5秒钟的思考，当然实际一般会比5秒多一些，如果你想要它进行更长时间搜索以获得更好的性能可以对源码相应位置进行更改。
 
-如同sunfish一样，我认为elephantfish会是一个很好的平台，由于其代码非常少，可以很方便的进行各种实验，希望各位感兴趣的同学可以尝试对其进行优化. 如果在优化后想要评估和目前版本的棋力差别，可以使用test.py中的self_arena来将你的代码和elephantfish进行对弈。
+如同sunfish一样，我认为elephantfish会是一个很好的平台，由于其代码非常少，可以很方便的进行各种实验，希望各位感兴趣的同学可以尝试对其进行优化. 如果在优化后想要评估和目前版本的棋力差别，可以使用 `tools/arena.py` 中的 self_arena 来将你的代码和elephantfish进行对弈。
 
 如果你觉得这个版本的象棋ai实力不够强，可以看看 [XQpy](https://github.com/bupticybee/XQPy)
 
@@ -33,10 +33,7 @@ elephantfish默认会进行5秒钟的思考，当然实际一般会比5秒多一
     Your move:
 
 
-Web UI:
-
-
-![UI](ui/snapshot.png)
+Web UI（转述对局台）见下方「转述对局台」一节。
 
 # 运行elephantfish!
 
@@ -89,11 +86,38 @@ server/app.py      转述对局服务（HTTP，本机）
 frontend/          Vite + React + TypeScript 界面
 tools/arena.py     新老引擎回归对局
 tools/verify.py    引擎一致性回归自检（棋规 / 记谱 / 主变 / 战绩）
-.devtools/         界面自检脚本（audit.mjs 指标审计 / drag.mjs 拖拽落子 / _uishot.mjs 受控取景）
+.devtools/         界面自检脚本（见下方「界面自检」）
 review/            自检与质量迭代报告
 ```
 
-原版 `elephantfish.py` 原样保留，作为棋力基准。新增的是 `engine/`、`server/`、`frontend/`。
+原版 `elephantfish.py` **原样保留，作为棋力基准与回归 oracle** —— 它不是遗留代码：
+`engine/core.py` 继承它的 `Position`，`tools/verify.py` 的走法生成对齐段拿它逐条逐序比对。
+文件头有同样的说明。
+
+```bash
+python tools/verify.py     # 引擎回归（~81s，26 条断言）
+```
+
+### 界面自检
+
+`.devtools/` 下是一套 Playwright 自检，跑之前先起服务：
+
+```bash
+python server/app.py 8010
+cd .devtools && npm install          # 只需要一次
+npm test                             # = audit + drag + kbd，全绿才算过
+npm test -- http://127.0.0.1:8020/   # 指定地址
+```
+
+| 脚本 | 管什么 |
+|---|---|
+| `audit.mjs` | 四档视口的溢出 / 点击目标尺寸 / 控制台错误，外加五个交互场景与抢录竞态 |
+| `drag.mjs` | 拖拽落子与点击落子两条路，坐标由棋子包围盒反推，视角翻转后照样成立 |
+| `kbd.mjs` | 键盘走子通路（方向键移光标 → 回车选中 → 回车落子） |
+
+判据跨过的是**稳定的 DOM 契约**（`data-square` / `data-piece` / `role`）与服务端
+`/api/state` 的事实，**不绑定 CSS 类名** —— 类名归样式所有，可以随时改名，
+拿它当测试接缝会得到一套「看起来在跑、其实早就失效」的自检。详见 `review/quality-review.html`。
 
 **双引擎内核支持**：
 - **⚡ 皮卡鱼（Pikafish · NNUE）**：接入世界顶级开源中国象棋引擎（Stockfish 架构 + 官方 NNUE 神经网络评估）。棋力高达 Elo 3500+，通过内置 UCI 驱动长驻运行，每秒搜索数百万至千万节点，中残局压制力极强，与任何对手大模型对弈时拥有绝对的碾压胜率。已随项目内置 macOS（通用二进制）、Windows、Linux 原生支持及 `pikafish.nnue` 权重文件，开箱即用。
@@ -127,7 +151,7 @@ review/            自检与质量迭代报告
 | 主变逐步合法性 | 红方视角 / 黑方视角 | 每步合法，记谱往返一致 |
 
 着法生成那一项是**连顺序都要求一致**的：重写搜索层不允许带来任何规则层面的漂移。
-界面侧另有 `.devtools/audit.mjs`（四档视口 + 五个交互场景 + 抢录竞态）与 `.devtools/drag.mjs`（拖拽落子与点击落子两条路），详见 `review/quality-review.html`。
+界面侧另有 `.devtools/` 里的三套 Playwright 自检（`npm test` 一条命令跑完），见上方「界面自检」。
 
 # 特性
 

@@ -38,7 +38,6 @@ from engine.search import Searcher                                  # noqa: E402
 from engine.pikafish_engine import PikafishEngine, find_pikafish_binary  # noqa: E402
 
 STATIC_DIR = os.path.join(_ROOT, 'frontend', 'dist')
-LEGACY_DIR = os.path.join(_ROOT, 'ui')
 
 # 深度与耗时的默认值。
 DEFAULT_SETTINGS = {
@@ -747,12 +746,12 @@ class Handler(SimpleHTTPRequestHandler):
             self._json({'ok': False, 'message': f'未知接口 {path}'}, 404)
             return
 
-        # 静态资源：优先前端构建产物，再退回到旧版 ui/
+        # 静态资源：只服务前端构建产物
         if path in ('/', '/index.html'):
             self.path = '/index.html'
 
         if not os.path.isdir(STATIC_DIR):
-            self._serve_legacy(path)
+            self._serve_unbuilt(path)
             return
 
         target = os.path.join(STATIC_DIR, path.lstrip('/').replace('/', os.sep))
@@ -770,14 +769,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header('Expires', '0')
         super().end_headers()
 
-    def _serve_legacy(self, path):
-        """前端还没构建时，退回到原版页面，至少不是白屏。"""
-        self.directory = LEGACY_DIR
-        if path in ('/', '/index.html'):
-            self.path = '/chess.html'
-        if os.path.isfile(os.path.join(LEGACY_DIR, self.path.lstrip('/'))):
-            super().do_GET()
-            return
+    def _serve_unbuilt(self, path):
+        """前端还没构建时，给一页说清怎么构建 —— 至少不是白屏。"""
         body = (
             '<!doctype html><meta charset="utf-8">'
             '<title>elephantfish</title>'

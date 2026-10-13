@@ -1,5 +1,20 @@
 #!/usr/bin/env pypy
 # -*- coding: utf-8 -*-
+"""上游参考实现 —— 对局台的 oracle，不是遗留代码。
+
+这个文件不是「还没删干净的老代码」。它同时承担两个不可替代的角色：
+
+1. ``engine/core.py`` 继承它的 ``Position`` 并复用 ``initial`` / ``pst`` / ``parse``，
+   把它当作「唯一事实来源」；
+2. ``tools/verify.py`` 的 A 段（走法生成对齐）拿它当基准，逐条逐**序**比对
+   23,927 个随机构面 —— 重写搜索层不允许带来任何规则层面的漂移。
+
+换句话说：删掉它，复杂度不是消失，而是扩散到 core.py 和所有回归断言里。
+所以它留在这里，且必须保持原样。
+
+另有 ``algorithms/`` 目录曾放着它的两个整文件 fork（elephantfish_pvs / elephantfish_improve），
+已于架构评审中删除 —— 那两份是真正零引用的死副本，看名字容易和本文件混淆。
+"""
 
 from __future__ import print_function
 import re, sys, time
