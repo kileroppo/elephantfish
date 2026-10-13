@@ -71,9 +71,17 @@ function newPage(vp) {
   })
 }
 
-/** 录入一步「对方」的棋，并等到引擎的应手落地。 */
-async function relay(page, mv) {
+/** 录入一步「对方」的棋，并等到引擎的应手落地。
+ *
+ *  想走的那一步**不保证合法**：对方的走法是引擎现算出来的（皮卡鱼按时间窗搜，
+ *  每次跑出来的局面都不完全一样），所以「录 g6g5」这种写死的走法迟早会踩到
+ *  非法着法、被服务端 400 挡回来。这里退一步：想走的那步在当前局面里合法就走
+ *  它，不合法就从合法着法里现取一步。这条曾经是隐藏的 —— 老 `relay()` 卡在
+ *  失效选择器上超时，根本没走到这一步，所以没人发现写死的走法会漏。 */
+async function relay(page, wanted) {
   await waitIdle(page)
+  const legal = (await getState(page)).game.legal_moves
+  const mv = legal.some((m) => m.iccs === wanted) ? wanted : legal[0].iccs
   await typeMove(page, mv)
   await waitIdle(page)
 }
@@ -222,7 +230,8 @@ for (const vp of VIEWPORTS) {
 
     // 引擎思考中的瞬间：长考窗口要够宽，否则截到的是算完之后
     await waitIdle(page)
-    await typeMove(page, 'g6g5')
+    // 这一步同样只能现取：本局的实际局面取决于引擎前面怎么走
+    await typeMove(page, (await getState(page)).game.legal_moves[0].iccs)
     await page.waitForTimeout(350)
     const thinking = (await getState(page)).task?.status === 'running'
     if (!thinking) problems.push('[scene] 没能截到「思考中」的瞬间，这张图无效')
