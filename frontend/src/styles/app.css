@@ -523,6 +523,8 @@ kbd {
   color: var(--ink-mute);
   font-size: 11.5px;
   cursor: pointer;
+  /* 同上：点击目标撑到 32px */
+  min-height: 32px;
   padding: 3px 12px;
   transition: all var(--dur-fast) var(--ease-out);
 }
@@ -619,6 +621,8 @@ kbd {
   font: inherit;
   font-size: 12px;
   font-weight: 500;
+  /* 这是给手指点的按钮，不是标签：撑到和 .icon-btn 一样高 */
+  min-height: 32px;
   padding: 3px 10px;
   border-radius: 999px;
   margin-left: 6px;
@@ -2986,8 +2990,7 @@ kbd {
    ========================================================================== */
 
 @media (max-width: 1320px) {
-  .workspace,
-  .topbar {
+  .workspace {
     grid-template-columns: 236px minmax(0, 1fr) 300px;
   }
 }
@@ -3011,16 +3014,20 @@ kbd {
     padding-bottom: 32px;
   }
 
-  .topbar {
-    grid-template-columns: 1fr auto;
-    row-gap: 10px;
-  }
-
-
+  /* 顶栏在窄屏不需要换布局：.topbar 是 flex，写 grid-template-columns
+     从来没生效过；它想摆的 .topbar-center 也早已不在组件里。
+     真正放不下的是手机 —— 见下面 720 那一档。 */
   .rail {
     overflow: visible;
     /* 窄屏是靠页面滚动的，别让 auto 行被压得比内容还矮 */
     min-height: auto;
+  }
+
+  /* 收起态的侧栏是 visibility:hidden，但仍然占着位置，子面板还带着 ±20px 的
+     抽屉平移 —— 于是不可见的它们照样把页面撑出横向滚动（实测 6px）。
+     这一档本来就没有「从侧面滑入」这回事，把平移撤掉。 */
+  .rail > * {
+    transform: none;
   }
 
   /* 窄屏上顺序只有一条：棋盘 → 转述台 → 分析 → 控制。
@@ -3075,6 +3082,18 @@ kbd {
     padding-right: 12px;
   }
 
+  /* 一行放不下：品牌 + 引擎徽章本身就占满了手机宽度，翻转/音效/帮助再挤进
+     同一行会横向顶出视口（414px 视口下实测溢出 36px）。
+     让它们换到第二行、右对齐。 */
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .topbar-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+
   /* 手机端页边距只有 12px，棋盘垫收进 10px，不然横向顶出视口 2px */
   .board::before {
     inset: -10px;
@@ -3125,6 +3144,10 @@ kbd {
   }
   .icon-btn {
     height: 40px;
+  }
+  .engine-badge,
+  .type-toggle-btn {
+    min-height: 40px;
   }
   .panel {
     padding: 16px;
