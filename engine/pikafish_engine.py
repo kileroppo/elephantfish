@@ -205,8 +205,14 @@ class PikafishEngine:
 
             # 组装 position 命令
             # 如果是从初始局面开局且有走子历史，使用 position startpos moves ...
-            # 这样引擎能获知全部历史局面、吃子计数与长打状态
-            if (not start_fen or start_fen == nt.to_fen(core.initial, True)) and board != core.initial:
+            # 这样引擎能获知全部历史局面、吃子计数与长打状态。
+            #
+            # 注意 ``move_history_iccs`` 非空这个条件是必须的：局面不是初始局面
+            # 却拿不到棋谱时，拼出来的 ``position startpos moves`` 着法表是空的，
+            # 引擎会以为自己在**初始局面**上搜 —— 返回一手对不上局面的棋，
+            # 而且不报任何错。这种情况下宁可退回 ``position fen``。
+            if ((not start_fen or start_fen == nt.to_fen(core.initial, True))
+                    and move_history_iccs and board != core.initial):
                 moves_str = " ".join(move_history_iccs or [])
                 pos_cmd = f"position startpos moves {moves_str}".strip()
             elif start_fen and start_fen != nt.to_fen(core.initial, True):

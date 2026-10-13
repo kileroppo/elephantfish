@@ -95,7 +95,8 @@ review/            自检与质量迭代报告
 文件头有同样的说明。
 
 ```bash
-python tools/verify.py     # 引擎回归（~81s，26 条断言）
+python tools/verify.py      # 引擎回归：棋规 / 记谱 / 主变 / 战绩 / 引擎接缝（~80s，36 条断言）
+python tools/smoke_http.py  # HTTP 契约：路由 / 状态码 / 字段 / 排队 / stale（自动找空闲端口）
 ```
 
 ### 界面自检
@@ -125,6 +126,20 @@ npm test -- http://127.0.0.1:8020/   # 指定地址
 
 在 Web 界面左侧控制栏的「引擎内核」即可随时一键切换两者。
 
+**引擎接缝**（`engine/engine.py`）：两个引擎的差异关在两个 adapter 里，对外只有一个接口
+`Engine.search(SearchRequest) -> Iterator[EngineInfo]`。接缝统一了三件一直散在调用点上的事：
+
+- **参考系**。内置 `Searcher` 内部是「引擎视角」（黑方走棋时整个棋盘转过 180°），
+  它的 `move` 是相对走子方的，而 `principal_variation` 又特意翻回了绝对坐标 ——
+  这一个不对称，就是以前 `server/app.py` 里那句
+  `abs_move = engine_move if red_to_move else flip_move(engine_move)` 存在的原因。
+  接缝把 `move` / `pv` 一律定成**绝对坐标**，`score` 是侧方视角、`eval_red` 是红方视角，
+  于是调用方一次翻转都不用写。
+- **选哪个**。降级规则（偏好皮卡鱼但没装 → 落回内置）以前写在六处，各自重判一遍
+  `engine_type == 'pikafish' and is_available`。现在只有 `EngineSet.active` 知道。
+- **怎么测**。依赖是接受进来的，不是内部 new 出来的：`EngineSet(builtin=FakeEngine())`
+  就能把真搜索整个换掉，`tools/verify.py` 的 H2 段就是这么验的。
+
 **内置 Python 搜索优化**（`engine/search.py`）：MTD(f) 二分换成 PVS + 胜负窗 + 迭代加深；置换表加代际计数器（O(1) 失效，不再 `dict.clear()`）；置换表着法优先试、其余着法懒生成；空着裁剪、LMR、futility 裁剪、静态搜索。着法生成只遍历 90 个真实格点而不是 256 格。
 
 用 `tools/arena.py` 在 1000 个随机开局上跑 50 局回归（深度 5，交换先后手）：
@@ -138,13 +153,15 @@ npm test -- http://127.0.0.1:8020/   # 指定地址
 
 **规则修正**：中国象棋的**困毙（无子可动但不是被将军）是判负**，不是和棋。原版沿用了国际象棋的处理，本仓库改正了。
 
-**正确性验证**（`python tools/verify.py`，一条命令跑完，26 条断言）：
+**正确性验证**（`python tools/verify.py`，一条命令跑完，36 条断言）：
 
 | 项目 | 规模 | 结果 |
 |---|---|---|
 | 着法生成 vs 原版 | 400 局随机对局、23,927 个随机构面 | 逐条逐**序**一致，分歧 0 |
 | 中文记谱往返 | 940,999 步 | 失败 0 |
 | ICCS 往返 | 940,999 步 | 失败 0 |
+| 引擎接缝（两个 adapter） | 红方/黑方走棋各一遍，内置 + 皮卡鱼 | `move` 落在绝对坐标的合法着法集合里，`pv`/`pv_iccs` 同序，`eval_red` 换算正确 |
+| 引擎接缝可替换 | 注入假引擎 | `choose()` 交出注入的对象，降级与校验各只有一份 |
 | 困毙判负 | 自造局面 + 对照组 | 判负；抽掉红兵后回到「还在下」 |
 | 认输后悔棋 | resign → undo_round → playing | 回到「等对手出招」 |
 | 战绩 settle / unsettle | 记入 → 撤回 → 重复结算 | 可逆且只记一次 |

@@ -5,6 +5,7 @@
     search    PVS 搜索（重写，取代原版 MTD 二分）
     notation  中文记谱 / ICCS / FEN
     game      对局状态机与规则判定
+    engine    引擎接缝：把「内置搜索」与「皮卡鱼 UCI」统一成一个接口
 """
 
 from .core import (          # noqa: F401
@@ -19,6 +20,11 @@ from .opening import GLOBAL_BOOK, OpeningBook  # noqa: F401
 from .pikafish_engine import PikafishEngine, find_pikafish_binary  # noqa: F401
 from . import notation                # noqa: F401
 from .game import Game, RED, BLACK    # noqa: F401
+from .engine import (                 # noqa: F401
+    Engine, EngineInfo, EngineSet, SearchRequest,
+    BuiltinEngine, PikafishAdapter, default_engines,
+    PIKAFISH, BUILTIN, PREFERENCE_NAMES,
+)
 
 __all__ = [
     'Position', 'initial', 'parse', 'render', 'flip', 'flip_move',
@@ -28,5 +34,9 @@ __all__ = [
     'MATE_LOWER', 'MATE_UPPER', 'INF', 'ROWS', 'COLS',
     'Searcher', 'PikafishEngine', 'find_pikafish_binary',
     'GLOBAL_BOOK', 'OpeningBook', 'notation', 'Game', 'RED', 'BLACK',
+    # 引擎接缝
+    'Engine', 'EngineInfo', 'EngineSet', 'SearchRequest',
+    'BuiltinEngine', 'PikafishAdapter', 'default_engines',
+    'PIKAFISH', 'BUILTIN', 'PREFERENCE_NAMES',
 ]
 

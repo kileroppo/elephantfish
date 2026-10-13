@@ -33,21 +33,28 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from engine import Game, RED, BLACK, notation as nt, core          # noqa: E402
-from engine.search import Searcher                                  # noqa: E402
-from engine.pikafish_engine import PikafishEngine, find_pikafish_binary  # noqa: E402
+from engine import (                                                # noqa: E402
+    Game, RED, BLACK, notation as nt, core,
+    SearchRequest,
+    PIKAFISH, BUILTIN,
+    default_engines,
+)
 
 STATIC_DIR = os.path.join(_ROOT, 'frontend', 'dist')
 
 # 深度与耗时的默认值。
+#
+# 注意这里**没有** engine_type：引擎偏好的真值在 EngineSet 里（因为它还要
+# 迭上「装了没装」的降级结果）。再往这个字典里抄一份，就立刻有了两个真值。
 DEFAULT_SETTINGS = {
     'max_depth': 20,
     'think_ms': 2500,
     'auto_reply': True,
-    'engine_type': 'pikafish',
     'threads': 2,
     'hash_mb': 64,
 }
+
+DEFAULT_ENGINE_PREFERENCE = PIKAFISH
 
 
 # --------------------------------------------------------------------------- #
@@ -106,12 +113,18 @@ class Session:
     def __init__(self):
         self.lock = threading.RLock()
         self.game = Game(engine_side=RED)
-        self.searcher = Searcher()
-        self.pikafish = PikafishEngine(threads=DEFAULT_SETTINGS['threads'], hash_mb=DEFAULT_SETTINGS['hash_mb'])
+        # 引擎接缝：两个 adapter + 「选哪个 / 谁可用 / 怎么降级」的规则，
+        # 全在 EngineSet 里。这个会话只知道「要一个引擎」，不知道有几个。
+        self.engines = default_engines(
+            prefer=DEFAULT_ENGINE_PREFERENCE,
+            threads=DEFAULT_SETTINGS['threads'],
+            hash_mb=DEFAULT_SETTINGS['hash_mb'],
+        )
+        # 皮卡鱼不在就把偏好落回内置：界面读的是 settings.engine_type，
+        # 不能让它显示一个实际不会生效的引擎。
+        if not self.engines.available(PIKAFISH):
+            self.engines.set_preference(BUILTIN)
         self.settings = dict(DEFAULT_SETTINGS)
-        # 自动判定引擎：Pikafish 可用则优先，否则降级为纯 Python 内置引擎
-        if not self.pikafish.is_available:
-            self.settings['engine_type'] = 'builtin'
         self.task = None
         self.opponent = {
             'mode': 'manual',       # manual | http
@@ -197,124 +210,94 @@ class Session:
         task = SearchTask('engine-move')
         self.task = task
 
-        # 开跑前就把搜索输入固化下来，避免搜索途中局面被动过
-        red_to_move = game.red_to_move
-        pos = core.make_position(game.board, red_to_move)
-        history = list(game.boards)
-        moves_history = [r['iccs'] for r in game.records]
-        start_fen = getattr(game, 'start_fen', None)
+        # 开跑前就把搜索输入固化下来，避免搜索途中局面被动过。
+        # 两个引擎的差异（要棋盘串还是要 Position、要 ICCS 棋谱还是局面串、
+        # 怎么喊停）全在 adapter 里；这里只说一次「要什么」。
         settings = dict(self.settings)
-        use_pikafish = (settings.get('engine_type') == 'pikafish' and self.pikafish.is_available)
+        req = SearchRequest(
+            board=game.board,
+            red_to_move=game.red_to_move,
+            game_history=tuple(game.boards),
+            move_history_iccs=tuple(r['iccs'] for r in game.records),
+            start_fen=getattr(game, 'start_fen', None),
+            max_depth=settings['max_depth'],
+            time_limit=settings['think_ms'] / 1000.0,
+            stop=task.stop_event.is_set,
+        )
+        engine = self.engines.choose()
+        start_board = req.board
+        red_to_move = req.red_to_move
 
         def worker():
             try:
-                deadline = time.time() + settings['think_ms'] / 1000.0
                 last = None
+                for info in engine.search(req):
+                    last = info
+                    task.progress = {
+                        'depth': info.depth,
+                        'score': info.score,
+                        'mate': info.mate,
+                        'nodes': info.nodes,
+                        'time': round(info.time, 3),
+                        'nps': info.nps,
+                        'pv': list(info.pv_iccs),
+                        'pv_detail': pv_detail(start_board, red_to_move, info.pv),
+                    }
+                    if task.stop_event.is_set():
+                        break
 
-                if use_pikafish:
-                    for info in self.pikafish.search(
-                            game.board,
-                            red_to_move,
-                            move_history_iccs=moves_history,
-                            max_depth=settings['max_depth'],
-                            time_limit=settings['think_ms'] / 1000.0,
-                            external_stop=task.stop_event.is_set,
-                            start_fen=start_fen):
-                        last = info
-                        pv_tuples = info['pv']
-                        task.progress = {
-                            'depth': info['depth'],
-                            'score': info['score'],
-                            'mate': info['mate'],
-                            'nodes': info['nodes'],
-                            'time': round(info['time'], 3),
-                            'nps': info['nps'],
-                            'pv': info.get('pv_iccs') or [nt.to_iccs(m) for m in pv_tuples],
-                            'pv_detail': pv_detail(game.board, red_to_move, pv_tuples),
-                        }
-                        if task.stop_event.is_set():
-                            break
-                else:
-                    searcher = self.searcher
-                    for info in searcher.search(
-                            pos,
-                            max_depth=settings['max_depth'],
-                            time_limit=settings['think_ms'] / 1000.0,
-                            game_history=history,
-                            external_stop=task.stop_event.is_set,
-                            root_is_red=red_to_move):
-                        last = info
-                        task.progress = {
-                            'depth': info['depth'],
-                            'score': info['score'],
-                            'mate': info['mate'],
-                            'nodes': info['nodes'],
-                            'time': round(info['time'], 3),
-                            'nps': info['nps'],
-                            'pv': [nt.to_iccs(m) for m in info['pv']],
-                            'pv_detail': pv_detail(game.board, red_to_move, info['pv']),
-                        }
-                        if task.stop_event.is_set():
-                            break
-
-                if last is None or last.get('move') is None:
+                if last is None or last.move is None:
                     task.status = 'done'
                     task.result = {'status': 'no_move', 'message': '无着可走'}
                     return
 
-                engine_move = last['move']
                 # 搜索期间局面理论上不会变（其它入口都被 task_busy 挡住），
                 # 但还是断言一下，宁可报错也不要走出一手对不上局面的棋。
-                check_pos = core.make_position(self.game.board, self.game.red_to_move)
-                if check_pos.board != pos.board:
+                if self.game.board != start_board or self.game.red_to_move != red_to_move:
                     task.status = 'error'
                     task.error = '搜索期间局面发生了变化，已放弃这步棋'
                     return
 
-                if use_pikafish:
-                    abs_move = engine_move
-                else:
-                    abs_move = engine_move if red_to_move else core.flip_move(engine_move)
-
+                # 接缝已经保证 move 是绝对坐标 —— 不用再按走子方翻一次
+                abs_move = last.move
                 if abs_move not in self.game.legal_moves():
                     task.status = 'error'
                     task.error = '引擎给出的走法非法，已放弃'
                     return
 
-                score_red = last['score'] if red_to_move else -last['score']
                 with self.lock:
                     rec = self.game.push(
                         abs_move, by='engine',
-                        eval_red=score_red,
-                        depth=last['depth'],
-                        think_time=round(last['time'], 3),
+                        eval_red=last.eval_red,
+                        depth=last.depth,
+                        think_time=round(last.time, 3),
                     )
                 task.move = rec['iccs']
                 task.result = {
                     'status': 'ok',
-                    'engine': 'pikafish' if use_pikafish else 'elephantfish',
+                    'engine': engine.name,
                     'move': rec['iccs'],
                     'chinese': rec['chinese'],
-                    'depth': last['depth'],
-                    'score': score_red,
-                    'mate': last['mate'],
-                    'nodes': last['nodes'],
-                    'time': round(last['time'], 3),
-                    'nps': last['nps'],
+                    'depth': last.depth,
+                    'score': last.eval_red,
+                    'mate': last.mate,
+                    'nodes': last.nodes,
+                    'time': round(last.time, 3),
+                    'nps': last.nps,
                     'elapsed': round(time.time() - task.started, 3),
                     'stopped': task.stop_event.is_set(),
                 }
                 with self.lock:
                     self.engine_stats['moves'] += 1
-                    self.engine_stats['nodes'] += last['nodes']
-                    self.engine_stats['think_time'] += last['time']
+                    self.engine_stats['nodes'] += last.nodes
+                    self.engine_stats['think_time'] += last.time
                     self.engine_stats['depth_max'] = max(
-                        self.engine_stats['depth_max'], last['depth'])
+                        self.engine_stats['depth_max'], last.depth)
                     self.game_stats['moves'] += 1
-                    self.game_stats['nodes'] += last['nodes']
-                    self.game_stats['think_time'] += last['time']
+                    self.game_stats['nodes'] += last.nodes
+                    self.game_stats['think_time'] += last.time
                     self.game_stats['depth_max'] = max(
-                        self.game_stats['depth_max'], last['depth'])
+                        self.game_stats['depth_max'], last.depth)
                     self.settle()
                 task.status = 'done'
                 # 引擎收手了：如果有排队的对方走法，现在就替它落下去
@@ -341,17 +324,20 @@ class Session:
 
     # ---- 序列化 -------------------------------------------------------- #
 
+    def settings_snapshot(self):
+        """对外的设置快照。``engine_type`` 现从 EngineSet 取，不存第二份。"""
+        return {**self.settings, 'engine_type': self.engines.preference}
+
     def state(self):
         with self.lock:
-            active_engine = 'pikafish' if (self.settings.get('engine_type') == 'pikafish' and self.pikafish.is_available) else 'builtin'
             return {
                 'game': self.game.snapshot(),
                 'task': self.task.to_dict() if self.task else None,
-                'settings': dict(self.settings),
+                'settings': self.settings_snapshot(),
                 'engine_info': {
-                    'active': active_engine,
-                    'pikafish_available': self.pikafish.is_available,
-                    'pikafish_path': self.pikafish.binary_path,
+                    'active': self.engines.active,
+                    'pikafish_available': self.engines.available(PIKAFISH),
+                    'pikafish_path': self.engines.pikafish_path,
                 },
                 'opponent': dict(self.opponent),
                 'stats': dict(self.engine_stats),
@@ -374,9 +360,9 @@ def act_new(payload):
     with SESSION.lock:
         SESSION.stop_search()
         SESSION.game = Game(engine_side=engine_side)
-        SESSION.searcher = Searcher()
-        if SESSION.pikafish.is_available:
-            SESSION.pikafish.new_game()
+        # 新对局的引擎清理（内置丢置换表、皮卡鱼发 ucinewgame）由接缝管，
+        # 调用方不用知道有几个引擎、各自要清什么。
+        SESSION.engines.new_game()
         SESSION.task = None
         SESSION.pending = None
         SESSION.game_stats = _blank_stats()
@@ -387,7 +373,8 @@ def act_new(payload):
         if 'auto_reply' in payload:
             SESSION.settings['auto_reply'] = bool(payload['auto_reply'])
         if 'engine_type' in payload:
-            SESSION.settings['engine_type'] = payload['engine_type']
+            # 校验规则只有 EngineSet 一份：名字不认就原样不动
+            SESSION.engines.set_preference(payload['engine_type'])
         task = None
         if SESSION.game.engine_to_move:
             task = SESSION.start_search()
@@ -524,8 +511,7 @@ def act_load(payload):
                         'state': SESSION.state()}, 400
         SESSION.game = game
         SESSION.game_stats = _blank_stats()
-        if SESSION.pikafish.is_available:
-            SESSION.pikafish.new_game()
+        SESSION.engines.new_game()
         if SESSION.game.engine_to_move and not SESSION.game.is_over():
             SESSION.start_search()
     return {'ok': True, 'state': SESSION.state(), 'message': '局面已载入'}
@@ -540,19 +526,17 @@ def act_settings(payload):
         if 'auto_reply' in payload:
             SESSION.settings['auto_reply'] = bool(payload['auto_reply'])
         if 'engine_type' in payload:
-            engine_type = str(payload['engine_type']).lower()
-            if engine_type in ('pikafish', 'builtin'):
-                SESSION.settings['engine_type'] = engine_type
+            SESSION.engines.set_preference(payload['engine_type'])
         if 'threads' in payload:
             threads = max(1, min(16, int(payload['threads'])))
             SESSION.settings['threads'] = threads
-            SESSION.pikafish.set_options(threads=threads)
+            SESSION.engines.set_options(threads=threads)
         if 'hash_mb' in payload:
             hash_mb = max(16, min(1024, int(payload['hash_mb'])))
             SESSION.settings['hash_mb'] = hash_mb
-            SESSION.pikafish.set_options(hash_mb=hash_mb)
+            SESSION.engines.set_options(hash_mb=hash_mb)
     return {'ok': True, 'state': SESSION.state(),
-            'message': f'设置已更新（当前引擎：{"皮卡鱼" if SESSION.settings.get("engine_type") == "pikafish" else "象鱼内置"}）'}
+            'message': f'设置已更新（当前引擎：{"皮卡鱼" if SESSION.engines.active == PIKAFISH else "象鱼内置"}）'}
 
 
 def act_opponent_config(payload):
@@ -613,8 +597,11 @@ ROUTES = {
 GET_ROUTES = {
     '/api/state': lambda _: {'ok': True, 'state': SESSION.state()},
     '/api/health': lambda _: {'ok': True,
-                              'engine': 'pikafish' if (SESSION.settings.get('engine_type') == 'pikafish' and SESSION.pikafish.is_available) else 'elephantfish',
-                              'pikafish_available': SESSION.pikafish.is_available,
+                              # 这里用的是**显示词表**（elephantfish / pikafish），
+                              # 与 settings.engine_type 的 builtin / pikafish 不同。
+                              # 两套词都是既有的 HTTP 契约，映射在 EngineSet 里做掉了。
+                              'engine': SESSION.engines.choose().name,
+                              'pikafish_available': SESSION.engines.available(PIKAFISH),
                               'python': sys.version.split()[0]},
 }
 
