@@ -515,7 +515,16 @@ export function Board({
               }}
             >
               <svg className="last-to-spinner" viewBox="0 0 100 100" aria-hidden="true">
-                <circle className="spinner-arcs" cx="50" cy="50" r="43" />
+                <defs>
+                  <filter id="softArcGlow" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="1.2" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                <circle className="spinner-arcs" cx="50" cy="50" r="43" filter="url(#softArcGlow)" />
               </svg>
             </span>
           </>

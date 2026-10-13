@@ -1889,11 +1889,11 @@ kbd {
 
 /* ---- 上一手落子终点：典雅微光取景落点框 ---- */
 
-/* ---- 上一步落子终点：三段晶莹弧环 + 缓慢旋转 + 呼吸微光闪烁（一闪一闪） ---- */
+/* ---- 上一步落子终点：三段柔和晶莹弧环 + 缓慢平稳旋转（不闪烁，距离舒展，羽化柔边） ---- */
 
 .last-to {
-  width: calc(var(--u) * 82px);
-  height: calc(var(--u) * 82px);
+  width: calc(var(--u) * 94px);
+  height: calc(var(--u) * 94px);
   position: absolute;
   transform: translate(-50%, -50%);
   display: grid;
@@ -1907,37 +1907,38 @@ kbd {
   width: 100%;
   height: 100%;
   overflow: visible;
-  animation: lastToSpin 14s linear infinite;
+  animation: lastToSpin 20s linear infinite;
   transform-origin: 50% 50%;
 }
 
 .last-to-spinner .spinner-arcs {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.95);
-  stroke-width: 3.2;
+  stroke: rgba(255, 255, 255, 0.78);
+  stroke-width: 2.6;
   stroke-linecap: round;
-  stroke-dasharray: 56 34;
-  animation: arcTwinkle 2.4s ease-in-out infinite alternate;
-  filter: drop-shadow(0 0 calc(var(--u) * 3px) rgba(255, 255, 255, 0.95))
-          drop-shadow(0 0 calc(var(--u) * 7px) rgba(255, 255, 255, 0.5));
+  stroke-dasharray: 52 38;
+  /* 彻底移除一闪一闪的动画，保持平稳柔和常驻 */
+  opacity: 0.88;
+  filter: drop-shadow(0 0 calc(var(--u) * 2.5px) rgba(255, 255, 255, 0.75))
+          drop-shadow(0 0 calc(var(--u) * 6px) rgba(255, 255, 255, 0.4));
 }
 
 .last-to-red .spinner-arcs {
-  stroke: rgba(255, 255, 255, 0.95);
-  filter: drop-shadow(0 0 calc(var(--u) * 3px) rgba(255, 255, 255, 0.95))
-          drop-shadow(0 0 calc(var(--u) * 6px) rgba(235, 90, 75, 0.6));
+  stroke: rgba(255, 255, 255, 0.82);
+  filter: drop-shadow(0 0 calc(var(--u) * 2.5px) rgba(255, 255, 255, 0.8))
+          drop-shadow(0 0 calc(var(--u) * 6px) rgba(235, 110, 95, 0.45));
 }
 
 .last-to-black .spinner-arcs {
-  stroke: rgba(255, 255, 255, 0.95);
-  filter: drop-shadow(0 0 calc(var(--u) * 3px) rgba(255, 255, 255, 0.95))
-          drop-shadow(0 0 calc(var(--u) * 6px) rgba(150, 200, 255, 0.6));
+  stroke: rgba(255, 255, 255, 0.82);
+  filter: drop-shadow(0 0 calc(var(--u) * 2.5px) rgba(255, 255, 255, 0.8))
+          drop-shadow(0 0 calc(var(--u) * 6px) rgba(150, 190, 240, 0.45));
 }
 
 .last-to-capture .spinner-arcs {
-  stroke: rgba(255, 255, 255, 1);
-  filter: drop-shadow(0 0 calc(var(--u) * 4px) rgba(255, 255, 255, 1))
-          drop-shadow(0 0 calc(var(--u) * 9px) rgba(255, 75, 55, 0.9));
+  stroke: rgba(255, 255, 255, 0.95);
+  filter: drop-shadow(0 0 calc(var(--u) * 3px) rgba(255, 255, 255, 0.9))
+          drop-shadow(0 0 calc(var(--u) * 8px) rgba(245, 90, 75, 0.7));
 }
 
 @keyframes lastToSpin {
@@ -1946,21 +1947,6 @@ kbd {
   }
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes arcTwinkle {
-  0% {
-    opacity: 0.55;
-    stroke-width: 2.8;
-  }
-  50% {
-    opacity: 1;
-    stroke-width: 3.5;
-  }
-  100% {
-    opacity: 0.55;
-    stroke-width: 2.8;
   }
 }
 
