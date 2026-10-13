@@ -268,8 +268,10 @@ export default function App() {
               flipped={flipped}
               thinking={g.thinking}
               /* 主变直接接引擎算出来的那一条（以前这里写死 pv={[]}，
-                 于是 Board 里那段虚线渲染从来没亮过） */
-              pv={g.task?.progress?.pv ?? []}
+                 于是 Board 里那段虚线渲染从来没亮过）。
+                 只在**思考中**画：task.progress 在落子之后并不清空，照单全画的话
+                 引擎刚走过的那一步会被再画一条虚线，跟盘面上的墨痕叠在一起。 */
+              pv={g.thinking ? (g.task?.progress?.pv ?? []) : []}
               onMove={onBoardMove}
             />
             {showOverModal && !dismissedOver && (

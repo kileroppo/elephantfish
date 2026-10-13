@@ -73,6 +73,7 @@ python server/app.py 8010                       # 启动服务
 所以整个界面围绕「录入对方走法 / 取走我方应手」这两件事设计。**录入以棋盘为先**：
 
 - **直接摆子**：点棋盘上的棋子、再点落点；或者按住它拖过去。轮到的子有抓手光标，可走的点会亮起来，拖到哪个点哪个点张开。这是最快的一条路 —— 不需要把棋步翻译成任何符号；
+- 引擎在算的时候，盘面上会铺一条淡淡的虚线，那是它正在盘算的一步；它一落子这条线就撤掉，只留墨痕；
 - 习惯键盘的人，也可以在转述台①里敲坐标（`h2e2`）或中文记谱（`炮二平五`），输入前几个字符就出候选，`Tab` 补全、回车落子。焦点只对「键盘流」自动跟随：一旦你开始用棋盘，它就不再每手来抢；
 - 引擎算棋的时候**照样能输入**：抢录的那一步会排队，引擎一收手自动落子，人不会被计算时间卡住；
 - 右侧「引擎应手」一点即复制，直接粘回对手模型；
@@ -131,7 +132,7 @@ npm run test:all              # 界面 + HTTP 一起
 | 脚本 | 管什么 |
 |---|---|
 | `audit.mjs` | 四档视口的溢出 / 点击目标尺寸 / 控制台错误，外加交互场景与抢录竞态 |
-| `drag.mjs` | 拖拽落子与点击落子两条路，坐标由棋子包围盒反推，视角翻转后照样成立 |
+| `drag.mjs` | 拖拽落子与点击落子两条路，坐标由棋盘框 + `data-flipped` 算出，视角翻转后照样成立 |
 | `kbd.mjs` | 键盘走子通路（方向键移光标 → 回车选中 → 回车落子） |
 
 三套脚本**只**通过 `_contract.mjs` 说话，不再各自记一套选择器。它导出的读状态
@@ -143,6 +144,7 @@ npm run test:all              # 界面 + HTTP 一起
 | `data-board` `data-flipped` `data-thinking` `data-ply` `data-dragging` | 棋盘容器 |
 | `data-square` `data-piece` `data-side` `data-selected` `data-dragging` | 棋子 |
 | `data-target` `data-over` | 可落点 |
+| `data-pv-trace` | 主变虚线（引擎正在盘算的那一步） |
 | `data-kbd-cursor` `data-cursor` | 键盘光标 |
 | `data-relay` `data-relay-queued` `data-relay-toggle` `data-relay-input` | 转述台 |
 | `data-analysis` | 分析面板 |
@@ -158,6 +160,25 @@ npm run test:all              # 界面 + HTTP 一起
 写成 `waitForFunction(async () => …)` 时它看到的是一个真值 Promise 对象，于是立即返回 ——
 实测同一个判据同步版等满 626ms、异步版 6ms 就回来了。所以 `_contract.mjs` 里
 「服务端闲 + 界面已同步」是**在 Node 侧轮询**实现的，不交给 `waitForFunction`。
+
+#### 别在一个还在动的东西上量尺寸
+
+界面到处都是动画，而 `getBoundingClientRect()` 返回的是**当前**（可能正在动）的位置。
+两条由此修出来的规矩：
+
+* **量之前先等它站定。** `.piece` 挂着 `transition: left/top 240ms`，盘面进场还有
+  620ms 的位移动画。`_contract.mjs` 的 `squareCenter` / `calibrate` 因此都走
+  `steady()`：反复读，直到**连续两帧一致**才拿来用。`calibrate` 还更进一步 ——
+  把「盘面框 + 棋子框 + 翻转 + 滚动」放进**同一个 `page.evaluate`** 里读，
+  同一帧内完成，中间插不进一次重排或滚动，两次读数必然同源。
+  不等就量，会把「量早了」报成「`lib/board.ts` 的几何常量改了，去同步 `_contract.mjs`」——
+  排查方向完全错。
+* **别拿固定 sleep 当同步。** `audit.mjs` 那一拍「引擎思考中」原先
+  `waitForTimeout(350)` 再采一次 `task.status`。实测：引擎进 `running` 很稳
+  （约 45ms），但**结束**时间在 347~991ms 之间飘 —— 皮卡鱼搜到 `max_depth`
+  就收手，不一定用满 `think_ms`，于是窗口是 `min(think_ms, 深度到顶)`，
+  最短只有 300ms。350ms 那个采样点正好卡在最短一档的刀刃上，8 次里红了 2 次。
+  现在改成**轮询**到「引擎 running + 盘面有主变虚线」再截图，窗口再窄也抓得住。
 
 **双引擎内核支持**：
 - **⚡ 皮卡鱼（Pikafish · NNUE）**：接入世界顶级开源中国象棋引擎（Stockfish 架构 + 官方 NNUE 神经网络评估）。棋力高达 Elo 3500+，通过内置 UCI 驱动长驻运行，每秒搜索数百万至千万节点，中残局压制力极强，与任何对手大模型对弈时拥有绝对的碾压胜率。已随项目内置 macOS（通用二进制）、Windows、Linux 原生支持及 `pikafish.nnue` 权重文件，开箱即用。

@@ -386,6 +386,7 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
             <div
               key={`${step.from}${step.to}${i}`}
               className="pv-trace"
+              data-pv-trace=""
               style={{
                 left: `${a.x}%`,
                 top: `${a.y}%`,

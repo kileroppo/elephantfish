@@ -228,17 +228,46 @@ for (const vp of VIEWPORTS) {
     const el = await landmark(page, '[data-board]', '中局盘面截图')
     if (el) await el.screenshot({ path: `${outDir}/_board_midgame.png` })
 
-    // 引擎思考中的瞬间：长考窗口要够宽，否则截到的是算完之后
+    // 引擎思考中的瞬间：**轮询**等它真的进 running，而不是固定 sleep 一下再看。
+    //
+    // 为什么固定 sleep 不行 —— 实测过：`think_ms=900` 时，引擎进 running 很稳
+    // （约 45ms），但**什么时候结束完全不一定**。连采 6 次的时间线是
+    // 347 / 752 / 940 / 944 / 976 / 991ms：皮卡鱼搜到 `max_depth` 就收手，
+    // 并不一定用满 think_ms，于是这个窗口是 `min(think_ms, 深度到顶)`，
+    // 有时只有 300ms。老的写法在 350ms 处采一次，正好卡在最短那一档的刀刃上，
+    // 8 次里红了 2 次 —— 报的是「没截到」，其实只是采样点晚了 3ms。
+    // 轮询能在窗口里稳稳抓住（每 60ms 一次，300ms 的窗口也有 4~5 次机会）。
+    //
+    // 主变虚线是引擎搜出一步之后才有的，所以两个条件都满足才算抓到。
     await waitIdle(page)
     // 这一步同样只能现取：本局的实际局面取决于引擎前面怎么走
     await typeMove(page, (await getState(page)).game.legal_moves[0].iccs)
-    await page.waitForTimeout(350)
-    const thinking = (await getState(page)).task?.status === 'running'
-    if (!thinking) problems.push('[scene] 没能截到「思考中」的瞬间，这张图无效')
+    let sawThinking = false
+    let pvWhileThinking = 0
+    const thinkDeadline = Date.now() + 8000
+    while (Date.now() < thinkDeadline) {
+      const s = await getState(page)
+      if (s.task?.status === 'running') {
+        sawThinking = true
+        const n = await page.locator('[data-pv-trace]').count()
+        if (n > 0) {
+          pvWhileThinking = n
+          break
+        }
+      }
+      await page.waitForTimeout(60)
+    }
+    // 两种失败分开报：进不了思考态是「这张图无效」，进了却没有虚线是「虚线坏了」。
+    if (!sawThinking) problems.push('[scene] 8 秒内没等到引擎进入思考状态，这张图无效')
+    else if (pvWhileThinking === 0) problems.push('[scene] 引擎思考中，盘面上却没有主变虚线')
     await page.screenshot({ path: `${outDir}/thinking.png` })
-    console.log(`✓ thinking（抓到了：${thinking}）`)
+    console.log(`✓ thinking（思考中：${sawThinking}，主变虚线 ${pvWhileThinking} 条）`)
 
     await waitIdle(page)
+    const pvAfterSettle = await page.locator('[data-pv-trace]').count()
+    if (pvAfterSettle > 0) {
+      problems.push(`[scene] 引擎已经落子，盘面上还留着 ${pvAfterSettle} 条主变虚线`)
+    }
     await page.keyboard.press('Escape')
     await page.keyboard.press('?')
     await page.waitForTimeout(400)

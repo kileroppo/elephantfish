@@ -227,27 +227,101 @@ const CELL = 80
 const BOARD_W = 720
 const BOARD_H = 800
 
-/**
- * 从格号算像素中心。
- *
- * 视角有没有翻转读 `data-flipped`，不再像以前那样拿棋子包围盒去反推 ——
- * 那种反推在半数情况下是对的，另外半数情况下会把脚本自己的错误算成产品的错误。
- * 格子是正方形，所以只用一个轴的缩放（用 x 轴），旋转设备下也稳。
- */
-export async function squareCenter(page, square) {
-  const info = await boardInfo(page)
-  const box = await page.locator('[data-board]').boundingBox()
-  if (!box) throw new Error('找不到 [data-board]，盘面还没渲染出来')
+/** 同一帧里读「盘面框 + 视角翻转」。没有盘面返回 null。 */
+const readBoard = (page) =>
+  page.evaluate(() => {
+    const el = document.querySelector('[data-board]')
+    if (!el) return null
+    const b = el.getBoundingClientRect()
+    return {
+      flipped: el.dataset.flipped === 'true',
+      board: { x: b.x, y: b.y, width: b.width, height: b.height },
+    }
+  })
 
+/**
+ * 同一帧里把「盘面框 + 某格棋子框 + 翻转 + 滚动」一起读出来。
+ *
+ * **必须写在同一个 `evaluate` 里**：两次 `getBoundingClientRect` 在同一帧内
+ * 完成，中间插不进一次重排或滚动，所以「盘面」和「棋子」一定属于同一个参考系。
+ * 分成两次读（先读盘面、再读棋子）就会出问题 —— 中间只要发生一次布局位移，
+ * 两次读数就跨了参考系，凭空多出一个偏移量，还查不出来源。
+ */
+const readBoardAndPiece = (page, square) =>
+  page.evaluate((sq) => {
+    const el = document.querySelector('[data-board]')
+    const pe = document.querySelector(`[data-piece][data-square="${sq}"]`)
+    if (!el || !pe) return null
+    const b = el.getBoundingClientRect()
+    const p = pe.getBoundingClientRect()
+    return {
+      flipped: el.dataset.flipped === 'true',
+      board: { x: b.x, y: b.y, width: b.width, height: b.height },
+      piece: { x: p.x, y: p.y, width: p.width, height: p.height },
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    }
+  }, square)
+
+const sameRect = (a, b, tol) =>
+  Math.abs(a.x - b.x) <= tol &&
+  Math.abs(a.y - b.y) <= tol &&
+  Math.abs(a.width - b.width) <= tol &&
+  Math.abs(a.height - b.height) <= tol
+
+/**
+ * 反复读，直到连续两次读数一致 —— 也就是布局「站定」了。
+ *
+ * 为什么必须等：
+ *   * `.piece` 挂着 `transition: left 240ms, top 240ms`，棋子一换格子就会滑
+ *     240ms；这期间 `getBoundingClientRect` 给的是滑行途中的坐标。
+ *   * 布局本身也会动：`reset()` 之后舞台头部的内容一变，盘面可用高度跟着变，
+ *     整块盘面会上下挪（`boardIn` 入场动画也会平移它）。
+ *
+ * 这期间量出来的几何不属于同一个参考系，能差出整整一格（72px），然后被报成
+ * 「棋盘几何常量改了，去同步 board.ts」—— 排查方向完全错。等两次读数一致，
+ * 才算站在地上，量出来的数字才有意义。
+ *
+ * 超时还没稳就返回最后一次读数（调用方自己判断怎么报）。元素消失返回 null。
+ */
+async function steady(page, read, { timeout = 2500, tol = 0.5, gap = 120 } = {}) {
+  const deadline = Date.now() + timeout
+  let prev = await read()
+  if (!prev) return null
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(gap)
+    const now = await read()
+    if (!now) return null
+    const boardSettled = sameRect(prev.board, now.board, tol)
+    const pieceSettled = !prev.piece || sameRect(prev.piece, now.piece, tol)
+    if (boardSettled && pieceSettled) return now
+    prev = now
+  }
+  return prev
+}
+
+/** 由盘面框 + 格号算像素中心。frameToPoint 是唯一一处换算，squareCenter 和
+ *  calibrate 共用它 —— 两份迟早会走岔。
+ *  视角翻转读 `data-flipped`，不再拿棋子包围盒去反推 —— 那种反推在半数情况下
+ *  是对的，另外半数会把脚本自己的错误算成产品的错误。格子是正方形，所以只用
+ *  一个轴的缩放（用 x 轴），旋转设备下也稳。 */
+function frameToPoint(box, square, flipped) {
   const file = square.charCodeAt(0) - 97
   const rank = Number(square.slice(1))
-  const f = info.flipped ? 8 - file : file
-  const r = info.flipped ? 9 - rank : rank
+  const f = flipped ? 8 - file : file
+  const r = flipped ? 9 - rank : rank
   const scale = box.width / BOARD_W
   return {
     x: box.x + scale * (MARGIN + f * CELL),
     y: box.y + scale * (MARGIN + (9 - r) * CELL),
   }
+}
+
+export async function squareCenter(page, square) {
+  // 先等盘面站定：盘面还在动的话，按它算出来的落点也是动的。
+  const g = await steady(page, () => readBoard(page))
+  if (!g) throw new Error('找不到 [data-board]，盘面还没渲染出来')
+  return frameToPoint(g.board, square, g.flipped)
 }
 
 /**
@@ -258,18 +332,32 @@ export async function squareCenter(page, square) {
  * 排查方向完全错了。
  */
 export async function calibrate(page, square) {
-  const computed = await squareCenter(page, square)
-  const box = await piece(page, square).boundingBox()
-  if (!box) throw new Error(`棋盘上没有 ${square} 这颗子`)
-  const real = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  // 盘面与这颗子在同一帧读、并等到连续两帧一致，才拿来比（详见 steady 的注释）：
+  // 不等就会量到棋子滑动途中 / 盘面位移途中的几何，报一个「几何对不上」的假警报。
+  const g = await steady(page, () => readBoardAndPiece(page, square))
+  if (!g) throw new Error(`棋盘或 ${square} 这颗子还没渲染出来`)
+  const { board, piece, flipped } = g
+
+  const computed = frameToPoint(board, square, flipped)
+  const real = { x: piece.x + piece.width / 2, y: piece.y + piece.height / 2 }
   const off = Math.hypot(real.x - computed.x, real.y - computed.y)
-  const cell = (await page.locator('[data-board]').boundingBox()).width / 9
+  const cell = board.width / 9
   if (off > cell / 2) {
+    const nodes = await page.$$eval(`[data-piece][data-square="${square}"]`, (els) =>
+      els.map((e) => {
+        const r = e.getBoundingClientRect()
+        return `${e.getAttribute('class')} @${r.x.toFixed(0)},${r.y.toFixed(0)} ${r.width.toFixed(0)}x${r.height.toFixed(0)}`
+      }),
+    )
     throw new Error(
-      `棋盘几何对不上：按常量算 ${square} 的中心在 ${computed.x.toFixed(0)},` +
-        `${computed.y.toFixed(0)}，真实棋子在 ${real.x.toFixed(0)},${real.y.toFixed(0)}，` +
-        `偏了 ${off.toFixed(0)}px（半格 ${(cell / 2).toFixed(0)}px）。` +
-        `大概 frontend/src/lib/board.ts 的 MARGIN/CELL 改了，需要同步 _contract.mjs。`,
+      `棋盘几何对不上：按常量算 ${square} 的中心在 ${computed.x.toFixed(0)},${computed.y.toFixed(0)}，` +
+        `真实棋子在 ${real.x.toFixed(0)},${real.y.toFixed(0)}，偏了 ${off.toFixed(0)}px（半格 ${(cell / 2).toFixed(0)}px）。` +
+        `盘面框 ${board.width.toFixed(1)}x${board.height.toFixed(1)}@${board.x.toFixed(1)},${board.y.toFixed(1)}，` +
+        `棋子框 ${piece.width.toFixed(1)}x${piece.height.toFixed(1)}@${piece.x.toFixed(1)},${piece.y.toFixed(1)}，` +
+        `滚动 ${g.scrollX},${g.scrollY}，翻转 ${flipped}，[data-piece][data-square=${square}] 命中 ${nodes.length} 个：` +
+        `${nodes.join(' | ')}。` +
+        `若偏差正好约一格，多半是布局/棋子还在动（量早了）；若是稳定的常数级偏差，` +
+        `才是 frontend/src/lib/board.ts 的 MARGIN/CELL 改了，需要同步 _contract.mjs。`,
     )
   }
   return computed
