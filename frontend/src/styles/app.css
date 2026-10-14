@@ -3679,11 +3679,39 @@ kbd {
   border-top: 1px solid var(--hairline);
 }
 
+.setup-settings-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .setup-options {
   display: flex;
   gap: 16px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.setup-scenario-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  background: rgba(120, 120, 120, 0.08);
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+  line-height: 1.4;
+  width: fit-content;
+}
+
+.setup-scenario-hint .scenario-bulb {
+  font-size: 12px;
+}
+
+.setup-scenario-hint .scenario-text {
+  letter-spacing: 0.01em;
 }
 
 .option-group {

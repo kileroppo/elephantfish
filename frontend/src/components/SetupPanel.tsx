@@ -324,47 +324,59 @@ export function SetupPanel({
 
       {/* 对局设定与启动动作 */}
       <div className="setup-bottom-bar">
-        <div className="setup-options">
-          {/* 谁先走 */}
-          <div className="option-group">
-            <span className="option-label">先手方:</span>
-            <div className="segmented-sm">
-              <button
-                type="button"
-                className={`seg-btn ${turn === 'red' ? 'is-active' : ''}`}
-                onClick={() => onTurnChange('red')}
-              >
-                <span className="dot red-dot" /> 红方先手
-              </button>
-              <button
-                type="button"
-                className={`seg-btn ${turn === 'black' ? 'is-active' : ''}`}
-                onClick={() => onTurnChange('black')}
-              >
-                <span className="dot black-dot" /> 黑方先手
-              </button>
+        <div className="setup-settings-box">
+          <div className="setup-options">
+            {/* 谁先走 */}
+            <div className="option-group">
+              <span className="option-label">轮到走棋:</span>
+              <div className="segmented-sm">
+                <button
+                  type="button"
+                  className={`seg-btn ${turn === 'red' ? 'is-active' : ''}`}
+                  onClick={() => onTurnChange('red')}
+                >
+                  <span className="dot red-dot" /> 轮到红方
+                </button>
+                <button
+                  type="button"
+                  className={`seg-btn ${turn === 'black' ? 'is-active' : ''}`}
+                  onClick={() => onTurnChange('black')}
+                >
+                  <span className="dot black-dot" /> 轮到黑方
+                </button>
+              </div>
+            </div>
+
+            {/* 引擎执子 */}
+            <div className="option-group">
+              <span className="option-label">引擎执子:</span>
+              <div className="segmented-sm">
+                <button
+                  type="button"
+                  className={`seg-btn ${engineSide === 'red' ? 'is-active' : ''}`}
+                  onClick={() => onEngineSideChange('red')}
+                >
+                  执红（朝下）
+                </button>
+                <button
+                  type="button"
+                  className={`seg-btn ${engineSide === 'black' ? 'is-active' : ''}`}
+                  onClick={() => onEngineSideChange('black')}
+                >
+                  执黑（朝下）
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* 引擎执子 */}
-          <div className="option-group">
-            <span className="option-label">引擎执子:</span>
-            <div className="segmented-sm">
-              <button
-                type="button"
-                className={`seg-btn ${engineSide === 'red' ? 'is-active' : ''}`}
-                onClick={() => onEngineSideChange('red')}
-              >
-                引擎执红
-              </button>
-              <button
-                type="button"
-                className={`seg-btn ${engineSide === 'black' ? 'is-active' : ''}`}
-                onClick={() => onEngineSideChange('black')}
-              >
-                引擎执黑
-              </button>
-            </div>
+          <div className="setup-scenario-hint">
+            <span className="scenario-bulb">💡</span>
+            <span className="scenario-text">
+              开局状态：引擎执{engineSide === 'red' ? '红' : '黑'}（朝下），
+              {turn === engineSide
+                ? '开局由引擎自动出招'
+                : `开局轮到${turn === 'red' ? '红' : '黑'}方（请在盘面落子）`}
+            </span>
           </div>
         </div>
 
