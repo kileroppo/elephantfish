@@ -287,6 +287,9 @@ def from_fen(fen):
         raise ValueError(f'FEN 应有 {ROWS} 行，实际 {len(rows)} 行')
 
     chars = list(_initial)
+    for r in range(ROWS):
+        for f in range(COLS):
+            chars[parse(chr(ord('a') + f) + str(r))] = '.'
     for r, row in enumerate(rows):
         rank = ROWS - 1 - r          # 第一行是黑方底线 = rank 9
         fil = 0

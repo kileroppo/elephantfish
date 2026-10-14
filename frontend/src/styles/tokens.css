@@ -43,22 +43,32 @@
   /* 木纹不是颜色，是两条 feTurbulence 噪声，写在 Board.tsx 的 <defs> 里。
      feColorMatrix 的 values 属性不吃 CSS 变量，所以那两处颜色只能硬编码。 */
 
-  /* ---- 棋子（漆器升级版） ---- */
-  /* 盘面：左上受光偏亮、右下背光偏暗，温暖红棕漆器调 */
-  --disc-face-1: #fef9f0;    /* 受光面 — 近白暖调 */
-  --disc-face-2: #ecdcbe;    /* 中间过渡 */
-  --disc-face-3: #c9ad84;    /* 背光面 — 深棕 */
-  --disc-face-deep: #a68658; /* 最深暗部（漆器底色） */
-  /* 漆面高光 */
-  --disc-specular: rgba(255, 255, 255, 0.95); /* 镜面高光点 */
-  --disc-rim-light: rgba(255, 240, 210, 0.6); /* 倒角水线 */
+  /* ---- 棋子（朱红漆器 + 玉质透光） ----
+     盘面**不透明**，层次靠明度拉开，不靠叠半透明。以前棋子身上压了约十层
+     半透明暖棕（rgba(80,50,15,.38)、rgba(60,36,10,.22)、rgba(100,30,20,.30)…），
+     半透明棕一层层相加在物理上就是浑浊 —— 那是「脏」的主因，调参数救不回来。 */
+  --disc-face-1: #fffbf3; /* 受光面 */
+  --disc-face-2: #f2e5cd; /* 中间过渡 */
+  --disc-face-3: #d2b78e; /* 背光面 */
+  --disc-face-deep: #ab8c60; /* 最深暗部 */
   --piece-red: #a92c24;
   --piece-black: #221d18;
-  /* 阴影：三层叠加——接触影（硬）、中层扩散影、远层羽化大影 */
-  --disc-shadow:
-    0 1px 2px rgba(40, 24, 8, 0.55),
-    0 4px 10px rgba(58, 34, 12, 0.38),
-    0 12px 28px rgba(58, 34, 12, 0.20);
+
+  /* ---- 光：整个界面只有一盏，在左上，投影一律朝右下 ----
+     --light-x 是投影的横向系数（纵向恒为 1）。方向只在这里定一次，写法也只有一条：
+     **每个投射影的横向分量都写成 `calc(<纵向位移> * var(--light-x))`** —— 于是
+     calc 里 px 前面那个数字永远等于它后面那个纵向位移的数字，扫一眼就知道角度对不对。
+
+     以前这里是两套光：棋子影明确偏右下（translate(3.5px, 4.5px)），而棋盘三层影、
+     --shadow-panel、--shadow-float 全是正下方垂直投影 —— 同一个画面里跑两套光照，
+     眼睛读作「廉价」，这是「脏」的另一半来源。棋子的接触影现在也收到 0.42 上了。
+
+     三类豁免，别拿尺子去量它：
+       · inset 阴影：语义相反，那是内壁受光，不是投影；
+       · `0 0 <blur>` / `0 0 0 <spread>`：对称的发光与描边圆环，本来就没有方向；
+       · 字体的墨迹 text-shadow：那是给笔画加分量的排印手段，不是影子落在地上。
+         真正表达凹凸的那种（如 .seal span 的阴刻）算光影 —— 要跟方向一致、符号相反。 */
+  --light-x: 0.42;
 
   /* ---- 字体 ---- */
   --font-display: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC",
@@ -75,14 +85,28 @@
   --r-lg: 16px;
   --r-xl: 22px;
 
-  --shadow-panel: 0 1px 2px rgba(43, 35, 26, 0.05),
-    0 8px 24px -12px rgba(43, 35, 26, 0.2);
-  --shadow-float: 0 2px 6px rgba(43, 35, 26, 0.08),
-    0 24px 48px -20px rgba(43, 35, 26, 0.3);
+  --shadow-panel: calc(1px * var(--light-x)) 1px 2px rgba(43, 35, 26, 0.05),
+    calc(6px * var(--light-x)) 6px 20px -12px rgba(43, 35, 26, 0.2);
+  --shadow-float: calc(2px * var(--light-x)) 2px 6px rgba(43, 35, 26, 0.08),
+    calc(20px * var(--light-x)) 20px 44px -20px rgba(43, 35, 26, 0.3);
 
-  /* ---- 棋子接触影 ---- */
-  --shadow-contact: rgba(58, 41, 18, 0.34);
-  --shadow-contact-fade: rgba(58, 41, 18, 0);
+  /* ---- 版面净距 ---- */
+  /* 回合条药丸（.turn-badge）的实际高度：行高 20px + 上下 padding 5px×2 + 边框 1px×2。
+     **必须显式定义，不能指望它自己撑开** —— 窄屏（≤1140px）下 .stage 会变成
+     `display: contents`，回合条被上提进 .workspace 当成栅格的一行；此时它内部 badge
+     的高度**不参与该行的固有尺寸计算**（实测：把 min-height 置 0，行高就是 0，
+     而 badge 仍旧 32px 杵在外面）。桌面档没有上提，内容是正常撑开的，所以这个坑
+     只在窄屏露头。改 badge 的字号 / padding / 边框时，这个值要跟着改 ——
+     .devtools 里有一条断言盯着它（见 audit.mjs 的「回合条净空」一节）。 */
+  --badge-h: 32px;
+
+  /* 回合条与棋盘之间的净距。**必须大于棋盘垫的探出量**（.board::before 的 14px，
+     手机档 10px）：棋盘垫比棋盘大一圈，上缘也会往上探 —— 而垫子画在棋盘自己的层叠
+     上下文里，棋盘又是 positioned 元素，于是整块垫子画在回合条**之上**（垫子那句
+     z-index:-1 只压得住棋盘自己的内容，压不住回合条）。净距不够 14px 时，
+     垫子的上缘就会把回合条下半截盖掉。桌面档走 .stage 的 gap，窄屏档走
+     .board-wrap 的 margin-top（窄屏 .workspace 的 row-gap 是 0）。 */
+  --board-clearance: 16px;
 
   /* ---- 移动轨迹（墨痕） ---- */
   --trail-red: rgba(169, 44, 36, 0.35);
@@ -93,6 +117,11 @@
   /* ---- 动效 ---- */
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.32, 0.46, 1);
+  /* 位移：纯减速，**不回弹**。棋子是「稳重」的东西，位移动画带回弹会立刻
+     变塑料球。缓动分级这一点见 app.css 的 .piece 段。 */
+  --ease-move: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* 落子：只在触盘那一下给一次极小的压实回弹 */
+  --ease-land: cubic-bezier(0.34, 1.28, 0.42, 1);
   --dur-fast: 140ms;
   --dur: 220ms;
   --dur-slow: 380ms;
@@ -106,12 +135,4 @@
     --dur: 1ms;
     --dur-slow: 1ms;
   }
-}
-
-
-/* 棋子掠射光的角度：注册成 <angle> 才能被 keyframes 插值 */
-@property --sweep {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: -120deg;
 }

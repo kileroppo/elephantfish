@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api'
 import type { AppState, SearchTask } from '../types'
 import { play } from '../lib/sound'
+import { landMs } from '../lib/board'
 
 const POLL_MS = 130
 /** 没有搜索在跑时的慢心跳。见文件末尾「空闲心跳」那段。 */
@@ -38,7 +39,7 @@ interface UseGame {
   resign: () => Promise<void>
   stopThinking: () => Promise<void>
   updateSettings: (patch: Partial<AppState['settings']>) => Promise<void>
-  loadPosition: (fen: string) => Promise<void>
+  loadPosition: (fen: string, engine_side?: 'red' | 'black') => Promise<void>
 }
 
 export function useGame(): UseGame {
@@ -91,13 +92,17 @@ export function useGame(): UseGame {
       if (ply === lastPly.current + 1 && lastPly.current >= 0) {
         const rec = game.records[ply - 1]
         if (rec) {
-          // 物理音画精确同步：位移耗时 240ms，在 t=210ms 触盘瞬间精准敲击发声
+          // 音效跟棋子滑行**同一个时长**（同一份定义，见 lib/board.ts 的 glideMs）——
+          // 在「看着落定」的那一刻敲，音画才对得上。这里原来写死 210ms，那是按固定的
+          // 240ms 位移配出来的数；位移改成按跨度分级之后远手会滑到 360ms，
+          // 死数就会在棋子还在半路上的时候响一声。
+          const delay = landMs(rec.from, rec.to) || 210
           window.setTimeout(() => {
             if (rec.mate) play('win')
             else if (rec.check) play('check')
             else if (rec.captured) play('capture')
             else play('move')
-          }, 210)
+          }, delay)
           // 引擎的应手不再另外弹 toast —— 它本来就会显示在转述台②里，
           // 每次出招都在右下角弹一下会让人以为界面在抖。
           // 声音留着：那是「走了一步」的提示，不占视觉。
@@ -290,9 +295,9 @@ export function useGame(): UseGame {
   )
 
   const loadPosition = useCallback(
-    async (fen: string) => {
+    async (fen: string, engine_side?: 'red' | 'black') => {
       lastPly.current = -1
-      await run(() => api.load({ fen }))
+      await run(() => api.load({ fen, engine_side }))
     },
     [run],
   )
@@ -313,7 +318,15 @@ export function useGame(): UseGame {
   // 但「我们停下」不等于「世界停下」：另一个标签页、或者对手模型那边的 HTTP
   // 自动拉取，都可能在我们不动手的时候把局面推走。空闲时留一个一秒的慢心跳，
   // 界面就不会闭着眼 —— 代价可以忽略，而看不见对手的棋正是这个软件最忌讳的事。
-  const idle = !!state && state.game.status.state === 'playing' && !taskId
+  //
+  // **心跳的条件里不能带「对局进行中」。** 以前这里写的是
+  // `state.game.status.state === 'playing' && !taskId` —— 于是对局一结束
+  // （被将死、认输、和棋）心跳就自己关了，而**下一局同样是由外界开的**
+  // （对手模型的 HTTP、或者另一个标签页）。结果本页永远停在一个早已不存在的
+  // 残局上：实测对局结束后 4 秒内 /api/state 请求 0 次，外部随后开的新局
+  // 界面 7 秒内毫无察觉（见 .devtools/_idle_heartbeat_check.mjs）。
+  // 换句话说，这个门禁恰好把心跳关在它最该工作的时候。条件只该是「我们没在搜」。
+  const idle = !!state && !taskId
   useEffect(() => {
     if (!idle) return
     const timer = window.setInterval(() => void refreshQuiet(), IDLE_MS)

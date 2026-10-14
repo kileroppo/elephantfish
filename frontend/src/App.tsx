@@ -5,10 +5,12 @@ import { AnalysisPanel } from './components/AnalysisPanel'
 import { MoveList } from './components/MoveList'
 import { ControlRail } from './components/ControlRail'
 import { TopBar } from './components/TopBar'
+import { SetupPanel } from './components/SetupPanel'
 import { HelpOverlay, Toasts } from './components/Overlays'
 import { useGame } from './hooks/useGame'
 import { isSoundEnabled, play, setSoundEnabled, unlockAudio } from './lib/sound'
 import { sideName } from './lib/format'
+import { useSetupMode } from './hooks/useSetupMode'
 
 const LS_FLIP = 'ef.flipped'
 const LS_SOUND = 'ef.sound'
@@ -26,6 +28,13 @@ export default function App() {
   const [railR, setRailR] = useState(() => localStorage.getItem(LS_RAIL_R) === '1')
 
   const game = g.state?.game
+
+  // ---- 补棋 / 自定义排局模式 ----
+  const setup = useSetupMode({
+    game,
+    pushToast: g.pushToast,
+    loadPosition: g.loadPosition,
+  })
 
   // 引擎执黑时默认把黑方摆在下面 —— 归属我方视角
   useEffect(() => {
@@ -97,10 +106,10 @@ export default function App() {
 
   /** 落子的唯一出口。走哪一步算一步、合法不合法，都由 Board 自己认完了才报上来 ——
    *  上层不再算一遍合法性，也就不会有「两处判得不一样」的余地。 */
+  // 回一个「收没收」给 Board：它在本地先替这一步挪了一格，被拒时得知道要退回来。
+  // 'queued' 也算收下（服务端已经记着，等引擎收手自己落子），只有 'error' 是没成。
   const onBoardMove = useCallback(
-    (iccs: string) => {
-      void g.submitMove(iccs)
-    },
+    async (iccs: string) => (await g.submitMove(iccs)) !== 'error',
     [g],
   )
 
@@ -112,12 +121,23 @@ export default function App() {
 
       if (e.key === 'Escape') {
         setHelp(false)
+        if (setup.active) {
+          setup.clearSelection()
+        }
         // 棋盘的选中态归 Board 自己管（它也有自己的 Escape 分支）；
         // 这里只负责关帮助、把焦点从输入框上收回来。
         if (typing) (target as HTMLInputElement).blur()
         return
       }
       if (typing) return
+
+      if (setup.active && (e.key === 'Delete' || e.key === 'Backspace')) {
+        if (setup.pickedBoardSquare) {
+          e.preventDefault()
+          setup.removePiece(setup.pickedBoardSquare)
+        }
+        return
+      }
 
       // '/' 由 RelayConsole 自己接管：它能先把折叠的录入框展开再聚焦
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -171,11 +191,13 @@ export default function App() {
     )
   }
 
-  const turnText = isPlaying
-    ? g.thinking
-      ? '引擎深度计算中…'
-      : `轮到${sideName(game.turn)}${game.turn === game.engine_side ? '（我方引擎）' : '（对方，请在盘面点选）'}`
-    : game.status.reason || '对局结束'
+  const turnText = setup.active
+    ? `补棋排局中 · 设定【${setup.turn === 'red' ? '红先' : '黑先'}】`
+    : isPlaying
+      ? g.thinking
+        ? '引擎深度计算中…'
+        : `轮到${sideName(game.turn)}${game.turn === game.engine_side ? '（我方引擎）' : '（对方，请在盘面点选）'}`
+      : game.status.reason || '对局结束'
 
   return (
     <div className={`app${g.thinking ? ' is-thinking' : ''}`}>
@@ -185,6 +207,8 @@ export default function App() {
         connected={g.connected}
         flipped={flipped}
         soundOn={soundOn}
+        setupMode={setup.active}
+        onToggleSetup={setup.toggle}
         onToggleEngine={() => {
           const current = g.state?.settings.engine_type ?? 'pikafish'
           const next = current === 'pikafish' ? 'builtin' : 'pikafish'
@@ -230,6 +254,8 @@ export default function App() {
         <ControlRail
           open={railL}
           state={g.state}
+          setupMode={setup.active}
+          onToggleSetup={setup.toggle}
           onNewGame={(side) => void g.newGame(side)}
           onUndo={() => void g.undoRound()}
           onResign={() => void g.resign()}
@@ -248,6 +274,9 @@ export default function App() {
               ]
                 .filter(Boolean)
                 .join(' ')}
+              /* 自检锚点：`audit.mjs` 量「回合条有没有被棋盘垫盖住」靠它。
+                 类名归样式所有，随时可能改，所以断言读这个 data-*。 */
+              data-turn-badge=""
             >
               <span className="turn-disc" />
               {/* key = 文案本身：换一次状态，文字就淡入一次；文案不变时不打扰 */}
@@ -255,26 +284,30 @@ export default function App() {
                 {turnText}
               </span>
             </span>
-            {game.in_check && isPlaying && (
+            {game.in_check && isPlaying && !setup.active && (
               <span key={`chk${game.ply}`} className="check-flag">
                 将军！
               </span>
             )}
           </div>
 
-          <div className={`board-wrap ${showOverModal ? 'is-over' : ''}`}>
+          <div className={`board-wrap ${showOverModal && !setup.active ? 'is-over' : ''}`}>
             <Board
               game={game}
               flipped={flipped}
               thinking={g.thinking}
-              /* 主变直接接引擎算出来的那一条（以前这里写死 pv={[]}，
-                 于是 Board 里那段虚线渲染从来没亮过）。
-                 只在**思考中**画：task.progress 在落子之后并不清空，照单全画的话
-                 引擎刚走过的那一步会被再画一条虚线，跟盘面上的墨痕叠在一起。 */
-              pv={g.thinking ? (g.task?.progress?.pv ?? []) : []}
+              pv={g.thinking && !setup.active ? (g.task?.progress?.pv ?? []) : []}
               onMove={onBoardMove}
+              setupMode={setup.active}
+              setupPieces={setup.pieces}
+              selectedTrayPiece={setup.selectedTrayPiece}
+              pickedBoardSquare={setup.pickedBoardSquare}
+              onSetupSquareTap={setup.tapSquare}
+              onSetupPieceMove={setup.movePiece}
+              onSetupPieceRemove={setup.removePiece}
+              onSetupPickBoardSquare={setup.pickSquare}
             />
-            {showOverModal && !dismissedOver && (
+            {showOverModal && !dismissedOver && !setup.active && (
               <div className={`result-veil winner-${game.status.winner ?? 'none'}`}>
                 <div className="seal" aria-hidden="true">
                   <span>{game.status.winner === null ? '和' : '胜'}</span>
@@ -323,15 +356,39 @@ export default function App() {
             )}
           </div>
 
-          <RelayConsole
-            game={game}
-            thinking={g.thinking}
-            queued={g.queued}
-            onSubmit={g.submitMove}
-            onClearQueue={g.clearQueue}
-            onStop={() => void g.stopThinking()}
-            onEngineMove={() => void g.engineMove()}
-          />
+          {setup.active ? (
+            <SetupPanel
+              boardMap={setup.boardMap}
+              turn={setup.turn}
+              engineSide={setup.engineSide}
+              selectedTrayPiece={setup.selectedTrayPiece}
+              pickedBoardSquare={setup.pickedBoardSquare}
+              onSelectTrayPiece={setup.selectTrayPiece}
+              onClearBoard={setup.clearBoard}
+              onResetStandard={setup.resetStandard}
+              onRevertOriginal={setup.revertOriginal}
+              onRemovePickedPiece={() =>
+                setup.pickedBoardSquare && setup.removePiece(setup.pickedBoardSquare)
+              }
+              onCancelPick={setup.clearSelection}
+              onTurnChange={setup.setTurn}
+              onEngineSideChange={setup.setEngineSide}
+              onImportFen={setup.importFen}
+              onStartGame={() => void setup.startGame()}
+              onExitSetup={setup.exit}
+              onToast={g.pushToast}
+            />
+          ) : (
+            <RelayConsole
+              game={game}
+              thinking={g.thinking}
+              queued={g.queued}
+              onSubmit={g.submitMove}
+              onClearQueue={g.clearQueue}
+              onStop={() => void g.stopThinking()}
+              onEngineMove={() => void g.engineMove()}
+            />
+          )}
         </div>
 
         <aside

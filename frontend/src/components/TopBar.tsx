@@ -6,6 +6,8 @@ interface Props {
   connected: boolean
   flipped: boolean
   soundOn: boolean
+  setupMode?: boolean
+  onToggleSetup?: () => void
   onToggleEngine?: () => void
   onFlip: () => void
   onToggleSound: () => void
@@ -17,6 +19,8 @@ export function TopBar({
   engineInfo,
   connected,
   soundOn,
+  setupMode = false,
+  onToggleSetup,
   onToggleEngine,
   onFlip,
   onToggleSound,
@@ -79,6 +83,18 @@ export function TopBar({
             断线
           </button>
         )}
+        <button
+          type="button"
+          className={`icon-btn icon-setup${setupMode ? ' is-on' : ''}`}
+          onClick={onToggleSetup}
+          title={setupMode ? '退出补棋模式' : '进入补棋模式（自定义排局）'}
+        >
+          <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6">
+            <rect x="3" y="3" width="14" height="14" rx="2" />
+            <path d="M3 10h14M10 3v14" />
+          </svg>
+          <span>{setupMode ? '退出补棋' : '补棋模式'}</span>
+        </button>
         <button type="button" className="icon-btn icon-flip" onClick={onFlip} title="翻转视角 (快捷键 F)">
           <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6">
             <path d="M4 7a6 6 0 0 1 10-3.5M16 13a6 6 0 0 1-10 3.5" />

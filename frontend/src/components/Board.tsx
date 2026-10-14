@@ -3,10 +3,12 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react'
-import type { GameSnapshot, Side } from '../types'
+import type { CSSProperties } from 'react'
+import type { GameSnapshot, PieceInfo, Side } from '../types'
 import {
   BOARD_H,
   BOARD_W,
@@ -15,6 +17,7 @@ import {
   MARK_POINTS,
   RIVER_LABELS,
   ROWS,
+  glideMs,
   squareAt,
   toPixel,
   toPercent,
@@ -24,12 +27,20 @@ import {
 } from '../lib/board'
 
 /** 正在被拖拽的一颗子。bx/by 是棋盘坐标系里的像素位置，
- *  渲染时换算成百分比，所以不需要在渲染期读 getBoundingClientRect。 */
+ *  渲染时直接写进 --cx/--cy，所以不需要在渲染期读 getBoundingClientRect。 */
 interface DragState {
   from: string
   bx: number
   by: number
 }
+
+/** 落子反馈自身的时长。涟漪（520ms）比压实（320ms）长，两者错开收尾，
+ *  所以这个类要挂满最长的那个。 */
+const IMPACT_MS = 520
+
+/** 本地预判最多活这么久。到点服务端还没认，就判这一手落空、就地回位。
+ *  这条兜底只该在「服务端拒绝了这一手」时走到（正常情况下 ply 一变就把预判撤了）。 */
+const PENDING_MS = 800
 
 interface BoardProps {
   game: GameSnapshot
@@ -37,11 +48,35 @@ interface BoardProps {
   thinking: boolean
   /** 主变（ICCS）：在盘面上淡淡地铺一条「引擎打算这么走」的虚线 */
   pv?: string[]
-  /** 落子唯一的出口。走哪一步算一步由 Board 自己认，上层只收 ICCS。 */
-  onMove: (iccs: string) => void
+  /** 落子唯一的出口。走哪一步算一步由 Board 自己认，上层只收 ICCS。
+   *  要回一个「收没收」：false 表示这一步没被接受，Board 得立刻把本地预判撤回来。 */
+  onMove: (iccs: string) => Promise<boolean>
+  /** 补棋 / 自定义排局模式 */
+  setupMode?: boolean
+  setupPieces?: PieceInfo[]
+  selectedTrayPiece?: string | null
+  pickedBoardSquare?: string | null
+  onSetupSquareTap?: (square: string) => void
+  onSetupPieceMove?: (from: string, to: string) => void
+  onSetupPieceRemove?: (square: string) => void
+  onSetupPickBoardSquare?: (square: string | null) => void
 }
 
-export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) {
+export function Board({
+  game,
+  flipped,
+  thinking,
+  pv = [],
+  onMove,
+  setupMode = false,
+  setupPieces,
+  selectedTrayPiece = null,
+  pickedBoardSquare = null,
+  onSetupSquareTap,
+  onSetupPieceMove,
+  onSetupPieceRemove,
+  onSetupPickBoardSquare,
+}: BoardProps) {
   const surfaceRef = useRef<HTMLDivElement>(null)
 
   // 拖拽：从「按下一颗子」到「松手」之间的全部状态都在这里。
@@ -54,25 +89,78 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
     moved: boolean
   } | null>(null)
 
-  // 本地预判位移：落子瞬间立即启动位移，不等网络往返，杜绝子回弹与闪烁
-  const [pendingMove, setPendingMove] = useState<{ from: string; to: string } | null>(null)
+  // 本地预判位移：落子瞬间立即启动位移，不等网络往返，杜绝子回弹与闪烁。
+  // 记的是**棋子身份号**而不仅是格子名 —— 预判落空要回位时，得精确知道该把
+  // 「上一帧位置」这笔账还给哪颗子（见下面 PENDING_MS 那个兜底计时器）。
+  const [pendingMove, setPendingMove] = useState<{
+    id: number
+    from: string
+    to: string
+  } | null>(null)
+
+  // 每颗子「上一帧渲染在哪个格子」，键是服务端给的棋子身份号。两个用途：
+  // 算出这一手的滑行距离，以及认出「哪颗子刚落下来」好给它挂一次落子反馈。
+  // 摆在 ref 里而不是 state 里：它只在渲染期被读一次，更新它不该再触发一轮渲染。
+  const prevVisual = useRef(new Map<number, string>())
+
+  // 落子的序号。用来认出「这条提交回执已经过期了」—— 期间又落了一手的话，
+  // 上一手的失败回执不该去动这一手的账。
+  const moveSeq = useRef(0)
+
+  // 上一次结算过的 ply。用来认出「真的往前走了一手」—— 落子反馈只该在那种时候响，
+  // 悔棋（ply 回退）不算。
+  const plyRef = useRef(game.ply)
+
+  // 滑行收尾时用它强制重渲一次。--glide-dur 是写在行内样式上的、**跨帧残留**的：
+  // 不主动收一次，落点之后那 200~360ms 里只要 --u 一变（开抽屉、缩放窗口），
+  // 这颗子就会莫名其妙再滑一次。用法见下面那个 effect 的收尾。
+  const [, forceSettle] = useReducer((n: number) => n + 1, 0)
+
+  /** 正在滑的棋子 -> 这一段位移该走多久。**锁住，滑完才收。**
+   *
+   *  为什么不能按每帧的 diff 现算（这是踩过的坑，别再改回去）：
+   *  过渡要能起来，时长必须和「--cx 变化」落在**同一次样式重算**里。而服务端够快时
+   *  （本机往往十几毫秒），「本地预判」与「服务端确认」两次 commit 会落在同一帧内，
+   *  浏览器整帧只做一次重算 —— 如果确认那一次已经把 --glide-dur 按「这一帧没换格」
+   *  改回了 0ms，浏览器看到的就是「起点 → 终点、时长 0ms」：过渡根本不会开始，
+   *  棋子是瞬移过去的。而且**是不是能滑起来取决于服务端响应落在哪一帧**，时好时坏。
+   *  锁成同一个数之后，无论重算落在哪一次 commit 之后，时长都是它，过渡必然开始。
+   *
+   *  写在渲染期是刻意的：时长只有跟 --cx 一起 commit 才管用，等到 effect 里再设
+   *  就晚了（那时 CSS 里元素的起点已经是终点了）。这里**只写不消费**，幂等 ——
+   *  StrictMode 下渲染函数被调两遍，也只是把同一个值写两遍，没有副作用。 */
+  const glideRef = useRef(new Map<number, number>())
+
+  // 正在播落子反馈的那颗子。**一次性**的：挂上去、到点自己摘。
+  // 以前这件事靠 `.piece.is-landing` 这个**持久**类 + `.piece-face` 上 key 的变化
+  // 触发 React 重挂载来重播。那等于把「什么时候播」绑死在 React 的重建上：
+  // 加不出分级时序，还得每落一手白重建一次 DOM。
+  const [impactId, setImpactId] = useState<number | null>(null)
+  const showImpact = useRef<number | null>(null)
+  const hideImpact = useRef<number | null>(null)
 
   // 选中哪一格归 Board 自己管。以前它住在上层，于是「点一下到底算选中还是落子」
   // 要绕一圈：Board 把格子报上去，上层判完再把 selected/targets 传回来。走这条
   // 环路的代价是合法性判两遍（Board 判 targets.includes，上层再 find 一次），
   // 两处一旦有一处改了就静默不一致。
   const [picked, setPicked] = useState<string | null>(null)
+  const activePieces = setupMode && setupPieces ? setupPieces : game.pieces
+  const effectivePicked = setupMode ? pickedBoardSquare : picked
 
   // 可走点：从合法着法里现算。不再由上层算好传下来 —— 传下来就意味着上层也得
   // 知道「哪一格能被选中」，那正是要收窄掉的那部分知识。
   const targets = useMemo(() => {
-    if (!picked) return []
-    return game.legal_moves.filter((m) => m.from === picked).map((m) => m.to)
-  }, [picked, game.legal_moves])
+    if (setupMode || !effectivePicked) return []
+    return game.legal_moves.filter((m) => m.from === effectivePicked).map((m) => m.to)
+  }, [setupMode, effectivePicked, game.legal_moves])
 
+  // 服务端认了这一手就把预判撤掉。**只认 ply 与 turn 这两个「确认信号」** ——
+  // 原来依赖里还挂着 game.pieces，那是个陷阱：pieces 每一轮轮询都是新数组，
+  // 于是预判在下一次轮询（可能只有 100ms）就被清掉，棋子当场滑回原位、等确认
+  // 到了再滑过去：一步棋滑两趟。
   useEffect(() => {
     setPendingMove(null)
-  }, [game.ply, game.pieces, game.turn])
+  }, [game.ply, game.turn])
 
   // 局面换了就把选中清掉。**只认这几个字段**：直接依赖 game.pieces 会在每次
   // 轮询/state 刷新时都拿到新数组，于是每一轮都把选中清掉，选子根本立不住。
@@ -80,11 +168,117 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
     setPicked(null)
   }, [game.ply, game.engine_side, game.status.state])
 
+  // 兜底：PENDING_MS 还没等到服务端点头，就判这一手落空，就地回位。
+  // 回位前先把这颗子的「上一帧位置」改回原位 —— 于是这次回位是**瞬回**：
+  // 既不滑（滑回去是一次假的位移），也不会再响一次落子反馈（那是第二个假的
+  // 「发生了什么」）。走这条路只可能是服务端拒绝了这一手。
   useEffect(() => {
     if (!pendingMove) return
-    const timer = window.setTimeout(() => setPendingMove(null), 800)
+    const { id, from } = pendingMove
+    const timer = window.setTimeout(() => {
+      prevVisual.current.set(id, from)
+      setPendingMove(null)
+    }, PENDING_MS)
     return () => window.clearTimeout(timer)
   }, [pendingMove])
+
+  /** 这一帧真正换了格子的子，以及它从哪滑到哪。
+   *
+   *  分辨「这一步棋是真是假」不能只看「ply 变没变」：预判发生在服务端点头**之前**，
+   *  那一帧 ply 还没动，可它确实是一步棋。所以两边都要看，判据在下面的 canGlide。
+   *
+   *  这里**只读** prevVisual，不写 —— 写它的活儿归下面那个 effect。渲染函数在
+   *  StrictMode 下会被调两遍，在这里写会把要看的那个差值自己抹掉。 */
+  const moved = useMemo(() => {
+    const prev = prevVisual.current
+    const out: { id: number; from: string; to: string }[] = []
+    for (const p of game.pieces) {
+      // 「视觉上的格子」：本地预判期间，这颗子在画面上已经在落点了
+      const sq = p.id === pendingMove?.id ? pendingMove.to : p.square
+      const was = prev.get(p.id)
+      if (was !== undefined && was !== sq) out.push({ id: p.id, from: was, to: sq })
+    }
+    return out
+  }, [game.pieces, pendingMove])
+
+  /** 这一帧的位移该不该滑。
+   *
+   *  两个来源都算「真走了一步」：ply 往前走（服务端确认了某一手），或者本地正替它
+   *  先走（预判在飞，这一帧 ply 还没动）。
+   *
+   *  反过来：ply 回退是悔棋、归零是重开、跳一大截是载入存档 —— 那些是「局面被整个
+   *  换掉了」，不是「某颗子走了一步」。棋子该直接站到新位置上去，不滑，也不响落地。 */
+  const plyDelta = game.ply - plyRef.current
+  const canGlide = plyDelta > 0 || (plyDelta === 0 && pendingMove !== null)
+
+  // 把这一手的滑行时长锁下来（为什么必须锁，见 glideRef 上面那一段）。
+  // 只锁「单独一颗子」这一种：整片换格是重开 / 载入，那种满盘漂移既不像下棋也很贵。
+  const solo = moved.length === 1 ? moved[0] : null
+  if (solo && canGlide) glideRef.current.set(solo.id, glideMs(solo.from, solo.to))
+
+  /** 排一次落子反馈。
+   *
+   *  时机是关键：反馈必须等滑行**结束**才响，否则棋子还在半路上就开始压盘，
+   *  看着像两个人各干各的。所以这里按这一手的滑行时长延后 wait 毫秒再挂类。
+   *
+   *  **故意不返回 cleanup。** 这个 effect 的依赖里有 game.pieces，而它每一轮
+   *  轮询都会换一个新数组 —— 一旦按惯例写 cleanup clearTimeout，那个计时器
+   *  每 100 多毫秒就会被清掉一次、而重跑时又因为「没有换格」直接 return，
+   *  于是类永远摘不掉。两个计时器都用 ref 拿着，自己管自己的命。
+   *
+   *  用的是上面渲染期算好的 moved，不在这里重算一遍 —— 否则「渲染看到的」与
+   *  「effect 算出的」是两个时刻的视图，两边可能对不上（两边都以 moved 为准）。 */
+  useEffect(() => {
+    const next = new Map<number, string>()
+    for (const p of game.pieces) {
+      next.set(p.id, p.id === pendingMove?.id ? pendingMove.to : p.square)
+    }
+    prevVisual.current = next
+
+    // 一次只该有一颗子换格。换了一整片说明这是重开 / 载入 / 悔棋带回来的整体位移：
+    // 那不是「一步棋」，不滑行也不响反馈。
+    // （以前这里按 id 一对一地认「上一帧在哪」，而服务端重开时会把 id 重新分配成
+    // 1..N —— 于是满盘棋子会一起从上一局的终局位置滑到开局位置，还各响一次反馈。）
+    const landed = moved.length === 1 ? moved[0] : null
+    if (!landed) {
+      plyRef.current = game.ply
+      return
+    }
+
+    const { id } = landed
+    // 时长是渲染期锁好的。悔棋那种 canGlide 为假的时候这里取不到值，wait = 0 ——
+    // 于是那颗子直接站回原位，且下面那句 isPrediction/advanced 也会判成「不是落子」。
+    const wait = glideRef.current.get(id) ?? 0
+    // 只有「真的往前走了一手」才响落子反馈：ply 前进说明服务端认了这一手；
+    // 预判这一帧 ply 还没动，但那一手正是本地替它先走的，所以也认。
+    const isPrediction = pendingMove?.id === id
+    const advanced = game.ply === plyRef.current + 1
+    plyRef.current = game.ply
+
+    if (showImpact.current) window.clearTimeout(showImpact.current)
+    if (hideImpact.current) window.clearTimeout(hideImpact.current)
+    showImpact.current = window.setTimeout(() => {
+      if (isPrediction || advanced) {
+        setImpactId(id)
+        hideImpact.current = window.setTimeout(
+          () => setImpactId((curr) => (curr === id ? null : curr)),
+          IMPACT_MS,
+        )
+      }
+      // 这一段位移收尾，把时长交还给 0 —— 否则 --glide-dur 会残留在 DOM 上，
+      // 之后 200~360ms 里只要 --u 一变（开抽屉、缩放窗口），这颗子会再滑一次。
+      glideRef.current.delete(id)
+      forceSettle()
+    }, wait)
+  }, [moved, game.pieces, pendingMove])
+
+  useEffect(
+    () => () => {
+      if (showImpact.current) window.clearTimeout(showImpact.current)
+      if (hideImpact.current) window.clearTimeout(hideImpact.current)
+    },
+    [],
+  )
 
   // 棋盘比例锚定
   useLayoutEffect(() => {
@@ -203,27 +397,65 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
 
   /** 这颗子现在能不能被拿走。轮到的、还没结束、引擎没在算 —— 三者缺一不可。 */
   const grabbable = (square: string | null): boolean => {
-    if (!square || thinking || game.status.state !== 'playing') return false
+    if (!square) return false
+    if (setupMode) {
+      return activePieces.some((p) => p.square === square)
+    }
+    if (thinking || game.status.state !== 'playing') return false
     const piece = game.pieces.find((p) => p.square === square)
     return !!piece && piece.side === game.turn
   }
 
   /** 现在能不能动棋。三个入口（拖、点、键盘）都过这一道。 */
-  const canPlay = (): boolean => !thinking && game.status.state === 'playing'
+  const canPlay = (): boolean => setupMode || (!thinking && game.status.state === 'playing')
 
   /** 落子。**合法性只在这一处判**，上层收到的永远是已经核对过的一步。 */
   const commitMove = (from: string, to: string): boolean => {
     if (!canPlay()) return false
     const mv = game.legal_moves.find((m) => m.from === from && m.to === to)
     if (!mv || mv.from === mv.to) return false
-    setPendingMove({ from, to }) // 先本地预判位移，不等网络往返
+    // 认一下是哪颗子 —— 预判带着它走，落空时才知道该把位移记还给谁
+    const mover = game.pieces.find((p) => p.square === from)
+    if (!mover) return false
+    setPendingMove({ id: mover.id, from, to }) // 先本地预判位移，不等网络往返
     setPicked(null)
-    onMove(mv.iccs)
+
+    // 服务端当场说「不收」时立刻回位，不等 PENDING_MS 那个兜底。否则这最多 800ms
+    // 里画面停在一步服务端根本没认的棋上 —— 连被预判吃掉的敌子都一直是隐身的，
+    // 那是在展示一个不存在的局面。
+    const seq = (moveSeq.current += 1)
+    const rollBack = () => {
+      if (seq !== moveSeq.current) return // 期间又落了新的一手，这条回执作废
+      // 把「上一帧位置」记回去，于是这次回位是**瞬回**：不滑，也不再响一次反馈
+      prevVisual.current.set(mover.id, from)
+      setPendingMove(null)
+    }
+    void onMove(mv.iccs).then((ok) => {
+      if (!ok) rollBack()
+    }, rollBack)
     return true
   }
 
   /** 单击一格：能落子就落子；点到自己轮到的子就选中／取消；点别处清掉选中。 */
   const tapSquare = (sq: string) => {
+    if (setupMode) {
+      if (selectedTrayPiece) {
+        onSetupSquareTap?.(sq)
+        return
+      }
+      const pieceOnSq = activePieces.find((p) => p.square === sq)
+      if (pickedBoardSquare) {
+        if (pickedBoardSquare === sq) {
+          onSetupPickBoardSquare?.(null)
+        } else {
+          onSetupPieceMove?.(pickedBoardSquare, sq)
+          onSetupPickBoardSquare?.(null)
+        }
+      } else if (pieceOnSq) {
+        onSetupPickBoardSquare?.(sq)
+      }
+      return
+    }
     if (!canPlay()) return
     if (picked && picked !== sq && commitMove(picked, sq)) return
     if (grabbable(sq)) setPicked((prev) => (prev === sq ? null : sq))
@@ -235,10 +467,15 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
   // 落子有两条路，共用同一套坐标反查：
   //   拖   —— 按住子、挪过 5px 就进入拖拽，松手落在合法点就落子；
   //   点   —— 没挪动，当单击处理（选中／落子由 tapSquare 一处认）。
-  // 之所以把点击也画进指针事件里，是因为一个 <div> 上同时挂 onClick 和
+  // 之配置点击也画进指针事件里，是因为一个 <div> 上同时挂 onClick 和
   // pointerdown，拖拽结束时浏览器补的那次 click 会把同一步走两遍。
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (setupMode && e.button === 2) {
+      const sq = squareAtPoint(e.clientX, e.clientY)
+      if (sq) onSetupPieceRemove?.(sq)
+      return
+    }
     if (e.button !== 0) return
     setKbdOn(false) // 回到鼠标操作，键盘光标退场
     const sq = squareAtPoint(e.clientX, e.clientY)
@@ -279,6 +516,14 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
     if (e.currentTarget.hasPointerCapture(d.id)) e.currentTarget.releasePointerCapture(d.id)
     const sq = squareAtPoint(e.clientX, e.clientY)
     if (wasDrag && fromSq) {
+      if (setupMode) {
+        if (sq && sq !== fromSq) {
+          onSetupPieceMove?.(fromSq, sq)
+        } else if (!sq) {
+          onSetupPieceRemove?.(fromSq)
+        }
+        return
+      }
       // 拖到哪落哪：不合法 commitMove 自己会落空，这里不必先问一遍 targets
       if (sq && sq !== fromSq) commitMove(fromSq, sq)
       return
@@ -352,8 +597,26 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
     }
   }
 
+  /** 棋子按身份号排一遍再渲染。
+   *
+   *  **DOM 顺序必须与棋盘位置无关。** 服务端的 pieces 是按「先列后行」排的
+   *  （见 engine/core.py 的 pieces_of），棋子一换格，它在数组里的下标就跟着变。
+   *  React 对带 key 的子节点做重排用的是 insertBefore —— 对已经挂着的节点，
+   *  那就是「先从父节点摘下来、再插回新位置」。而 Chrome 在这种**脱离/插回**时，
+   *  会把该元素上正在跑的 CSS 过渡直接取消（transitioncancel）。
+   *  于是落子那颗子的滑行**时有时无**：取决于 React 这一帧决定挪走它自己、
+   *  还是挪它周围那一批。这个坑极难发现 —— 它跟时长、缓动、时长锁定都没关系，
+   *  是 DOM 结构在动。
+   *
+   *  按 id 排就够了：id 在一局之内是稳定的，排序结果与棋子站在哪儿无关，
+   *  节点顺序恒定，React 就永远不会去搬它们。 */
+  const piecesInOrder = useMemo(
+    () => [...activePieces].sort((a, b) => a.id - b.id),
+    [activePieces],
+  )
+
   return (
-    <div className={`board ${thinking ? 'is-thinking' : ''}`}>
+    <div className={`board ${thinking ? 'is-thinking' : ''} ${setupMode ? 'is-setup' : ''}`}>
       <div
         className={`board-surface ${drag ? 'is-dragging' : ''}`}
         ref={surfaceRef}
@@ -361,6 +624,9 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
         onPointerMove={onPointerMove}
         onPointerUp={endPointer}
         onPointerCancel={cancelPointer}
+        onContextMenu={(e) => {
+          if (setupMode) e.preventDefault()
+        }}
         onKeyDown={onKeyDown}
         onFocus={() => setKbdOn(false)}
         tabIndex={0}
@@ -379,27 +645,28 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
         <BoardArtwork />
 
         {/* 主变预览：引擎盘算的下一步，淡淡的，不抢戏 */}
-        {pvSquares.map((step, i) => {
-          const a = toPercent(parseSquare(step.from).file, parseSquare(step.from).rank, flipped)
-          const b = toPercent(parseSquare(step.to).file, parseSquare(step.to).rank, flipped)
-          return (
-            <div
-              key={`${step.from}${step.to}${i}`}
-              className="pv-trace"
-              data-pv-trace=""
-              style={{
-                left: `${a.x}%`,
-                top: `${a.y}%`,
-                width: `${Math.hypot(((b.x - a.x) / 100) * BOARD_W, ((b.y - a.y) / 100) * BOARD_H)}px`,
-                transform: `rotate(${Math.atan2(
-                  ((b.y - a.y) / 100) * BOARD_H,
-                  ((b.x - a.x) / 100) * BOARD_W,
-                )}rad)`,
-                opacity: 0.5 - i * 0.16,
-              }}
-            />
-          )
-        })}
+        {!setupMode &&
+          pvSquares.map((step, i) => {
+            const a = toPercent(parseSquare(step.from).file, parseSquare(step.from).rank, flipped)
+            const b = toPercent(parseSquare(step.to).file, parseSquare(step.to).rank, flipped)
+            return (
+              <div
+                key={`${step.from}${step.to}${i}`}
+                className="pv-trace"
+                data-pv-trace=""
+                style={{
+                  left: `${a.x}%`,
+                  top: `${a.y}%`,
+                  width: `${Math.hypot(((b.x - a.x) / 100) * BOARD_W, ((b.y - a.y) / 100) * BOARD_H)}px`,
+                  transform: `rotate(${Math.atan2(
+                    ((b.y - a.y) / 100) * BOARD_H,
+                    ((b.x - a.x) / 100) * BOARD_W,
+                  )}rad)`,
+                  opacity: 0.5 - i * 0.16,
+                }}
+              />
+            )
+          })}
 
         {/* 可走点位 */}
         {targets.map((sq) => {
@@ -424,18 +691,21 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
           )
         })}
 
-        {/* 键盘光标：只有按过方向键才出现，鼠标用户无感 */}
-        {kbdOn && cursor && (
-          <span
-            className="kbd-cursor"
-            data-kbd-cursor=""
-            data-cursor={cursor}
-            style={{
-              left: `${toPercent(parseSquare(cursor).file, parseSquare(cursor).rank, flipped).x}%`,
-              top: `${toPercent(parseSquare(cursor).file, parseSquare(cursor).rank, flipped).y}%`,
-            }}
-          />
-        )}
+        {/* 键盘光标：只有按过方向键才出现，鼠标用户无感。
+            位置跟棋子同一套（板面像素 + transform），所以连按方向键时
+            它是滑过去而不是每格重排一次。 */}
+        {kbdOn && cursor && (() => {
+          const p = parseSquare(cursor)
+          const { x, y } = toPixel(p.file, p.rank, flipped)
+          return (
+            <span
+              className="kbd-cursor"
+              data-kbd-cursor=""
+              data-cursor={cursor}
+              style={{ '--cx': `${x}px`, '--cy': `${y}px` } as CSSProperties}
+            />
+          )
+        })()}
 
         {/* 移动轨迹（墨痕）：棋子走过后的渐隐笔锋，700ms 淡没 */}
         {game.last_move && (() => {
@@ -465,12 +735,12 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
         })()}
 
         {/* 选中棋子周围的清透月牙高光圆环（精准对齐图一） */}
-        {picked && (() => {
-          const { file, rank } = parseSquare(picked)
+        {effectivePicked && (() => {
+          const { file, rank } = parseSquare(effectivePicked)
           const { x, y } = toPercent(file, rank, flipped)
           return (
             <span
-              key={`selected-crescent-${picked}`}
+              key={`selected-crescent-${effectivePicked}`}
               className="selected-crescent-ring"
               style={{
                 left: `${x}%`,
@@ -520,7 +790,7 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
         {/* 上一步的起终点：
             起点：柔光白圈点（指示从何处起步）
             终点：典雅微光取景落点框 */}
-        {game.last_move && (
+        {!setupMode && game.last_move && (
           <>
             <span
               key={`from-${game.ply}-${game.last_move.from}`}
@@ -569,20 +839,24 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
         )}
 
         {/* 被吃棋子的物理受力击退滑移 */}
-        {capturedGhost && (() => {
+        {!setupMode && capturedGhost && (() => {
           const { file, rank } = parseSquare(capturedGhost.square)
-          const { x, y } = toPercent(file, rank, flipped)
+          const { x, y } = toPixel(file, rank, flipped)
           return (
             <div
               key={capturedGhost.id}
               className={`piece ${capturedGhost.side} piece-ghost-knockback`}
-              style={{
-                left: `${x}%`,
-                top: `${y}%`,
-                ['--kx' as any]: capturedGhost.kx,
-                ['--ky' as any]: capturedGhost.ky,
-                ['--kr' as any]: `${capturedGhost.kr}deg`,
-              }}
+              style={
+                {
+                  /* 定位跟别的棋子同一套：写板面像素，不写 left/top。
+                     残影的 pieceKnockback 关键帧也拿 --piece-base 当基座。 */
+                  '--cx': `${x}px`,
+                  '--cy': `${y}px`,
+                  '--kx': capturedGhost.kx,
+                  '--ky': capturedGhost.ky,
+                  '--kr': `${capturedGhost.kr}deg`,
+                } as CSSProperties
+              }
               aria-hidden="true"
             >
               <span className="piece-face">
@@ -591,23 +865,36 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
             </div>
           )
         })()}
-        {/* 棋子：纯净位移，其它棋子保持绝对静止 */}
-        {game.pieces.map((p) => {
-          // 被吃掉的子立即隐藏（被预判吃掉或被服务端吃掉）
-          if (pendingMove && p.square === pendingMove.to && p.side !== game.turn) {
+        {/* 棋子：纯净位移，其它棋子保持绝对静止。
+            用 piecesInOrder 而不是 game.pieces —— 顺序必须是稳定的，原因见它上面那段。 */}
+        {piecesInOrder.map((p) => {
+          /* 被预判吃掉的子立刻隐身，好让走子的那颗先一步站到落点上。
+             **判据只能是「它是不是正在走的那一颗」，不能拿 side 去跟 game.turn 比** ——
+             确认落地那一帧 turn 已经翻面了，走子那颗自己就满足「side ≠ 当前轮次」，
+             于是连它一起被摘掉：同一颗子换了个 DOM 节点，跑到一半的 transform 过渡
+             当场作废，棋子直接出现在终点。整套「落子滑行」看不到，真凶就在这一行。 */
+          if (pendingMove && p.id !== pendingMove.id && p.square === pendingMove.to) {
             return null
           }
 
           const isDragging = drag?.from === p.square
-          const effectiveSquare = pendingMove && p.square === pendingMove.from ? pendingMove.to : p.square
+          const effectiveSquare =
+            pendingMove && p.id === pendingMove.id ? pendingMove.to : p.square
           const { file, rank } = parseSquare(effectiveSquare)
-          const { x, y } = toPercent(file, rank, flipped)
+          /* 只交出一个「板面坐标系里的中心点」（板面 px）。换成真实像素是 CSS 的事：
+             --u 就是「1 板面像素 = 多少 CSS 像素」。位移走 transform 才不碰布局 ——
+             以前这里写的是 left/top 百分比，每滑一格都要重排一次（实测一次落子
+             71 次布局 / 21.3ms，见 .devtools/frames.mjs）。 */
+          const center = toPixel(file, rank, flipped)
+          const cx = isDragging && drag ? drag.bx : center.x
+          const cy = isDragging && drag ? drag.by : center.y
+          /* 这一手要滑多久。没在滑的那一帧是 0ms —— 于是窗口缩放不会让棋子集体滑行。
+             取的是渲染期锁好的那一份（见 glideRef），不在这里按 diff 现算：现算的话，
+             服务端够快时「确认」会在同一帧里把时长改回 0，过渡根本起不来。 */
+          const wait = glideRef.current.get(p.id) ?? 0
 
-          const posX = isDragging && drag ? (drag.bx / BOARD_W) * 100 : x
-          const posY = isDragging && drag ? (drag.by / BOARD_H) * 100 : y
-
-          const canGrab = !thinking && game.status.state === 'playing' && p.side === game.turn
-          const isLanding = game.last_move && game.last_move.to === effectiveSquare && !isDragging
+          const canGrab =
+            setupMode || (!thinking && game.status.state === 'playing' && p.side === game.turn)
 
           return (
             <div
@@ -615,27 +902,34 @@ export function Board({ game, flipped, thinking, pv = [], onMove }: BoardProps) 
               className={[
                 'piece',
                 p.side,
-                picked === p.square ? 'is-selected' : '',
+                effectivePicked === p.square ? 'is-selected' : '',
                 kingInCheck === p.square ? 'is-check' : '',
                 victorKing === p.square ? 'is-victor' : '',
                 isDragging ? 'dragging' : '',
                 canGrab ? 'is-grabbable' : '',
-                isLanding ? 'is-landing' : '',
+                impactId === p.id ? 'is-impact' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
-              style={{
-                left: `${posX}%`,
-                top: `${posY}%`,
-              }}
+              style={
+                {
+                  '--cx': `${cx}px`,
+                  '--cy': `${cy}px`,
+                  '--glide-dur': `${wait}ms`,
+                } as CSSProperties
+              }
               aria-label={`${p.side === 'red' ? '红' : '黑'}${p.glyph}于 ${effectiveSquare}`}
               data-piece={p.piece}
               data-side={p.side}
               data-square={effectiveSquare}
-              data-selected={picked === p.square ? 'true' : 'false'}
+              data-selected={effectivePicked === p.square ? 'true' : 'false'}
               data-dragging={isDragging ? 'true' : 'false'}
             >
-              <span className="piece-face" key={`face-${p.id}-${effectiveSquare}`}>
+              {/* 这里以前挂着一个 `key={face-${p.id}-${effectiveSquare}}`：它唯一的
+                  用途是「换格就重建这个 span」，好让挂在它上面的落子动画重播一次。
+                  落子反馈已经改成由 Board 主动加 is-impact，这个 key 只剩成本，
+                  所以撤掉 —— DOM 不再每走一手白重建一次。 */}
+              <span className="piece-face">
                 <span className="piece-glyph">{p.glyph}</span>
               </span>
             </div>
@@ -685,7 +979,11 @@ const BoardArtwork = memo(function BoardArtwork() {
       aria-hidden="true"
     >
       <defs>
-        <linearGradient id="boardFace" x1="0" y1="0" x2="0.7" y2="1">
+        {/* 板面底色：左上受光、右下渐深。
+            x2 跟前文那盏灯取同一个角度 —— objectBoundingBox 里的 x2 是「相对板宽的
+            比值」，而板宽 720、板高 800，所以 0.42 要换算成 0.42 × 800 / 720 ≈ 0.467。
+            以前这里是 0.7（斜率 ≈ 0.63），跟板缘那道 boardSheen 不是一个角度。 */}
+        <linearGradient id="boardFace" x1="0" y1="0" x2="0.467" y2="1">
           <stop offset="0%" stopColor="var(--board-face-1)" />
           <stop offset="52%" stopColor="var(--board-face-2)" />
           <stop offset="100%" stopColor="var(--board-face-3)" />
@@ -694,8 +992,11 @@ const BoardArtwork = memo(function BoardArtwork() {
           <stop offset="60%" stopColor="rgba(255,255,255,0)" />
           <stop offset="100%" stopColor="var(--board-vignette)" />
         </radialGradient>
-        {/* 上缘受光、下缘落影：让这块板看起来有厚度，不是一张贴纸 */}
-        <linearGradient id="boardSheen" x1="0" y1="0" x2="0" y2="1">
+        {/* 上缘受光、下缘落影：让这块板看起来有厚度，不是一张贴纸。
+            方向跟全站那盏灯一致（左上 → 右下），不是纯垂直。objectBoundingBox 里
+            的 x2 是「相对板宽的比值」，而板宽 720、板高 800：要把 --light-x(0.42)
+            换算到这套坐标里，得乘上 800 / 720 ≈ 0.467 —— 换算过来才是同一个角度。 */}
+        <linearGradient id="boardSheen" x1="0" y1="0" x2="0.467" y2="1">
           <stop offset="0%" stopColor="rgba(255,252,244,0.6)" />
           <stop offset="13%" stopColor="rgba(255,252,244,0)" />
           <stop offset="84%" stopColor="rgba(74,52,22,0)" />

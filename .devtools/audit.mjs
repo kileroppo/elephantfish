@@ -132,6 +132,23 @@ for (const vp of VIEWPORTS) {
       }
     })
     const fontEl = document.querySelector('[data-piece] .piece-glyph')
+
+    // 回合条净空：药丸必须装得进它自己那一行，且棋盘垫（.board::before）的上缘
+    // 不许探到药丸下沿之上。这两件事各自独立地会「把回合条下半截切掉」——
+    // 窄屏下 .stage 变 display:contents 后行高只由 min-height 决定（内容不再参与），
+    // 而棋盘垫比棋盘大一圈、上缘也会上探，垫子又画在回合条之上。详见 tokens.css
+    // 的 --badge-h / --board-clearance。这里是那条约束的牙。
+    const badge = document.querySelector('[data-turn-badge]')
+    const head = badge ? badge.parentElement : null
+    const surface = document.querySelector('[data-board]')
+    const boardEl = surface ? surface.parentElement : null
+    const badgeR = badge ? badge.getBoundingClientRect() : null
+    const headR = head ? head.getBoundingClientRect() : null
+    const surfR = surface ? surface.getBoundingClientRect() : null
+    const matInset = boardEl && getComputedStyle(boardEl, '::before').content !== 'none'
+      ? -parseFloat(getComputedStyle(boardEl, '::before').top)
+      : null
+
     return {
       overflowX: de.scrollWidth - de.clientWidth,
       boardW: box ? Math.round(box.width) : 0,
@@ -141,9 +158,29 @@ for (const vp of VIEWPORTS) {
       relayTop: document.querySelector('[data-relay]')?.getBoundingClientRect().top ?? -1,
       analysisTop: document.querySelector('[data-analysis]')?.getBoundingClientRect().top ?? -1,
       fontFound: !!fontEl,
+      badgeFound: !!badge,
+      // >0 即「药丸溢出了自己的行」
+      badgeOverflow: badgeR && headR ? +(badgeR.bottom - headR.bottom).toFixed(2) : null,
+      // >0 即「棋盘垫的上缘探到了药丸下沿之上」（会被垫子盖住）
+      matIntoBadge:
+        badgeR && surfR && matInset !== null
+          ? +(badgeR.bottom - (surfR.top - matInset)).toFixed(2)
+          : null,
     }
   })
   if (!m.fontFound) problems.push(`[${vp.name}] 找不到棋子字形元素，字号这项指标失效`)
+  if (!m.badgeFound) problems.push(`[${vp.name}] 找不到回合条([data-turn-badge])，净空这项指标失效`)
+  else if (m.badgeOverflow > 0.5) {
+    problems.push(
+      `[${vp.name}] 回合条溢出了自己那一行 ${m.badgeOverflow}px —— ` +
+        `多半是 .stage-head 的 min-height(--badge-h) 落后于药丸的真实高度了`,
+    )
+  } else if (m.matIntoBadge > 0.5) {
+    problems.push(
+      `[${vp.name}] 棋盘垫吃进回合条 ${m.matIntoBadge}px —— ` +
+        `多半是回合条与棋盘之间的净距(--board-clearance)不够棋盘垫的探出量了`,
+    )
+  }
   if (!m.boardW) problems.push(`[${vp.name}] [data-board] 没有尺寸，盘面没渲染出来`)
   if (m.overflowX > 1) problems.push(`[${vp.name}] 横向溢出 ${m.overflowX}px`)
   if (m.smallBtns.length) {
@@ -155,8 +192,9 @@ for (const vp of VIEWPORTS) {
   // 并排，比较它们的纵坐标是没有意义的。以前这个指标在四种尺寸下都照算，
   // 于是宽屏上恒为 false，谁也没法从这一行里看出什么。
   const stacked = vp.width <= 1140
+  const headroom = `回合条净空 溢行 ${m.badgeOverflow}px / 垫接入 ${m.matIntoBadge}px`
   if (!stacked) {
-    notes.push(`${vp.name.padEnd(8)} 棋盘 ${m.boardW}x${m.boardH}  棋子字号 ${m.pieceFont}  溢出 ${m.overflowX}px  顺序：宽屏左右分栏，不适用`)
+    notes.push(`${vp.name.padEnd(8)} 棋盘 ${m.boardW}x${m.boardH}  棋子字号 ${m.pieceFont}  溢出 ${m.overflowX}px  顺序：宽屏左右分栏，不适用  ${headroom}`)
   } else {
     if (m.relayTop < 0 || m.analysisTop < 0) {
       problems.push(`[${vp.name}] 读不到转述台或分析面板的位置，顺序这项指标失效`)
@@ -165,7 +203,7 @@ for (const vp of VIEWPORTS) {
     if (!ok) problems.push(`[${vp.name}] 转述台没有排在分析面板之前（窄屏上它是主操作区）`)
     notes.push(
       `${vp.name.padEnd(8)} 棋盘 ${m.boardW}x${m.boardH}  棋子字号 ${m.pieceFont}  ` +
-        `溢出 ${m.overflowX}px  转述台先于分析 ${ok}`,
+        `溢出 ${m.overflowX}px  转述台先于分析 ${ok}  ${headroom}`,
     )
   }
   console.log(`✓ ${vp.name}  棋盘 ${m.boardW}x${m.boardH}  ${m.pieceFont}`)

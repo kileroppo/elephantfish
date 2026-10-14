@@ -22,7 +22,7 @@ import { dirname, join, resolve } from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
 const PYTHON = process.env.EF_PYTHON || 'python'
-const CHECKS = ['audit.mjs', 'drag.mjs', 'kbd.mjs']
+const CHECKS = ['audit.mjs', 'drag.mjs', 'kbd.mjs', 'frames.mjs', 'glide.mjs']
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`)

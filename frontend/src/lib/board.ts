@@ -45,6 +45,29 @@ export function squareAt(file: number, rank: number): string {
   return String.fromCharCode(97 + file) + rank
 }
 
+/** 一手棋的滑行时长：按跨度分一点级 —— 近手利落、远手略慢，但都不拖沓。
+ *  缓动是纯减速（--ease-move），**不回弹**：棋子是稳重的东西，位移带着回弹会立刻
+ *  变塑料球。返回 0 表示这颗子没在动 —— 于是窗口缩放（--u 变）不会让棋子集体滑行。
+ *
+ *  放在这儿而不是 Board 里：落子音效要按**同一个时长**敲（见 useGame 的 voiceFor）。
+ *  两处各写一份迟早走岔 —— 一处改了另一处不知道，音画就对不上了。 */
+export function glideMs(from: string | undefined, to: string): number {
+  if (!from || from === to) return 0
+  const a = parseSquare(from)
+  const b = parseSquare(to)
+  const span = Math.max(Math.abs(a.file - b.file), Math.abs(a.rank - b.rank))
+  return Math.min(360, 210 + (span - 1) * 46)
+}
+
+/** 棋子「看着落定」的时刻 —— 落子音效该在这一刻敲。
+ *
+ *  缓动是纯减速，走满 7/8 时长时肉眼已经到位（原来固定 240ms 的位移配的就是 210ms
+ *  的音，7/8 这个比例就是从那两个数来的）。按比例算而不是写死一个数：位移改成按
+ *  跨度分级之后，远手会滑到 360ms，写死的那一刻就会落在棋子还在半路上的时候响。 */
+export function landMs(from: string | undefined, to: string): number {
+  return Math.round(glideMs(from, to) * 0.875)
+}
+
 /** 像素坐标反查格子；落在棋盘外返回 null。 */
 export function pixelToSquare(
   x: number,

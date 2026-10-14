@@ -5,6 +5,8 @@ interface Props {
   /** 抽屉是否展开。收起时整栏 inert：不可聚焦、读屏跳过，但保持挂载以便滑动过渡 */
   open: boolean
   state: AppState
+  setupMode?: boolean
+  onToggleSetup?: () => void
   onNewGame: (side: Side) => void
   onUndo: () => void
   onResign: () => void
@@ -21,6 +23,8 @@ const THINK_PRESETS = [
 export function ControlRail({
   open,
   state,
+  setupMode = false,
+  onToggleSetup,
   onNewGame,
   onUndo,
   onResign,
@@ -114,6 +118,15 @@ export function ControlRail({
             }}
           >
             {confirmResign ? '再点一次确认认输' : '认输'}
+          </button>
+        </div>
+        <div style={{ marginTop: '8px' }}>
+          <button
+            type="button"
+            className={`btn wide ${setupMode ? 'btn-warn' : 'btn-ghost'}`}
+            onClick={onToggleSetup}
+          >
+            {setupMode ? '退出补棋' : '补棋 / 自定义排局'}
           </button>
         </div>
       </section>

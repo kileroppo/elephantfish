@@ -110,7 +110,11 @@ kbd {
     calc(var(--rail-r) + var(--rail-gap));
   column-gap: 0;
   padding: 0 18px 18px;
-  /* 栏轨数目恒为 3，浏览器才能逐轨插值 —— 所以侧栏常驻挂载，只把宽度收到 0 */
+  /* 栏轨数目恒为 3，浏览器才能逐轨插值 —— 所以侧栏常驻挂载，只把宽度收到 0。
+     这条过渡动的是布局属性（420ms，每帧重排整块工作区），按老规矩本该换成
+     transform。之所以留着：它是**离散交互**（点一下栏把手），不在落子路径上；
+     而换成 transform 就得改掉「三栏网格」这个布局模型本身（侧栏得变成浮层、
+     棋盘宽度也不再跟着变），改动面远大于收益。这里记一笔，不是漏了。 */
   transition: grid-template-columns var(--drawer);
 }
 
@@ -302,7 +306,9 @@ kbd {
 .stage {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  /* 净距不能小于棋盘垫的探出量，否则垫子会把回合条下半截盖掉 ——
+     原委见 tokens.css 的 --board-clearance。 */
+  gap: var(--board-clearance);
   min-height: 0;
 }
 
@@ -375,7 +381,7 @@ kbd {
   font-family: var(--font-kai);
   font-size: 13px;
   font-weight: 600;
-  box-shadow: 0 1px 4px rgba(180, 50, 42, 0.4);
+  box-shadow: calc(1px * var(--light-x)) 1px 4px rgba(180, 50, 42, 0.4);
 }
 
 .btn-kbd {
@@ -432,7 +438,7 @@ kbd {
 .hero-action-card:hover {
   border-color: var(--cinnabar);
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(180, 50, 42, 0.22);
+  box-shadow: calc(4px * var(--light-x)) 4px 14px rgba(180, 50, 42, 0.22);
 }
 
 .hero-action-card.is-copied {
@@ -643,7 +649,7 @@ kbd {
   background: var(--paper-2);
   border-color: var(--ink-4);
   color: var(--ink-0);
-  box-shadow: 0 2px 8px rgba(43, 35, 26, 0.12);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(43, 35, 26, 0.12);
 }
 
 .engine-badge.is-clickable:active {
@@ -677,7 +683,7 @@ kbd {
 .engine-badge.is-pikafish.is-clickable:hover {
   background: rgba(180, 50, 42, 0.16);
   border-color: var(--cinnabar);
-  box-shadow: 0 2px 8px rgba(180, 50, 42, 0.22);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(180, 50, 42, 0.22);
 }
 
 
@@ -685,9 +691,12 @@ kbd {
 
 
 
-.pill-lose,
 
 
+/* 这一段以前是个坑，记一笔：上面原本挂着一个悬空的选择器片段（`.pill-lose,`），
+   结尾那个逗号让选择器列表一直往后续，把紧跟着的 @keyframes spin 整条吞了进去 ——
+   @keyframes 不是合法选择器，于是整条规则连同关键帧一起被丢弃，vite 构建时
+   minifier 会报 Unexpected "@keyframes"。删规则体的时候，记得把选择器的逗号一起删。 */
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -849,7 +858,7 @@ kbd {
 .btn:hover:not(:disabled) {
   border-color: var(--ink-4);
   transform: translateY(-1px);
-  box-shadow: 0 6px 14px -8px rgba(43, 35, 26, 0.5);
+  box-shadow: calc(6px * var(--light-x)) 6px 14px -8px rgba(43, 35, 26, 0.5);
 }
 
 .btn:active:not(:disabled) {
@@ -865,7 +874,7 @@ kbd {
   background: linear-gradient(180deg, var(--cinnabar-bright), var(--cinnabar));
   border-color: transparent;
   color: #fff8f2;
-  box-shadow: 0 6px 16px -8px rgba(180, 50, 42, 0.9);
+  box-shadow: calc(6px * var(--light-x)) 6px 16px -8px rgba(180, 50, 42, 0.9);
 }
 
 .btn-danger {
@@ -993,8 +1002,6 @@ kbd {
 
 
 
-.field-row input,
-.field-row select,
 
 
 /* ==========================================================================
@@ -1006,7 +1013,13 @@ kbd {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 26px;
+  /* 高度必须**显式**给，尺寸取 --badge-h（就是药丸自己的高度）。
+     以前这里写的是 26px —— 那是更早一版更矮的回合条留下的值，而药丸后来长到了
+     32px。桌面档看不出问题（回合条是 flex 项，内容会把行撑到 32px）；窄屏
+     （≤1140px）下 .stage 变成 `display: contents`，回合条被上提进 .workspace 当栅格
+     的一行，内容不再参与行高计算 —— 行高就等于这里的 min-height，于是药丸上下各
+     溢出 3px，下沿随即被棋盘垫吃掉。详见 tokens.css 的 --badge-h。 */
+  min-height: var(--badge-h);
 }
 
 .turn-badge {
@@ -1094,10 +1107,14 @@ kbd {
   max-width: 100%;
   border-radius: var(--r-lg);
   /* 三层影子：贴地的一条硬边、近处的一圈散影、远处的一片环境影。
-     一层 shadow 只会让人觉得「浮起来了」，三层才有「放在桌上」的重量。 */
-  box-shadow: 0 1px 1px rgba(58, 41, 18, 0.26),
-    0 3px 8px -3px rgba(58, 41, 18, 0.3),
-    0 26px 54px -22px rgba(58, 41, 18, 0.45);
+     一层 shadow 只会让人觉得「浮起来了」，三层才有「放在桌上」的重量。
+
+     横向那一项乘 --light-x：整站只有一盏灯在左上 45°，投影一律朝右下。
+     以前这里全是 `0 xpx` 的正下方垂直投影，而棋子影明确偏右下 —— 两套光照
+     同框，眼睛读作「廉价」，这是「脏」的另一半来源。 */
+  box-shadow: calc(1px * var(--light-x)) 1px 1px rgba(58, 41, 18, 0.26),
+    calc(3px * var(--light-x)) 3px 8px -3px rgba(58, 41, 18, 0.3),
+    calc(26px * var(--light-x)) 26px 54px -22px rgba(58, 41, 18, 0.45);
   animation: boardIn 620ms var(--ease-out) both;
 }
 
@@ -1109,8 +1126,9 @@ kbd {
   inset: -14px;
   border-radius: 26px;
   background: linear-gradient(180deg, var(--paper-2), var(--paper-3));
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.55),
-    inset 0 -2px 8px rgba(43, 35, 26, 0.14), 0 1px 2px rgba(43, 35, 26, 0.06);
+  box-shadow: inset calc(-1px * var(--light-x)) 1px 2px rgba(255, 255, 255, 0.55),
+    inset calc(2px * var(--light-x)) -2px 8px rgba(43, 35, 26, 0.14),
+    calc(1px * var(--light-x)) 1px 2px rgba(43, 35, 26, 0.06);
   z-index: -1;
   pointer-events: none;
 }
@@ -1171,19 +1189,65 @@ kbd {
   letter-spacing: 12px;
 }
 
-/* ---- 棋子 ---- */
+/* ---- 棋子 ----
+   位置由 transform 承担，不碰 left/top。
 
+   以前这里写的是 `transition: left 240ms, top 240ms` + `will-change: left, top`。
+   left/top 是**布局属性**：每滑一格都要重排一次，而棋子 ::after 上还挂着
+   `filter: blur()`，于是每帧都要重新光栅化一个模糊层 —— 实测一次落子
+   **71 次布局 / 21.3ms**（.devtools/frames.mjs 的基线数字）。那是卡顿的根因，
+   跟时长和缓动曲线无关，调曲线只会得到一个更优雅的卡顿。
+
+   现在的分工：
+     组件只交出「板面坐标系里的中心点」--cx/--cy（单位 px），
+     这里乘 --u 换成真实像素，再减去 50% 居中。--u 一变（窗口缩放）只是
+     乘数变了，transform 跟着变，全程在合成器上跑，不引发布局。
+
+   之所以不用百分比定位：translate 里的百分比是**相对元素自身**的，
+   表达不了「相对棋盘」的位置；板面像素 × --u 才是同一件事的像素写法。 */
 .piece {
   position: absolute;
+  left: 0;
+  top: 0;
   width: calc(var(--u) * 66px);
   height: calc(var(--u) * 66px);
-  transform: translate(-50%, -50%);
-  transition: left 240ms cubic-bezier(0.25, 1, 0.5, 1), top 240ms cubic-bezier(0.25, 1, 0.5, 1);
-  will-change: left, top;
+  /* 组件每帧都会覆写这三个；这里只是首帧（还没渲染时）的兜底 */
+  --cx: 0px;
+  --cy: 0px;
+  --lift: 0px;
+  /* --glide-dur 由组件按这一手的跨度给：近手快、远手略慢，但都不拖沓。
+     没在动的那一帧是 0ms —— 于是窗口缩放（--u 变）不会让一堆棋子集体滑行。 */
+  --glide-dur: 0ms;
+  /* 所有 keyframes 都拿它当基底，这样动画不必各自重写一遍定位换算 */
+  --piece-base: translate3d(
+    calc(var(--u) * var(--cx) - 50%),
+    calc(var(--u) * var(--cy) - 50% - var(--lift)),
+    0
+  );
+  transform: var(--piece-base);
+  transition: transform var(--glide-dur) var(--ease-move);
+  will-change: transform;
   z-index: 20;
 }
 
-/* 接触与定向落盘影：左上光源照射，在棋子右下方投下真实实木落盘阴影（严格参考图片） */
+/* 落子涟漪：只在 is-impact 那一瞬间存在的一圈扩散环。
+   占的是 .piece::before —— 这个伪元素此前**没人用**，所以不用新增 DOM。 */
+.piece::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: calc(var(--u) * 1.6px) solid rgba(108, 76, 34, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* 接触影：整块棋子的**唯一**一片投影。
+   方向跟全站主光一致（左上 45° → 右下）。以前棋子身上还额外挂着
+   --disc-shadow 的三层外部投影（正下方垂直），加上这一片，一颗子要算四片影 ——
+   四片半透明影叠在一起就是一团灰雾。现在只留这一片，它负责「放在棋盘上」的重量，
+   盘面自己的 box-shadow 只负责圆面的受光，绝不再往外投影。 */
 .piece::after {
   content: '';
   position: absolute;
@@ -1192,103 +1256,129 @@ kbd {
   top: 6%;
   bottom: 6%;
   border-radius: 50%;
-  /* 基础静止状态：向右下偏移 4px，带有深度层次的温暖实木阴影 */
-  transform: translate(calc(var(--u) * 3.5px), calc(var(--u) * 4.5px));
+  transform: translate(calc(var(--u) * 4.6px * var(--light-x)), calc(var(--u) * 4.6px));
   background: radial-gradient(
-    circle at 45% 45%,
-    rgba(34, 22, 10, 0.42) 0%,
-    rgba(40, 26, 12, 0.32) 48%,
-    rgba(50, 32, 14, 0.12) 72%,
+    ellipse at 46% 44%,
+    rgba(36, 22, 9, 0.34) 0%,
+    rgba(42, 27, 12, 0.22) 46%,
+    rgba(50, 32, 14, 0.09) 70%,
     transparent 100%
   );
-  filter: blur(calc(var(--u) * 2.2px));
-  z-index: -1;
+  filter: blur(calc(var(--u) * 2.4px));
+  z-index: -2;
   pointer-events: none;
-  transition: transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out);
+  /* 不再过渡 filter：模糊半径每帧变一次就要重新光栅化一遍，那正是要消掉的开销。
+     高度变化改用「影子的位移 + 缩放」表达，两者都在合成器上。 */
+  transition: transform var(--dur-fast) var(--ease-move), opacity var(--dur-fast) var(--ease-out);
 }
 
+/* 漆器盘面。
+   材质路线：朱红漆器为骨、玉质透光为皮。盘面是**不透明**的，层次靠明度拉开；
+   「通透」从边缘那一圈透光来，不从整片半透明来 —— 整片半透明在浅色棋盘上
+   只会变成塑料片，还会把朱砂环和字一起拖灰。
+
+   三处「脏」在这里被清掉：
+   1. 亚像素年轮纹。repeating-radial-gradient 的周期写的是 calc(var(--u) * 0.6px)，
+      --u 实测 0.55 → 实际周期 0.33px。亚像素周期的重复渐变必然产生摩尔纹噪点，
+      肉眼读作「灰蒙蒙」。删。
+   2. 一道假的反光。conic-gradient 那道掠射光靠 --sweep 驱动，而 --sweep
+      全库没有任何 keyframes 去改它，恒为初值 -120deg：一道 14deg 宽的纯白硬边
+      光斑钉死在 38%/28%，跟任何光源都对不上，眼睛读作污渍。删。
+   3. 三层半透明暖棕内影叠着上。换成三个职责分明的量，见下面的变量。 */
 .piece-face {
+  /* 圆面受光模型的三个可调量。状态之间只改这几个数，不各写一整套 box-shadow ——
+     以前 .piece.red / .piece.black 的 box-shadow 把基础那套**整体覆盖**了，
+     于是顶缘受光与底缘背光在红黑两方身上直接消失。那是「平、脏」的另一半原因。 */
+  --face-lit: rgba(255, 253, 247, 0.95); /* 顶缘受光 */
+  --face-shade: rgba(74, 46, 14, 0.36); /* 底缘背光 */
+  --face-glow: rgba(255, 236, 196, 0.26); /* 玉质内透光 */
+  --face-shadow: inset calc(var(--u) * -1px) calc(var(--u) * 2.6px) calc(var(--u) * 3px)
+      var(--face-lit),
+    inset calc(var(--u) * 1.5px) calc(var(--u) * -3.4px) calc(var(--u) * 8px) var(--face-shade),
+    /* 光从左上传进材质、在右下侧内壁散出来的一点暖光 —— 「通透」的物理线索，别删 */
+    inset calc(var(--u) * -2px) calc(var(--u) * -2px) calc(var(--u) * 10px) var(--face-glow);
+
   position: relative;
   display: grid;
   place-items: center;
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  /* 漆器盘面：四段径向渐变——左上受光→中间色→背光→最深暗部，强化立体感 */
   background:
-    /* 掠射光扫光层：漆面那道随角度闪烁的彩虹光晕 */
-    conic-gradient(
-      from var(--sweep, -120deg) at 38% 28%,
-      rgba(255, 255, 255, 0) 0deg,
-      rgba(255, 255, 255, 0.55) 14deg,
-      rgba(255, 255, 255, 0.1) 30deg,
-      rgba(255, 255, 255, 0) 50deg
-    ),
-    /* 漆面年轮纹：极细的同心环，比木纹更密、更亮，体现抛光感 */
-    repeating-radial-gradient(
-      circle at 50% 50%,
-      rgba(180, 130, 70, 0.04) 0 calc(var(--u) * 0.6px),
-      rgba(255, 255, 255, 0.07) calc(var(--u) * 0.6px) calc(var(--u) * 1.4px)
-    ),
-    /* 主盘面：左上受光白 → 暖棕中间 → 右下深棕（漆器强对比） */
+    /* 抛光光泽带：一道宽的、**不周期**的高光弧（替掉那条亚像素年轮纹） */
     radial-gradient(
-      circle at 32% 24%,
+      118% 96% at 26% 16%,
+      rgba(255, 253, 246, 0.6) 0%,
+      rgba(255, 251, 240, 0.16) 40%,
+      rgba(255, 249, 236, 0) 64%
+    ),
+    /* 主盘面：左上受光 → 右下背光。只三段，且全是不透明色 */
+    radial-gradient(
+      circle at 30% 22%,
       var(--disc-face-1) 0%,
-      var(--disc-face-2) 42%,
-      var(--disc-face-3) 72%,
+      var(--disc-face-2) 46%,
+      var(--disc-face-3) 78%,
       var(--disc-face-deep) 100%
     );
-  /* 内嵌阴影：顶部亮边 + 底部暗边（模拟圆形表面受光） + 外部三层投影 */
-  box-shadow:
-    inset 0 calc(var(--u) * 2px) calc(var(--u) * 3px) rgba(255, 255, 255, 0.9),
-    inset 0 calc(var(--u) * -2.5px) calc(var(--u) * 6px) rgba(80, 50, 15, 0.38),
-    inset calc(var(--u) * -1.5px) calc(var(--u) * -1.5px) calc(var(--u) * 4px) rgba(60, 36, 10, 0.22),
-    var(--disc-shadow);
+  box-shadow: var(--face-shadow);
 }
 
-/* 漆器高光核心：左上方强镜面高光点 + 向右下渐隐 */
+/* 镜面高光：一个收窄的亮点 + 一圈很弱的散光。
+   以前内核实打实是 rgba(255,255,255,1) 再 blur，压着底纹就是一块过曝的白斑 ——
+   高光过曝同样是「脏」：白到顶就丢掉了材质的颜色，只剩一块糊。 */
 .piece-face::before {
   content: '';
   position: absolute;
-  /* 高光椭圆：偏左上，体现光源从左上打来 */
-  left: 16%;
-  right: 36%;
-  top: 7%;
-  height: 30%;
-  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-  /* 双层渐变：内核近白镜面点 + 外晕柔和散开 */
+  left: 15%;
+  right: 41%;
+  top: 6%;
+  height: 27%;
+  border-radius: 50%;
   background: radial-gradient(
-    ellipse at 38% 30%,
-    rgba(255, 255, 255, 1) 0%,
-    rgba(255, 255, 255, 0.88) 18%,
-    rgba(255, 255, 255, 0.45) 45%,
+    ellipse at 36% 32%,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.7) 22%,
+    rgba(255, 255, 255, 0.26) 54%,
     rgba(255, 255, 255, 0) 100%
   );
-  filter: blur(calc(var(--u) * 1.6px));
+  filter: blur(calc(var(--u) * 1.4px));
   pointer-events: none;
 }
 
-/* 倒角水线：漆器边缘受光那一圈细亮线，顶部最亮、底部渐隐 */
+/* 圈与透光。
+   一圈**连续**的环：左上最亮（受光那一侧），右下最暗。
+
+   画法上有一个坑值得记下来：这里最直觉的写法是
+       background: <透明层> padding-box, conic-gradient(...) border-box;
+       border: 2px solid transparent;
+   以为「padding-box 那层盖住中间」——**盖不住**。那一层本身是透明的，
+   底下 border-box 那层会照原样从中间透出来，于是整块盘面被染成环的颜色，
+   棋子变成一枚红色圆片。第一版就是这么翻车的（截图对比里看得很清楚）。
+   现在用 mask 把内圈精确挖掉：环就是环，盘面还是盘面。
+
+   环的颜色按红黑两方换（见下面 .piece.red / .piece.black）：
+   红方朱砂环、黑方墨环，但**受光模型一模一样**，这才是「同一盏灯照着」。 */
 .piece-face::after {
+  --ring-hi: rgba(255, 255, 255, 0.92);
+  --ring-base: rgba(178, 142, 88, 0.95);
+  --ring-low: rgba(72, 48, 20, 0.98);
   content: '';
   position: absolute;
-  inset: calc(var(--u) * 6.5px);
+  inset: 0;
   border-radius: 50%;
-  /* 顶部亮线（漆器倒角水线）+ 底部微暗槽 */
-  border: calc(var(--u) * 1.2px) solid transparent;
-  background:
-    linear-gradient(135deg, rgba(255, 248, 230, 0.0), rgba(255, 248, 230, 0.0)) padding-box,
-    linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.85) 0%,
-      rgba(255, 248, 220, 0.55) 25%,
-      rgba(200, 160, 90, 0.15) 55%,
-      rgba(80, 50, 15, 0.35) 80%,
-      rgba(50, 30, 8, 0.5) 100%
-    ) border-box;
-  box-shadow:
-    inset 0 calc(var(--u) * 0.8px) calc(var(--u) * 2px) rgba(255, 255, 255, 0.65),
-    inset 0 calc(var(--u) * -0.8px) calc(var(--u) * 1.5px) rgba(60, 36, 10, 0.28);
+  background: conic-gradient(
+    from 315deg,
+    var(--ring-hi) 0deg,
+    var(--ring-base) 96deg,
+    var(--ring-low) 180deg,
+    var(--ring-base) 264deg,
+    var(--ring-hi) 360deg
+  );
+  /* closest-side：百分比按「内切圆半径」算，不然默认的 farthest-corner
+     会把分母算成对角线，85% 早就跑到元素外面去了，环根本画不出来。
+     85% → 100% 那一圈就是这个环：厚约 4 个板面像素，外沿与盘面齐平。 */
+  -webkit-mask: radial-gradient(circle closest-side, transparent 0 85%, #000 88% 100%);
+  mask: radial-gradient(circle closest-side, transparent 0 85%, #000 88% 100%);
   pointer-events: none;
 }
 
@@ -1299,219 +1389,173 @@ kbd {
   font-size: calc(var(--u) * 42px);
   line-height: 1;
   transform: translateY(-1%);
-  /* 字体墨迹：顶部高光反光（笔锋受光面） + 底部微阴影（笔锋背光面） */
+  /* 字体墨迹：两层就够。以前是三层，顶上那层白色 −1px 会在笔画外缘描出一圈
+     光晕，字号一小就成了「毛边」。
+     这两层**刻意不带** --light-x：字影在这里是「给笔画加分量」的排印手段，
+     不是影子落在地上 —— 跟 .seal span 那种真正表达凹凸的阴刻不是一回事。 */
   text-shadow:
-    0 calc(var(--u) * -1px) calc(var(--u) * 1px) rgba(255, 255, 255, 0.85),
-    0 calc(var(--u) * 1.2px) calc(var(--u) * 2px) rgba(40, 22, 8, 0.55),
-    0 calc(var(--u) * 2px) calc(var(--u) * 4px) rgba(40, 22, 8, 0.22);
+    0 calc(var(--u) * 0.5px) calc(var(--u) * 1.1px) rgba(255, 253, 246, 0.6),
+    0 calc(var(--u) * 1.3px) calc(var(--u) * 2.4px) rgba(44, 24, 8, 0.4);
 }
 
-.piece.red .piece-face {
-  box-shadow:
-    /* 朱砂边环 */
-    inset 0 0 0 calc(var(--u) * 3.5px) var(--piece-red),
-    /* 朱砂环内侧亮边 */
-    inset 0 0 0 calc(var(--u) * 4.8px) rgba(255, 255, 255, 0.55),
-    /* 朱砂环内侧底部阴影 */
-    inset 0 calc(var(--u) * -2px) calc(var(--u) * 6px) rgba(100, 30, 20, 0.30),
-    /* 外投影 */
-    var(--disc-shadow);
+/* 红黑两方只在「环的颜色 + 字的颜色」上分家，受光模型共用同一套。
+   顺带把环从 .piece-face 的 box-shadow 挪到 ::after 上 —— 挪过来之后
+   环不再是「又一层内影」，而是一圈真正有厚度的边。 */
+.piece.red .piece-face::after {
+  --ring-hi: rgba(255, 236, 228, 0.95);
+  --ring-base: #b8382c;
+  --ring-low: #77160f;
 }
 .piece.red .piece-glyph {
   color: var(--piece-red);
   text-shadow:
-    0 calc(var(--u) * -1px) calc(var(--u) * 1px) rgba(255, 220, 210, 0.7),
-    0 calc(var(--u) * 1.2px) calc(var(--u) * 2px) rgba(80, 15, 10, 0.60),
-    0 calc(var(--u) * 2px) calc(var(--u) * 4px) rgba(80, 15, 10, 0.25);
+    0 calc(var(--u) * 0.5px) calc(var(--u) * 1.1px) rgba(255, 236, 230, 0.5),
+    0 calc(var(--u) * 1.3px) calc(var(--u) * 2.4px) rgba(74, 12, 8, 0.42);
 }
 
-.piece.black .piece-face {
-  box-shadow:
-    /* 黑色边环 */
-    inset 0 0 0 calc(var(--u) * 3.5px) var(--piece-black),
-    /* 黑色环内侧亮边 */
-    inset 0 0 0 calc(var(--u) * 4.8px) rgba(255, 255, 255, 0.45),
-    /* 黑色环内侧底部阴影 */
-    inset 0 calc(var(--u) * -2px) calc(var(--u) * 6px) rgba(10, 8, 5, 0.38),
-    /* 外投影 */
-    var(--disc-shadow);
+.piece.black .piece-face::after {
+  --ring-hi: rgba(246, 244, 240, 0.8);
+  --ring-base: #3d362e;
+  --ring-low: #0f0d0a;
 }
 .piece.black .piece-glyph {
   color: var(--piece-black);
   text-shadow:
-    0 calc(var(--u) * -1px) calc(var(--u) * 1px) rgba(255, 255, 255, 0.55),
-    0 calc(var(--u) * 1.2px) calc(var(--u) * 2px) rgba(10, 8, 5, 0.65),
-    0 calc(var(--u) * 2px) calc(var(--u) * 4px) rgba(10, 8, 5, 0.30);
+    0 calc(var(--u) * 0.5px) calc(var(--u) * 1.1px) rgba(255, 253, 246, 0.42),
+    0 calc(var(--u) * 1.3px) calc(var(--u) * 2.4px) rgba(8, 6, 4, 0.46);
 }
 
+/* 选中：棋子离盘抬起 6px。抬升走 --lift（它就是 transform 里的一项），
+   影子同时向右下移远、放大 —— 「浮起来了」由影子的位移说，不靠再堆几层阴影。 */
 .piece.is-selected {
   z-index: 45;
-  /* 选中态：棋子向上浮起（产生立体悬浮高度） */
-  transform: translate(-50%, calc(-50% - var(--u) * 6px));
-  transition: transform var(--dur-fast) var(--ease-spring);
+  --lift: calc(var(--u) * 6px);
 }
 
 .piece.is-selected .piece-face {
+  /* 离地之后顶光更直射：只改受光模型的三个量，不重写整套 box-shadow */
+  --face-lit: #ffffff;
+  --face-shade: rgba(58, 32, 6, 0.42);
+  --face-glow: rgba(255, 240, 206, 0.34);
   transform: scale(1.03);
-  filter: brightness(1.06);
-  /* 选中浮空：顶部更强的漆器镜面高光（棋子离开棋盘面，光线更直射） */
-  box-shadow:
-    /* 顶部强镜面散射 */
-    0 calc(var(--u) * -3px) calc(var(--u) * 6px) rgba(255, 255, 255, 0.65),
-    /* 内侧顶部高光条 */
-    inset 0 calc(var(--u) * 2.5px) calc(var(--u) * 4px) rgba(255, 255, 255, 0.98),
-    /* 内侧底部漆器深阴影 */
-    inset 0 calc(var(--u) * -2.5px) calc(var(--u) * 6px) rgba(70, 42, 12, 0.35),
-    /* 左侧微光 */
-    inset calc(var(--u) * 1.5px) 0 calc(var(--u) * 3px) rgba(255, 255, 255, 0.35),
-    var(--disc-shadow);
-  transition: transform var(--dur-fast) var(--ease-spring), filter var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
-/* 选中态浮空深投影：棋子抬升后，深色影子向右下方沉降、略微扩散，形成强烈的悬浮高度感 */
 .piece.is-selected::after {
-  transform: translate(calc(var(--u) * 7px), calc(var(--u) * 13px)) scale(0.92);
-  opacity: 0.80;
-  filter: blur(calc(var(--u) * 3.5px));
-  background: radial-gradient(
-    ellipse at 48% 48%,
-    rgba(15, 8, 2, 0.85) 0%,
-    rgba(25, 14, 4, 0.62) 40%,
-    rgba(35, 20, 8, 0.25) 68%,
-    transparent 100%
-  );
-  transition: transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out);
+  transform: translate(calc(var(--u) * 12px * var(--light-x)), calc(var(--u) * 12px)) scale(0.94);
+  opacity: 0.8;
 }
 
+/* 被将军：盘面上那圈朱砂。用 --face-shadow 打底再叠两层，不整体覆盖 ——
+   覆盖会连顶缘受光一起吃掉，棋子就会从「立体」变成「贴纸」。 */
 .piece.is-check .piece-face {
-  box-shadow: inset 0 0 0 calc(var(--u) * 2.5px) var(--piece-red),
-    inset 0 0 0 calc(var(--u) * 5px) rgba(255, 255, 255, 0.55),
-    0 0 calc(var(--u) * 8px) rgba(180, 50, 42, 0.5);
+  box-shadow: var(--face-shadow), 0 0 0 calc(var(--u) * 2.2px) var(--piece-red),
+    0 0 calc(var(--u) * 9px) rgba(180, 50, 42, 0.5);
 }
 
 /* ---- 拿起与拖动 ----
-   拖拽拿起时棋子高度更高，影子随高度进一步大幅沉降至右下方并柔和散开。 */
+   拖拽时棋子离盘更高，影子随高度进一步沉到右下并放大。 */
 
 .piece.is-grabbable {
   cursor: grab;
   touch-action: none;
 }
 
-.piece.is-lifted {
-  opacity: 0.35;
-}
-
-.piece.is-lifted .piece-face {
-  box-shadow: var(--disc-shadow);
-}
-
 .piece.dragging {
   z-index: 60;
   pointer-events: none;
-  /* 跟手：位置每帧直接写，棋子提空 6px */
+  /* 跟手：位置每帧由组件直接写进 --cx/--cy，这里必须把过渡关掉，否则会拖在指针后面 */
   transition: none;
-  transform: translate(-50%, calc(-50% - var(--u) * 6px));
+  --lift: calc(var(--u) * 8px);
 }
 
 .piece.dragging .piece-face {
-  transform: scale(1.1);
-  filter: brightness(1.14);
-  box-shadow:
-    /* 内侧顶部极强高光：棋子完全离地，顶光最强 */
-    inset 0 calc(var(--u) * 3px) calc(var(--u) * 4px) rgba(255, 255, 255, 1),
-    /* 内侧底部深漆器阴影 */
-    inset 0 calc(var(--u) * -3px) calc(var(--u) * 7px) rgba(70, 42, 12, 0.42),
-    /* 左侧受光边缘 */
-    inset calc(var(--u) * 2px) 0 calc(var(--u) * 4px) rgba(255, 255, 255, 0.42),
-    var(--disc-shadow);
+  --face-lit: #ffffff;
+  --face-shade: rgba(52, 28, 4, 0.48);
+  --face-glow: rgba(255, 244, 216, 0.4);
+  transform: scale(1.08);
 }
 
-/* 拿起时漆器高光点更锐利更集中 */
+/* 拿起时镜面高光更锐、更集中（离地后反射面更直） */
 .piece.dragging .piece-face::before {
-  filter: blur(calc(var(--u) * 1.2px));
-  background: radial-gradient(
-    ellipse at 35% 28%,
-    rgba(255, 255, 255, 1) 0%,
-    rgba(255, 255, 255, 0.92) 12%,
-    rgba(255, 255, 255, 0.58) 38%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  height: 34%;
-  left: 14%;
-  right: 34%;
+  filter: blur(calc(var(--u) * 1.1px));
+  left: 13%;
+  right: 40%;
   top: 5%;
+  height: 30%;
 }
 
-/* 拖拽时的右下方落盘大阴影：随高度抬高，影子拉得更远、更大、更虚 */
 .piece.dragging::after {
-  display: block;
-  transform: translate(calc(var(--u) * 14px), calc(var(--u) * 20px)) scale(1.20);
-  opacity: 0.62;
-  filter: blur(calc(var(--u) * 7px));
-  background: radial-gradient(
-    ellipse at 44% 44%,
-    rgba(18, 10, 3, 0.72) 0%,
-    rgba(28, 16, 6, 0.48) 48%,
-    rgba(40, 22, 8, 0.18) 75%,
-    transparent 100%
-  );
+  transform: translate(calc(var(--u) * 18px * var(--light-x)), calc(var(--u) * 18px)) scale(1.18);
+  opacity: 0.66;
 }
 
-@media (prefers-reduced-motion: reduce) {
+/* ---- 落子反馈：一次性的，由 Board 在滑行结束时挂上 is-impact，播完自己摘 ----
+   这里以前挂的是 .piece.is-landing —— 一个**持久**类（只要那颗子还停在
+   last_move.to 上就一直在），真正让动画重播的是 .piece-face 上 key 的变化
+   导致的 React 重挂载。等于把「什么时候播」绑死在 React 的重建上：加不出
+   分级时序，每落一手还要白重建一次 DOM。 */
+.piece.is-impact::before {
+  animation: pieceImpactRing 520ms var(--ease-out) both;
 }
 
-/* ---- 落地物理冲击与阴影收束 ---- */
-.piece.is-landing .piece-face {
-  animation: pieceLandImpact 240ms cubic-bezier(0.25, 1, 0.5, 1) both;
+.piece.is-impact .piece-face {
+  animation: pieceImpactSquash 320ms var(--ease-land) both;
 }
 
-.piece.is-landing::after {
-  animation: shadowLandImpact 240ms cubic-bezier(0.25, 1, 0.5, 1) both;
+.piece.is-impact::after {
+  animation: pieceImpactShadow 320ms var(--ease-land) both;
 }
 
-@keyframes pieceLandImpact {
+/* 涟漪：一圈极淡的环从棋子底下散开。只动 transform 与 opacity ——
+   这两个属性在合成器上跑，落子这一下不占主线程。 */
+@keyframes pieceImpactRing {
   0% {
-    transform: scale(1.08);
-    filter: brightness(1.18); /* 落地瞬间高光闪烁，模拟漆面反光 */
+    transform: scale(0.86);
+    opacity: 0.7;
   }
-  35% {
-    transform: scale(1.05);
-    filter: brightness(1.10);
-  }
-  75% {
-    transform: scale(0.968); /* 触盘瞬间的物理微压实 (Squash) */
-    filter: brightness(0.97);
-  }
-  90% {
-    transform: scale(1.012);
-    filter: brightness(1.01);
+  55% {
+    opacity: 0.28;
   }
   100% {
-    transform: scale(1); /* 阻尼恢复至 1.0 严丝合缝 */
-    filter: brightness(1);
+    transform: scale(1.5);
+    opacity: 0;
   }
 }
 
-@keyframes shadowLandImpact {
+/* 触盘：一次极短的压实 + 一次微回弹。幅度压得很小 —— 棋子是稳重的东西，
+   回弹一大立刻变塑料球。 */
+@keyframes pieceImpactSquash {
   0% {
-    transform: translateY(calc(var(--u) * 7px)) scale(0.91);
-    opacity: 0.35;
-    filter: blur(calc(var(--u) * 3px));
+    transform: scale(1.035);
   }
-  60% {
-    transform: translateY(calc(var(--u) * 5.5px)) scale(0.93);
-    opacity: 0.45;
-    filter: blur(calc(var(--u) * 2.5px));
+  36% {
+    transform: scale(0.982);
   }
-  85% {
-    transform: translateY(0) scale(1.04);
-    opacity: 0.95;
-    filter: blur(0px);
+  66% {
+    transform: scale(1.01);
   }
   100% {
-    transform: translateY(0) scale(1);
-    opacity: 0.85;
-    filter: blur(0px);
+    transform: scale(1);
+  }
+}
+
+/* 阴影收束：落下的那一瞬影子收紧、贴地，再回到静止位。
+   同样只动 transform —— 以前这里连 blur 半径一起动，那是每帧一次重新光栅化。
+
+   0% 那一帧的位置必须和 .piece::after 的静止值一模一样（都是 4.6px × --light-x / 4.6px），
+   收的是 scale 而不是位移。以前 0% 写的是 3px —— 比静止值近了 1.6px，而动画是 both、
+   类一挂上就立刻按 0% 帧填样式，于是落子反馈一开始影子会先「啪」地缩一下再动。
+   现在起点就是终点位，只靠 scale 表达「收紧 → 摊开」。 */
+@keyframes pieceImpactShadow {
+  0% {
+    transform: translate(calc(var(--u) * 4.6px * var(--light-x)), calc(var(--u) * 4.6px)) scale(0.9);
+  }
+  40% {
+    transform: translate(calc(var(--u) * 5.6px * var(--light-x)), calc(var(--u) * 5.6px))
+      scale(1.05);
+  }
+  100% {
+    transform: translate(calc(var(--u) * 4.6px * var(--light-x)), calc(var(--u) * 4.6px)) scale(1);
   }
 }
 
@@ -1522,16 +1566,17 @@ kbd {
   animation: pieceKnockback 220ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
 }
 
+/* 基座是 --piece-base：定位已经从 left/top 搬到 transform 上了，
+   keyframes 里那个写死的 translate(-50%, -50%) 会把这颗残影送回棋盘左上角。 */
 @keyframes pieceKnockback {
   0% {
-    transform: translate(-50%, -50%) translate(0, 0) scale(1) rotate(0deg);
+    transform: var(--piece-base) translate(0, 0) scale(1) rotate(0deg);
     opacity: 0.95;
   }
   100% {
-    transform: translate(-50%, -50%)
+    transform: var(--piece-base)
       translate(calc(var(--kx, 0) * var(--u) * 15px), calc(var(--ky, 0) * var(--u) * 15px))
-      scale(0.86)
-      rotate(calc(var(--kr, 4deg)));
+      scale(0.86) rotate(calc(var(--kr, 4deg)));
     opacity: 0;
   }
 }
@@ -1576,12 +1621,18 @@ kbd {
     inset 0 0 18px rgba(180, 50, 42, 0.16);
 }
 
-/* 键盘光标：取景框式的四角括号，墨色，和可走点的朱砂区分开 */
+/* 键盘光标：取景框式的四角括号，墨色，和可走点的朱砂区分开。
+   位置同样走 transform（跟棋子一套规矩）：方向键连按时光标要连滑好几格，
+   走 left/top 就是每格一次重排。 */
 .kbd-cursor {
   position: absolute;
+  left: 0;
+  top: 0;
   width: calc(var(--u) * 72px);
   height: calc(var(--u) * 72px);
-  transform: translate(-50%, -50%);
+  --cx: 0px;
+  --cy: 0px;
+  transform: translate3d(calc(var(--u) * var(--cx) - 50%), calc(var(--u) * var(--cy) - 50%), 0);
   pointer-events: none;
   z-index: 16;
   background-image:
@@ -1605,9 +1656,22 @@ kbd {
     left bottom, left bottom,
     right bottom, right bottom;
   opacity: 0.85;
-  animation: pop 200ms var(--ease-spring) both;
-  transition: left var(--dur-fast) var(--ease-out),
-    top var(--dur-fast) var(--ease-out);
+  animation: cursorPop 200ms var(--ease-spring);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+/* 光标自己的入场缩放。为什么不复用 pop：pop 的 from 里那个写死的
+   translate(-50%,-50%) 是给 .target 用的（它还在 left/top 上），光标的位置
+   现在在 transform 里，套上去会让它先闪到棋盘左上角再蹦回来。
+
+   也**不加 fill** —— 带 fill 的话动画结束时会把它那一刻的 transform 冻住，
+   之后改 --cx 光标就走不动了。 */
+@keyframes cursorPop {
+  from {
+    transform: translate3d(calc(var(--u) * var(--cx) - 50%), calc(var(--u) * var(--cy) - 50%), 0)
+      scale(0.2);
+    opacity: 0;
+  }
 }
 
 .target-capture {
@@ -1659,9 +1723,11 @@ kbd {
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 12;
-  /* 标记本身是绝对定位，换一手就整体换坐标。加一点短过渡，
-     让它滑到新格子而不是瞬移 —— 瞬移在棋盘上就是一次「跳」 */
-  transition: left var(--dur-fast) var(--ease-out), top var(--dur-fast) var(--ease-out);
+  /* 这里原来挂着一条 `transition: left/top`。它是**死代码**：标记的 key 里带了
+     game.ply（见 Board.tsx），每走一手都是一个新元素，新元素直接以最终坐标挂载，
+     从来没有「坐标变化」这回事，那条过渡一次都没跑过。
+     真要让标记滑行，得把它改成跟棋子一样走 transform；既然现在是瞬移，
+     就把过渡删掉 —— 留着只会骗下一个读代码的人。 */
 }
 
 /* 起点：外层纤细白圆圈线 + 中心柔白发光圆点（严格还原参考图） */
@@ -2030,7 +2096,7 @@ kbd {
   place-items: center;
   border-radius: 14px;
   background: linear-gradient(160deg, var(--cinnabar-bright), var(--cinnabar));
-  box-shadow: 0 18px 40px -14px rgba(180, 50, 42, 0.6),
+  box-shadow: calc(18px * var(--light-x)) 18px 40px -14px rgba(180, 50, 42, 0.6),
     inset 0 0 0 3px rgba(255, 248, 242, 0.85), inset 0 0 0 7px var(--cinnabar);
   animation: sealDrop 700ms var(--ease-out) 300ms both;
   z-index: 60;
@@ -2038,7 +2104,7 @@ kbd {
 
 .winner-none .seal {
   background: linear-gradient(160deg, var(--ink-2), var(--ink-1));
-  box-shadow: 0 18px 40px -14px rgba(43, 35, 26, 0.55),
+  box-shadow: calc(18px * var(--light-x)) 18px 40px -14px rgba(43, 35, 26, 0.55),
     inset 0 0 0 3px rgba(255, 248, 242, 0.85), inset 0 0 0 7px var(--ink-1);
 }
 
@@ -2047,8 +2113,11 @@ kbd {
   font-size: 52px;
   line-height: 1;
   color: #fff8f2;
-  /* 阴刻：上缘落影、下缘受光，字是錾进印面的 */
-  text-shadow: 0 -1px 1px rgba(90, 16, 12, 0.55), 0 1px 0 rgba(255, 255, 255, 0.25);
+  /* 阴刻：上缘落影、下缘受光，字是錾进印面的。
+     方向跟全站那盏灯一致，只是**符号相反** —— 凹槽里背光的那面内壁在左上，
+     所以暗影往左上偏、亮边往右下偏。--light-x 对「凹」的语义是取负。 */
+  text-shadow: calc(-1px * var(--light-x)) -1px 1px rgba(90, 16, 12, 0.55),
+    calc(1px * var(--light-x)) 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .seal::after {
@@ -2158,7 +2227,6 @@ kbd {
    ========================================================================== */
 
 
-.relay-input,
 
 
 
@@ -2298,8 +2366,6 @@ kbd {
 
 /* ② 里三种状态（思考中 / 应手 / 空）互相切换时只做透明度淡入，
    不做位移缩放 —— 底部这块只要有一点点弹动，整页都会被带着「抖」一下。 */
-.relay-thinking,
-.relay-move,
 
 
 
@@ -2375,6 +2441,11 @@ kbd {
   box-shadow: inset 0 1px 2px rgba(43, 35, 26, 0.16);
 }
 
+/* 评分条左右两段。这里过的是 width（布局属性）。换成 transform: scaleX 就能上
+   合成器，之所以没换：这两段的渐变是 90deg 的，scaleX 会把渐变一起压扁，要保持
+   渐变本来的样子还得再写一条 calc(100% / var(--er)) 的 background-size，并且给
+   --er 兜一个不为 0 的下限。收益只是一个 8px 高的叶子节点少一次重排，不值这个
+   复杂度。 */
 .eval-red {
   background: linear-gradient(90deg, #9d2820, var(--cinnabar-bright));
   transition: width var(--dur-slow) var(--ease-out);
@@ -2419,7 +2490,8 @@ kbd {
   margin-top: -5.5px;
   border-radius: 50%;
   background: var(--paper-0);
-  box-shadow: 0 0 0 1.5px rgba(43, 35, 26, 0.45), 0 1px 3px rgba(43, 35, 26, 0.4);
+  box-shadow: 0 0 0 1.5px rgba(43, 35, 26, 0.45),
+    calc(1px * var(--light-x)) 1px 3px rgba(43, 35, 26, 0.4);
 }
 
 /* 棋势走势线：评分条下面的一条极淡的叙事线，不抢评分条的视觉 */
@@ -2502,10 +2574,12 @@ kbd {
   flex: 1;
   border-radius: 1px;
   background: var(--paper-3);
-  /* 越靠后越高，读起来像「越来越深」而不是十二根一样高的柱子 */
+  /* 越靠后越高，读起来像「越来越深」而不是十二根一样高的柱子。
+     高度只在挂载那一刻由下面几条 :nth-child 定死，运行期从不变化，
+     所以过渡里只留 background —— 原来那条 `height` 是跑不起来的死代码。 */
   height: 34%;
   transform-origin: bottom;
-  transition: height var(--dur) var(--ease-spring), background var(--dur) var(--ease-out);
+  transition: background var(--dur) var(--ease-out);
 }
 
 .rung:nth-child(n + 4) {
@@ -3053,6 +3127,11 @@ kbd {
     order: 2;
     display: block;
     min-height: auto;
+    /* 窄屏的 .workspace 是个没有 row-gap 的单列栅格，而 .stage 被
+       `display: contents` 拆散 —— 桌面那份 12px 的 flex 间距到这里就没了，
+       回合条与棋盘是**零间距**紧贴的（实测两者边界像素完全重合）。于是棋盘垫
+       上探的 14px 整片吃进回合条。这里把那份净距补回来，量取同一个 --board-clearance。 */
+    margin-top: var(--board-clearance);
   }
 
   .rail-right {
@@ -3174,3 +3253,398 @@ kbd {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* ==========================================================================
+   补棋 / 自定义排局模式 (SetupPanel)
+   ========================================================================== */
+
+.icon-btn.icon-setup.is-on {
+  color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+  border-color: var(--cinnabar-edge);
+}
+
+.board.is-setup::before {
+  background: linear-gradient(180deg, rgba(180, 50, 42, 0.08), var(--paper-3));
+  box-shadow: 0 0 0 2px var(--cinnabar-edge),
+    calc(1px * var(--light-x)) 1px 2px rgba(43, 35, 26, 0.06);
+}
+
+.board.is-setup .board-surface {
+  box-shadow: inset 0 0 0 2px rgba(180, 50, 42, 0.25);
+}
+
+.setup-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--paper-1);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-panel);
+  animation: rise 240ms var(--ease-out) both;
+}
+
+.setup-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.setup-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--cinnabar-bright), var(--cinnabar));
+  color: #fff8f2;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  box-shadow: calc(3px * var(--light-x)) 3px 10px -4px rgba(180, 50, 42, 0.7);
+}
+
+.setup-subtitle {
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.setup-quick-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.setup-fen-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--paper-2);
+  border-radius: var(--r-md);
+  border: 1px solid var(--hairline);
+  animation: fadeIn 200ms var(--ease-out) both;
+}
+
+.fen-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fen-label {
+  font-size: 12px;
+  color: var(--ink-2);
+  min-width: 65px;
+  font-weight: 500;
+}
+
+.fen-input {
+  flex: 1;
+  font-family: var(--font-num);
+  font-size: 12px;
+  padding: 5px 9px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  color: var(--ink-1);
+}
+
+.fen-input:focus {
+  border-color: var(--cinnabar);
+}
+
+.setup-trays {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .setup-trays {
+    grid-template-columns: 1fr;
+  }
+}
+
+.piece-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--paper-0);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.tray-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.tray-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.tray-dot.red-dot {
+  background: var(--piece-red);
+}
+
+.tray-dot.black-dot {
+  background: var(--piece-black);
+}
+
+.tray-pieces {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tray-piece-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: 1px solid transparent;
+  padding: 3px 5px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.tray-piece-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, var(--disc-face-1), var(--disc-face-2));
+  border: 1.5px solid var(--disc-face-deep);
+  box-shadow: 0 2px 5px rgba(43, 35, 26, 0.15);
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.tray-piece-glyph {
+  font-family: var(--font-kai);
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.tray-piece-btn.red .tray-piece-glyph {
+  color: var(--piece-red);
+}
+
+.tray-piece-btn.black .tray-piece-glyph {
+  color: var(--piece-black);
+}
+
+.tray-count-tag {
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: var(--paper-2);
+}
+
+.tray-piece-btn:hover:not(:disabled) .tray-piece-circle {
+  transform: translateY(-2px) scale(1.06);
+  box-shadow: 0 4px 10px rgba(43, 35, 26, 0.22);
+}
+
+.tray-piece-btn.is-selected {
+  background: var(--cinnabar-wash);
+  border-color: var(--cinnabar-edge);
+}
+
+.tray-piece-btn.is-selected .tray-piece-circle {
+  box-shadow: 0 0 0 2px var(--cinnabar), 0 4px 12px rgba(180, 50, 42, 0.35);
+  transform: translateY(-2px);
+}
+
+.tray-piece-btn.is-selected .tray-count-tag {
+  background: var(--cinnabar);
+  color: #fff8f2;
+}
+
+.tray-piece-btn.is-empty {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.tray-piece-btn.is-empty .tray-piece-circle {
+  box-shadow: none;
+}
+
+.setup-status-strip {
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.status-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  border-radius: var(--r-sm);
+}
+
+.status-tip .tip-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.status-tip.active-tray-tip {
+  background: var(--cinnabar-wash);
+  border: 1px solid var(--cinnabar-edge);
+  color: var(--cinnabar);
+}
+
+.status-tip.active-picked-tip {
+  background: var(--jade-wash);
+  border: 1px solid var(--jade);
+  color: var(--jade);
+}
+
+.status-tip.normal-tip {
+  background: var(--paper-2);
+  color: var(--ink-2);
+}
+
+.btn-xs {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.setup-validation-box {
+  border-radius: var(--r-sm);
+}
+
+.validation-banner.is-valid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--r-sm);
+  background: var(--jade-wash);
+  border: 1px solid var(--jade);
+  color: var(--jade);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.validation-banner.is-invalid {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  background: rgba(180, 50, 42, 0.08);
+  border: 1px solid var(--cinnabar);
+  color: var(--cinnabar);
+}
+
+.validation-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.validation-list {
+  margin: 6px 0 0 20px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.setup-bottom-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+
+.setup-options {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.option-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.option-label {
+  font-size: 12px;
+  color: var(--ink-mute);
+  font-weight: 500;
+}
+
+.segmented-sm {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--paper-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+}
+
+.seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--ink-2);
+  border-radius: calc(var(--r-sm) - 2px);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.seg-btn:hover {
+  color: var(--ink-0);
+}
+
+.seg-btn.is-active {
+  background: var(--paper-0);
+  color: var(--cinnabar);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(43, 35, 26, 0.12);
+}
+
+.setup-action-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
