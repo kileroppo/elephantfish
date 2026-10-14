@@ -686,6 +686,94 @@ kbd {
   box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(180, 50, 42, 0.22);
 }
 
+.engine-side-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  min-height: 32px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-left: 6px;
+  background: rgba(120, 120, 120, 0.08);
+  color: var(--ink-2);
+  border: 1px solid var(--hairline-strong);
+  transition: all var(--dur-fast) var(--ease-out);
+  cursor: pointer;
+  user-select: none;
+  animation: fadeIn 220ms var(--ease-out) both;
+}
+
+.engine-side-badge:hover {
+  transform: translateY(-1px);
+  background: var(--paper-2);
+  border-color: var(--ink-4);
+  color: var(--ink-0);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(43, 35, 26, 0.12);
+}
+
+.engine-side-badge:active {
+  transform: translateY(0);
+}
+
+.engine-side-disc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  font-family: var(--font-kai);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.engine-side-disc.side-red {
+  background: var(--cinnabar);
+  color: #fffbf3;
+  box-shadow: 0 1px 2px rgba(180, 50, 42, 0.35);
+}
+
+.engine-side-disc.side-black {
+  background: var(--ink-0);
+  color: #fffbf3;
+  box-shadow: 0 1px 2px rgba(22, 19, 15, 0.4);
+}
+
+.engine-side-badge.side-red {
+  border-color: var(--cinnabar-edge);
+}
+
+.engine-side-badge.side-red:hover {
+  border-color: var(--cinnabar);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(180, 50, 42, 0.18);
+}
+
+.engine-side-badge.side-black {
+  border-color: var(--hairline-strong);
+}
+
+.engine-side-badge.side-black:hover {
+  border-color: var(--ink-2);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(22, 19, 15, 0.2);
+}
+
+.engine-side-switch {
+  display: inline-block;
+  font-size: 11px;
+  opacity: 0.6;
+  margin-left: 2px;
+  transition: transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast) var(--ease-out);
+}
+
+.engine-side-badge:hover .engine-side-switch {
+  opacity: 0.95;
+  transform: rotate(180deg);
+}
+
 
 
 
@@ -3230,6 +3318,7 @@ kbd {
     height: 40px;
   }
   .engine-badge,
+  .engine-side-badge,
   .type-toggle-btn {
     min-height: 40px;
   }

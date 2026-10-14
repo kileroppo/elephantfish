@@ -43,28 +43,6 @@ export function ControlRail({
     >
       <section className="panel">
         <header className="panel-head">
-          <h2>执子方</h2>
-        </header>
-        <p className="hint">
-          引擎执哪一边，即由引擎出招应手；对方走法在盘上点录。
-        </p>
-        <div className="segmented">
-          {(['red', 'black'] as Side[]).map((side) => (
-            <button
-              key={side}
-              type="button"
-              className={`seg seg-${side} ${game.engine_side === side ? 'is-on' : ''}`}
-              onClick={() => onNewGame(side)}
-            >
-              <span className="seg-disc" />
-              引擎执{side === 'red' ? '红' : '黑'}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel">
-        <header className="panel-head">
           <h2>思考时间</h2>
         </header>
         <div className="preset-column">

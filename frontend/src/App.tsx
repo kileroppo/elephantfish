@@ -36,12 +36,25 @@ export default function App() {
     loadPosition: g.loadPosition,
   })
 
-  // 引擎执黑时默认把黑方摆在下面 —— 归属我方视角
+  // 引擎执哪一边，这边的棋就朝下：
+  // 引擎执红 -> 红方在下（flipped = false）
+  // 引擎执黑 -> 黑方在下（flipped = true）
+  const prevEngineSide = useRef<string | null>(null)
   useEffect(() => {
     if (!game) return
-    const stored = localStorage.getItem(LS_FLIP)
-    if (stored === null) setFlipped(game.engine_side === 'black')
-  }, [game?.engine_side]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (prevEngineSide.current !== game.engine_side) {
+      prevEngineSide.current = game.engine_side
+      setFlipped(game.engine_side === 'black')
+    }
+  }, [game?.engine_side])
+
+  const handleNewGame = useCallback(
+    (side: 'red' | 'black') => {
+      setFlipped(side === 'black')
+      void g.newGame(side)
+    },
+    [g],
+  )
 
   useEffect(() => {
     setSoundEnabled(soundOn)
@@ -147,7 +160,7 @@ export default function App() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault()
-        if (game) void g.newGame(game.engine_side)
+        if (game) handleNewGame(game.engine_side)
         return
       }
       if (e.key === 'f' || e.key === 'F') {
@@ -165,7 +178,26 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [g, game])
+  }, [g, game, handleNewGame])
+
+  const onToggleEngineSide = useCallback(() => {
+    if (setup.active) {
+      const nextSide = setup.engineSide === 'red' ? 'black' : 'red'
+      setup.setEngineSide(nextSide)
+      setFlipped(nextSide === 'black')
+      g.pushToast(
+        `排局设定：引擎执${nextSide === 'red' ? '红' : '黑'}（${nextSide === 'red' ? '红' : '黑'}方朝下）`,
+        'info',
+      )
+    } else if (game) {
+      const nextSide = game.engine_side === 'red' ? 'black' : 'red'
+      handleNewGame(nextSide)
+      g.pushToast(
+        `已切换为引擎执${nextSide === 'red' ? '红' : '黑'}（${nextSide === 'red' ? '红' : '黑'}方朝下）`,
+        'ok',
+      )
+    }
+  }, [setup.active, setup.engineSide, setup.setEngineSide, game, handleNewGame, g])
 
   if (g.booting && !g.state) {
     return (
@@ -196,7 +228,7 @@ export default function App() {
     : isPlaying
       ? g.thinking
         ? '引擎深度计算中…'
-        : `轮到${sideName(game.turn)}${game.turn === game.engine_side ? '（我方引擎）' : '（对方，请在盘面点选）'}`
+        : `轮到${sideName(game.turn)}${game.turn === game.engine_side ? '（引擎出招）' : '（您出招，请在盘面落子）'}`
       : game.status.reason || '对局结束'
 
   return (
@@ -214,6 +246,7 @@ export default function App() {
           const next = current === 'pikafish' ? 'builtin' : 'pikafish'
           void g.updateSettings({ engine_type: next })
         }}
+        onToggleEngineSide={onToggleEngineSide}
         onFlip={() => setFlipped((v) => !v)}
         onToggleSound={() => setSoundOn((v) => !v)}
         onHelp={() => setHelp(true)}
@@ -256,7 +289,7 @@ export default function App() {
           state={g.state}
           setupMode={setup.active}
           onToggleSetup={setup.toggle}
-          onNewGame={(side) => void g.newGame(side)}
+          onNewGame={handleNewGame}
           onUndo={() => void g.undoRound()}
           onResign={() => void g.resign()}
           onSettings={(patch) => void g.updateSettings(patch)}
@@ -325,8 +358,8 @@ export default function App() {
                     {game.status.winner === null
                       ? '和棋'
                       : game.status.winner === game.engine_side
-                        ? '我方引擎获胜'
-                        : '对方获胜'}
+                        ? '引擎获胜'
+                        : '您获胜了！'}
                   </span>
                   <h2>{game.status.reason || '对局结束'}</h2>
                   <p className="hint">
@@ -336,7 +369,7 @@ export default function App() {
                     <button
                       type="button"
                       className="btn btn-primary"
-                      onClick={() => void g.newGame(game.engine_side)}
+                      onClick={() => handleNewGame(game.engine_side)}
                     >
                       再来一局
                     </button>
@@ -372,9 +405,15 @@ export default function App() {
               }
               onCancelPick={setup.clearSelection}
               onTurnChange={setup.setTurn}
-              onEngineSideChange={setup.setEngineSide}
+              onEngineSideChange={(side) => {
+                setup.setEngineSide(side)
+                setFlipped(side === 'black')
+              }}
               onImportFen={setup.importFen}
-              onStartGame={() => void setup.startGame()}
+              onStartGame={() => {
+                setFlipped(setup.engineSide === 'black')
+                void setup.startGame()
+              }}
               onExitSetup={setup.exit}
               onToast={g.pushToast}
             />

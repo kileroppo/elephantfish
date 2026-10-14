@@ -9,6 +9,7 @@ interface Props {
   setupMode?: boolean
   onToggleSetup?: () => void
   onToggleEngine?: () => void
+  onToggleEngineSide?: () => void
   onFlip: () => void
   onToggleSound: () => void
   onHelp: () => void
@@ -16,18 +17,21 @@ interface Props {
 }
 
 export function TopBar({
+  game,
   engineInfo,
   connected,
   soundOn,
   setupMode = false,
   onToggleSetup,
   onToggleEngine,
+  onToggleEngineSide,
   onFlip,
   onToggleSound,
   onHelp,
   onRefresh,
 }: Props) {
   const isPikafish = engineInfo?.active === 'pikafish'
+  const isEngineRed = game.engine_side === 'red'
 
   return (
     <header className="topbar">
@@ -74,6 +78,29 @@ export function TopBar({
             </span>
           </button>
         )}
+
+        <button
+          key={game.engine_side}
+          type="button"
+          className={`engine-side-badge is-clickable side-${game.engine_side}`}
+          onClick={onToggleEngineSide}
+          title={
+            isEngineRed
+              ? '当前：引擎执红（红方朝下）\n点击切换为引擎执黑'
+              : '当前：引擎执黑（黑方朝下）\n点击切换为引擎执红'
+          }
+          aria-label={`切换执子方，当前引擎执${isEngineRed ? '红' : '黑'}`}
+        >
+          <span className={`engine-side-disc side-${game.engine_side}`} aria-hidden="true">
+            {isEngineRed ? '帅' : '将'}
+          </span>
+          <span className="engine-side-name">
+            引擎执{isEngineRed ? '红' : '黑'}
+          </span>
+          <span className="engine-side-switch" aria-hidden="true">
+            ⇄
+          </span>
+        </button>
       </div>
 
       <div className="topbar-actions">
