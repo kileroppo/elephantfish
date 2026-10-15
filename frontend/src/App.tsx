@@ -11,8 +11,12 @@ import { useGame } from './hooks/useGame'
 import { isSoundEnabled, play, setSoundEnabled, unlockAudio } from './lib/sound'
 import { sideName } from './lib/format'
 import { useSetupMode } from './hooks/useSetupMode'
+import { useExitPhase } from './hooks/useExitPhase'
 
 const LS_FLIP = 'ef.flipped'
+/** 翻转视角：动画总长，以及「在动画最窄处换视角」的那个时刻。见 App 里的 turnBoard。 */
+const FLIP_TOTAL_MS = 340
+const FLIP_MID_MS = 150
 const LS_SOUND = 'ef.sound'
 const LS_RAIL_L = 'ef.rail-left'
 const LS_RAIL_R = 'ef.rail-right'
@@ -65,6 +69,39 @@ export default function App() {
     localStorage.setItem(LS_FLIP, flipped ? '1' : '0')
   }, [flipped])
 
+  // 翻转视角：不直接换 state，而是「收窄 → 换 → 展开」三段。
+  // 直接换的话，盘面（连同 32 颗子和所有标记）是「唰」地镜像过去 —— 全站唯一
+  // 一处纯切的硬边。换个视角本来就有方向感（我是想从对面看棋），把它演出来才对。
+  // 时序：0ms 起播收窄，FLIP_MID 落在动画最窄那一段里，那时才真的换视角，
+  // 于是「镜像」这个跳变被藏在盘面几乎看不见宽度的两帧里。
+  const [flipping, setFlipping] = useState(false)
+  const flipMid = useRef<number | null>(null)
+  const flipEnd = useRef<number | null>(null)
+  const flippedRef = useRef(flipped)
+  flippedRef.current = flipped
+
+  useEffect(
+    () => () => {
+      if (flipMid.current !== null) window.clearTimeout(flipMid.current)
+      if (flipEnd.current !== null) window.clearTimeout(flipEnd.current)
+    },
+    [],
+  )
+
+  const turnBoard = useCallback(() => {
+    // 转到一半又按：等这一转演完，不叠第二段（叠起来只会自己打断自己）
+    if (flipMid.current !== null) return
+    setFlipping(true)
+    flipMid.current = window.setTimeout(() => {
+      flipMid.current = null
+      setFlipped(!flippedRef.current)
+    }, FLIP_MID_MS)
+    flipEnd.current = window.setTimeout(() => {
+      flipEnd.current = null
+      setFlipping(false)
+    }, FLIP_TOTAL_MS)
+  }, [])
+
   useEffect(() => {
     localStorage.setItem(LS_RAIL_L, railL ? '1' : '0')
   }, [railL])
@@ -87,6 +124,8 @@ export default function App() {
   // 终局弹窗延迟 3 秒弹出：给最后一手杀棋、吃子动画和盘面定格留出 3 秒充足时间看清走子
   const [showOverModal, setShowOverModal] = useState(false)
   const [dismissedOver, setDismissedOver] = useState(false)
+  // 终局弹窗的退场：收起时不能一帧摘掉，得让「收」这件事也被看见
+  const [overMounted, overLeaving] = useExitPhase(showOverModal && !dismissedOver && !setup.active)
   const isPlaying = game?.status.state === 'playing'
 
   useEffect(() => {
@@ -164,7 +203,7 @@ export default function App() {
         return
       }
       if (e.key === 'f' || e.key === 'F') {
-        setFlipped((v) => !v)
+        turnBoard()
         return
       }
       if (e.key === '?' || (e.shiftKey && e.key === '/')) {
@@ -178,7 +217,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [g, game, handleNewGame])
+  }, [g, game, handleNewGame, turnBoard])
 
   const onToggleEngineSide = useCallback(() => {
     if (setup.active) {
@@ -247,7 +286,7 @@ export default function App() {
           void g.updateSettings({ engine_type: next })
         }}
         onToggleEngineSide={onToggleEngineSide}
-        onFlip={() => setFlipped((v) => !v)}
+        onFlip={turnBoard}
         onToggleSound={() => setSoundOn((v) => !v)}
         onHelp={() => setHelp(true)}
         onRefresh={() => void g.refresh()}
@@ -311,7 +350,8 @@ export default function App() {
                  类名归样式所有，随时可能改，所以断言读这个 data-*。 */
               data-turn-badge=""
             >
-              <span className="turn-disc" />
+              {/* key=game.turn：每易手一次圆点重挂载，播一次 discPop 脉搏 */}
+              <span key={game.turn} className="turn-disc" />
               {/* key = 文案本身：换一次状态，文字就淡入一次；文案不变时不打扰 */}
               <span key={turnText} className="turn-text">
                 {turnText}
@@ -328,6 +368,7 @@ export default function App() {
             <Board
               game={game}
               flipped={flipped}
+              flipping={flipping}
               thinking={g.thinking}
               pv={g.thinking && !setup.active ? (g.task?.progress?.pv ?? []) : []}
               onMove={onBoardMove}
@@ -340,8 +381,12 @@ export default function App() {
               onSetupPieceRemove={setup.removePiece}
               onSetupPickBoardSquare={setup.pickSquare}
             />
-            {showOverModal && !dismissedOver && !setup.active && (
-              <div className={`result-veil winner-${game.status.winner ?? 'none'}`}>
+            {overMounted && (
+              <div
+                className={`result-veil winner-${game.status.winner ?? 'none'}${
+                  overLeaving ? ' is-leaving' : ''
+                }`}
+              >
                 <div className="seal" aria-hidden="true">
                   <span>{game.status.winner === null ? '和' : '胜'}</span>
                 </div>
@@ -442,7 +487,9 @@ export default function App() {
       </main>
 
       <Toasts items={g.toasts} onDismiss={g.dismissToast} />
-      {help && <HelpOverlay onClose={() => setHelp(false)} />}
+      {/* 常挂：开与关都交给它自己（关掉时还要多活 180ms 播退场），
+          见 hooks/useExitPhase */}
+      <HelpOverlay open={help} onClose={() => setHelp(false)} />
       {!isSoundEnabled() && soundOn && (
         <span className="sr-only">音效已启用，等待首次交互解锁</span>
       )}

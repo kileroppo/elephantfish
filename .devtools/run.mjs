@@ -22,7 +22,10 @@ import { dirname, join, resolve } from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
 const PYTHON = process.env.EF_PYTHON || 'python'
-const CHECKS = ['audit.mjs', 'drag.mjs', 'kbd.mjs', 'frames.mjs', 'glide.mjs']
+// motion.mjs 守的是「动效还在不在」：编排成不成序列、悬停/按压有没有反馈、
+// 有没有退化成 transition:all、reduced-motion 有没有真的压住。它坏掉时页面照样
+// 能下棋，前面几套几何/位移断言一条都不会红 —— 所以它是独立的一票。
+const CHECKS = ['audit.mjs', 'drag.mjs', 'kbd.mjs', 'frames.mjs', 'glide.mjs', 'motion.mjs']
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`)

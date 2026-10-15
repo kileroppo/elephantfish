@@ -313,6 +313,36 @@ kbd {
 }
 
 /* ==========================================================================
+   页面开场编排
+   --------------------------------------------------------------------------
+   加载不是「啪」地全亮：顶栏先落定，回合条跟进，棋盘压轴升起（boardIn
+   自带 220ms 延迟，见「棋盘」一节），棋子再按波次逐颗落盘（波次由
+   Board.tsx 用 --enter-delay 排，见「棋子」一节）。
+   全长约 1.2s，之后界面进入稳态 —— 编排只属于开场，不打扰对局。
+   侧栏面板不参与：它们常驻挂载，入场会对着看不见的栏白放（见 .rail 段）。 */
+.topbar {
+  animation: topbarIn 480ms var(--ease-enter) both;
+}
+
+@keyframes topbarIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+.stage-head {
+  animation: stageHeadIn 420ms var(--ease-enter) 140ms both;
+}
+
+@keyframes stageHeadIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ==========================================================================
    顶栏
    ========================================================================== */
 
@@ -431,7 +461,10 @@ kbd {
   border: 1.5px solid var(--cinnabar-edge);
   background: var(--paper-0);
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-out);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
   animation: stampIn 260ms var(--ease-spring) both;
 }
 
@@ -477,7 +510,8 @@ kbd {
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--paper-2);
-  transition: all var(--dur-fast) var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 
 .hero-copy-icon {
@@ -532,7 +566,9 @@ kbd {
   /* 同上：点击目标撑到 32px */
   min-height: 32px;
   padding: 3px 12px;
-  transition: all var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 
 .type-toggle-btn kbd {
@@ -635,7 +671,11 @@ kbd {
   background: rgba(120, 120, 120, 0.1);
   color: var(--ink-2);
   border: 1px solid var(--hairline-strong);
-  transition: all var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
   animation: fadeIn 220ms var(--ease-out) both;
 }
 
@@ -653,7 +693,7 @@ kbd {
 }
 
 .engine-badge.is-clickable:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.96);
 }
 
 .engine-badge-icon {
@@ -700,7 +740,11 @@ kbd {
   background: rgba(120, 120, 120, 0.08);
   color: var(--ink-2);
   border: 1px solid var(--hairline-strong);
-  transition: all var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
   cursor: pointer;
   user-select: none;
   animation: fadeIn 220ms var(--ease-out) both;
@@ -715,7 +759,7 @@ kbd {
 }
 
 .engine-side-badge:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.96);
 }
 
 .engine-side-disc {
@@ -832,13 +876,21 @@ kbd {
   font: inherit;
   font-size: 12.5px;
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
 }
 
 .icon-btn:hover {
   color: var(--ink-0);
   background: var(--paper-2);
   border-color: var(--hairline);
+}
+
+/* 按下去要「陷」一下：90ms 内缩到 .93，松手由同一条过渡弹回 */
+.icon-btn:active {
+  transform: scale(0.93);
 }
 
 .icon-btn.warn {
@@ -940,7 +992,14 @@ kbd {
   font-size: 13px;
   letter-spacing: 0.04em;
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-out);
+  /* 以前这里是一条 transition:all —— 思考一开始禁用态跟着 opacity 一起淡变，
+     状态该是「切」不是「渐」（.app.is-thinking 那段不得不专门去关它）。
+     显式列出属性后，那段特赦仍然保留：它关的是所有过渡的「动」，没错。 */
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
 }
 
 .btn:hover:not(:disabled) {
@@ -950,7 +1009,7 @@ kbd {
 }
 
 .btn:active:not(:disabled) {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.97);
 }
 
 .btn:disabled {
@@ -1011,7 +1070,14 @@ kbd {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: all var(--dur) var(--ease-out);
+  transition: color var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
+}
+
+.seg:active {
+  transform: scale(0.97);
 }
 
 .seg-disc {
@@ -1019,6 +1085,12 @@ kbd {
   height: 12px;
   border-radius: 50%;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  /* 选中那一侧的小圆点微微鼓起 —— 「是我」这件事让形状也说话 */
+  transition: transform var(--dur-fast) var(--ease-spring-sm);
+}
+
+.seg.is-on .seg-disc {
+  transform: scale(1.2);
 }
 .seg-red .seg-disc {
   background: var(--piece-red);
@@ -1049,12 +1121,19 @@ kbd {
   font: inherit;
   font-size: 12px;
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
 }
 
 .preset:hover {
   border-color: var(--ink-4);
   color: var(--ink-1);
+}
+
+.preset:active {
+  transform: scale(0.96);
 }
 
 .preset.is-on {
@@ -1126,7 +1205,10 @@ kbd {
   border: 1px solid var(--hairline);
   box-shadow: var(--shadow-panel);
   min-width: 232px;
-  transition: all var(--dur) var(--ease-out);
+  transition: background var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
 }
 
 .turn-badge.is-engine {
@@ -1147,6 +1229,15 @@ kbd {
   height: 10px;
   border-radius: 50%;
   transition: background-color var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-spring);
+  /* key=game.turn（App.tsx）：每易手一次圆点重新挂载，从 .4 弹回 1 ——
+     「轮到你了」不靠颜色突变，靠这一下脉搏 */
+  animation: discPop 240ms var(--ease-spring-sm) both;
+}
+
+@keyframes discPop {
+  from {
+    transform: scale(0.4);
+  }
 }
 .turn-badge.side-red .turn-disc {
   background: var(--piece-red);
@@ -1203,7 +1294,11 @@ kbd {
   box-shadow: calc(1px * var(--light-x)) 1px 1px rgba(58, 41, 18, 0.26),
     calc(3px * var(--light-x)) 3px 8px -3px rgba(58, 41, 18, 0.3),
     calc(26px * var(--light-x)) 26px 54px -22px rgba(58, 41, 18, 0.45);
-  animation: boardIn 620ms var(--ease-out) both;
+  /* 开场编排的压轴：顶栏与回合条落定之后才升起（延迟 180ms），
+     曲线用 enter —— 尾段极长的减速让棋盘「放」在桌上，不是「滑」到桌上。
+     时长 520ms：与棋子落盘那条线（180 + 波次 + 340 ≈ 950ms）并行，
+     开场压轴由落盘那条线定，整段不到 1s。 */
+  animation: boardIn 520ms var(--ease-enter) 180ms both;
 }
 
 /* 棋盘垫：比棋盘大一圈的圆角面，给三层投影一个承接面 ——
@@ -1254,6 +1349,33 @@ kbd {
     inset 0 0 calc(var(--u) * 7px) rgba(58, 41, 18, 0.13);
   z-index: 5;
   pointer-events: none;
+}
+
+/* 翻转视角：盘面先收窄、在最窄处换视角、再展开。
+   直接换视角的话，盘面连同 32 颗子和所有标记是「唰」地镜像过去 —— 全站唯一一处
+   纯切的硬边。中间 40%~58% 留一个平口，那就是换视角的窗口（App 的 turnBoard 在
+   150ms 处换 state，正好落在平口里），镜像这个跳变于是被藏进「几乎看不见宽度」
+   的两帧。两段缓动不同：收窄干脆（--ease-out），展开拖一条长尾（--ease-enter），
+   像一张牌被翻过来之后「放」回桌上。 */
+.board-surface.is-flipping {
+  animation: boardTurn 340ms linear both;
+}
+
+@keyframes boardTurn {
+  0% {
+    transform: scaleX(1);
+    animation-timing-function: var(--ease-out);
+  }
+  40% {
+    transform: scaleX(0.88);
+  }
+  58% {
+    transform: scaleX(0.88);
+    animation-timing-function: var(--ease-enter);
+  }
+  100% {
+    transform: scaleX(1);
+  }
 }
 
 /* 拖动中的整个棋盘：光标收紧，手机端也由子元素接管手势 */
@@ -1316,6 +1438,26 @@ kbd {
   transition: transform var(--glide-dur) var(--ease-move);
   will-change: transform;
   z-index: 20;
+}
+
+/* 开场落盘：首渲染时 Board 给每颗子挂上 is-entering + --enter-delay
+  （按板面波次：从近端一行行向远端落，像摆子）。播完类摘除，之后悔棋 /
+   重开 / 载入都不再播 —— 那些是「局面被换掉」，不是「开场」。 */
+.piece.is-entering {
+  /* 180ms 是基础延迟：等棋盘升起再落子，不然棋子会在一块还没出现的板上落。
+     波次 delay 由 Board.tsx 用 --enter-delay 叠在它上面。 */
+  animation: pieceEnter 340ms var(--ease-enter)
+    calc(180ms + var(--enter-delay, 0ms)) both;
+}
+
+/* 基座是 --piece-base：定位在 transform 里，keyframes 必须从它出发，
+   写死 translate(-50%,-50%) 会把棋子送回棋盘左上角（踩过，见 knockback 段）。
+   opacity 挂在 .piece 上：整颗子（含接触影伪元素）一起淡入。 */
+@keyframes pieceEnter {
+  from {
+    opacity: 0;
+    transform: var(--piece-base) translateY(calc(var(--u) * -16px)) scale(0.9);
+  }
 }
 
 /* 落子涟漪：只在 is-impact 那一瞬间存在的一圈扩散环。
@@ -1392,6 +1534,9 @@ kbd {
   width: 100%;
   height: 100%;
   border-radius: 50%;
+  /* 选中 / 悬停 / 拖起的缩放都走这条微回弹 —— 以前没有它，
+     is-selected 的 scale(1.03) 是硬切，拿起放下一卡一卡的 */
+  transition: transform var(--dur-fast) var(--ease-spring-sm);
   background:
     /* 抛光光泽带：一道宽的、**不周期**的高光弧（替掉那条亚像素年轮纹） */
     radial-gradient(
@@ -1531,6 +1676,18 @@ kbd {
 .piece.is-selected::after {
   transform: translate(calc(var(--u) * 12px * var(--light-x)), calc(var(--u) * 12px)) scale(0.94);
   opacity: 0.8;
+}
+
+/* 可走棋子的悬停预告：指尖还没点下去，棋子先轻轻欠身 ——
+   「我可以走」这件事不用等选中才知道。幅度压得很小（2.5px），
+   只给欠身不给抬升；真正的抬升是选中那一刻的事。 */
+.piece.is-grabbable:not(.is-selected):not(.dragging):hover .piece-face {
+  transform: translateY(calc(var(--u) * -2.5px)) scale(1.025);
+}
+
+.piece.is-grabbable:not(.is-selected):not(.dragging):hover::after {
+  transform: translate(calc(var(--u) * 7px * var(--light-x)), calc(var(--u) * 7px))
+    scale(0.97);
 }
 
 /* 被将军：盘面上那圈朱砂。用 --face-shadow 打底再叠两层，不整体覆盖 ——
@@ -1686,7 +1843,9 @@ kbd {
   place-items: center;
   pointer-events: none;
   z-index: 15;
-  animation: pop 240ms var(--ease-spring) both;
+  /* 可走点不是「唰」地一起冒出来：--i 是它在这一手里的序号（Board.tsx 给），
+     每颗晚 18ms 出现，从选中那颗向外一圈圈荡开 */
+  animation: pop 240ms var(--ease-spring) calc(var(--i, 0) * 18ms) both;
   transition: opacity var(--dur-fast) var(--ease-out),
     filter var(--dur-fast) var(--ease-out);
 }
@@ -2172,6 +2331,40 @@ kbd {
   }
 }
 
+/* 终局这一层的退场：面纱自己先淡掉，印章与卡片各自「收回去」——
+   印章是抬起来（-6px）离开，卡片往回沉，两件东西不同步才像有人来收场 */
+.result-veil.is-leaving {
+  animation: veilLift 220ms var(--ease-out) both;
+}
+
+.result-veil.is-leaving .seal {
+  animation: sealLift 220ms var(--ease-out) both;
+}
+
+.result-veil.is-leaving .result-card {
+  animation: sheetOut 220ms var(--ease-out) both;
+}
+
+@keyframes veilLift {
+  to {
+    background: rgba(247, 242, 232, 0);
+    backdrop-filter: blur(0);
+  }
+}
+
+@keyframes sealLift {
+  /* from 必须写死：这条动画全会替换掉 sealDrop，不写 from 的话印章会先
+     弹回「没转过」的正位再抬起来 —— 一个 220ms 的动画里闪一下最扎眼 */
+  from {
+    opacity: 1;
+    transform: translateX(-50%) scale(1) rotate(-4deg);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -10px) scale(1.06) rotate(-4deg);
+  }
+}
+
 /* 印章：橙色方章 + 阴刻字，纯 CSS。从上方盖下，落定回弹，
    ::after 是盖章那一下的墨渍扩散环 */
 .seal {
@@ -2256,7 +2449,7 @@ kbd {
   background: var(--paper-0);
   border: 1px solid var(--hairline);
   box-shadow: var(--shadow-float);
-  animation: rise 360ms var(--ease-out) both;
+  animation: sheetIn 400ms var(--ease-spring-sm) both;
 }
 
 .modal-close-btn {
@@ -2270,7 +2463,8 @@ kbd {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: var(--r-sm);
-  transition: all var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 
 .modal-close-btn:hover {
@@ -3035,7 +3229,42 @@ kbd {
   border-radius: var(--r-xl);
   background: var(--paper-0);
   box-shadow: var(--shadow-float);
-  animation: rise 320ms var(--ease-out) both;
+  /* 弹层不是「升上来」，是「落到眼前」：上移 + 轻缩 + 微回弹，
+     比单纯的 rise 多一层「有质量的东西停住了」的手感 */
+  animation: sheetIn 400ms var(--ease-spring-sm) both;
+}
+
+@keyframes sheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.965);
+  }
+}
+
+/* 退场：关掉时不能一帧消失。
+   有入场编舞却一刀切地关，手感是不对等的 —— 这一下「收」要更快（180ms）、
+   方向相反（往回沉一点、再收小一点），像把纸片放回桌上。
+   指针事件在退场期间就掐掉，免得点到正在淡出的层。 */
+.overlay.is-leaving {
+  animation: fadeOut 180ms var(--ease-out) both;
+  pointer-events: none;
+}
+
+.sheet.is-leaving {
+  animation: sheetOut 180ms var(--ease-out) both;
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sheetOut {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
 }
 
 .sheet-head {
@@ -3334,6 +3563,10 @@ kbd {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
+    /* delay 也得压掉：开场编排的 --stagger 与逐颗 --enter-delay 是
+       animation-delay，只压 duration 的话用户还是要干等编排跑完 */
+    animation-delay: 1ms !important;
+    transition-delay: 1ms !important;
   }
 }
 
@@ -3341,6 +3574,15 @@ kbd {
   outline: 2px solid var(--cinnabar);
   outline-offset: 2px;
   border-radius: 4px;
+  /* 焦点环「贴上去」而不是「跳出来」：offset 由远及近，键盘走子时视线跟得上。
+     起点写在同一条规则外的 `*` 上 —— 过渡要有个「从哪来」的值才播得出来。 */
+  transition: outline-offset var(--dur-xs) var(--ease-out);
+}
+
+/* 非焦点态的起点：6px。outline 本身只在 focus-visible 时才画，
+   所以这条平时看不见，只用来给上面那条过渡一个出发点。 */
+:not(:focus-visible) {
+  outline-offset: 6px;
 }
 
 /* ==========================================================================
@@ -3515,7 +3757,8 @@ kbd {
   padding: 3px 5px;
   border-radius: var(--r-md);
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
 .tray-piece-circle {
@@ -3745,11 +3988,18 @@ kbd {
   color: var(--ink-2);
   border-radius: calc(var(--r-sm) - 2px);
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
 }
 
 .seg-btn:hover {
   color: var(--ink-0);
+}
+
+.seg-btn:active {
+  transform: scale(0.95);
 }
 
 .seg-btn.is-active {

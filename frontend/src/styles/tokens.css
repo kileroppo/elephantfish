@@ -114,25 +114,42 @@
   --trail-black: rgba(34, 29, 24, 0.30);
   --trail-black-fade: rgba(34, 29, 24, 0.05);
 
-  /* ---- 动效 ---- */
+  /* ---- 动效 ----
+     缓动分级（一条曲线打天下的时代结束了）：
+       enter  「出现」：起步快、尾段极长的减速 —— 入场与浮现都用它
+       exit   「消失」：起步即加速，退场不该让人等
+       out    通用状态切换（颜色、透明度）
+       move   位移：纯减速，**不回弹**。棋子是「稳重」的东西，位移动画
+              带回弹会立刻变塑料球。见 app.css 的 .piece 段。
+       land   落子：只在触盘那一下给一次极小的压实回弹
+       spring 明显的回弹：toast、盖印这类有仪式感的瞬间
+       spring-sm 微回弹：按压回弹、选中缩放这类「手感」层，幅度克制 */
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.55, 0, 0.55, 0.2);
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --ease-spring: cubic-bezier(0.34, 1.32, 0.46, 1);
-  /* 位移：纯减速，**不回弹**。棋子是「稳重」的东西，位移动画带回弹会立刻
-     变塑料球。缓动分级这一点见 app.css 的 .piece 段。 */
   --ease-move: cubic-bezier(0.22, 0.61, 0.36, 1);
-  /* 落子：只在触盘那一下给一次极小的压实回弹 */
   --ease-land: cubic-bezier(0.34, 1.28, 0.42, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.46, 1);
+  --ease-spring-sm: cubic-bezier(0.3, 1.3, 0.44, 1);
+
+  /* 时长分级：xs=按压反馈，fast=微交互，dur=状态切换，slow=入场，xl=编排段 */
+  --dur-xs: 90ms;
   --dur-fast: 140ms;
   --dur: 220ms;
   --dur-slow: 380ms;
+  --dur-xl: 560ms;
+  /* 入场编排：相邻两件出场的时间间隔 */
+  --stagger: 36ms;
 
   color-scheme: light;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
+    --dur-xs: 1ms;
     --dur-fast: 1ms;
     --dur: 1ms;
     --dur-slow: 1ms;
+    --dur-xl: 1ms;
   }
 }

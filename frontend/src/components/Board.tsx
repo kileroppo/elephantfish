@@ -60,6 +60,8 @@ interface BoardProps {
   onSetupPieceMove?: (from: string, to: string) => void
   onSetupPieceRemove?: (square: string) => void
   onSetupPickBoardSquare?: (square: string | null) => void
+  /** 正在翻转视角（「收窄 → 换 → 展开」这一段的头尾）。见 App 里的 turnBoard。 */
+  flipping?: boolean
 }
 
 export function Board({
@@ -68,6 +70,7 @@ export function Board({
   thinking,
   pv = [],
   onMove,
+  flipping = false,
   setupMode = false,
   setupPieces,
   selectedTrayPiece = null,
@@ -130,6 +133,15 @@ export function Board({
    *  就晚了（那时 CSS 里元素的起点已经是终点了）。这里**只写不消费**，幂等 ——
    *  StrictMode 下渲染函数被调两遍，也只是把同一个值写两遍，没有副作用。 */
   const glideRef = useRef(new Map<number, number>())
+
+  // 开场落盘只播一次：首渲染时全员带 is-entering（--enter-delay 按板面波次
+  // 逐颗排开），挂载后立刻记下「已开过场」。ref 变化不触发重渲染，类会留到
+  // 下一次渲染才摘 —— 那时动画早已播完（fill both 的终态就是正常态），无影响。
+  // 之后悔棋 / 重开 / 载入整盘换位置都不再播：那些是「局面被换掉」，不是开场。
+  const bootedRef = useRef(false)
+  useEffect(() => {
+    bootedRef.current = true
+  }, [])
 
   // 正在播落子反馈的那颗子。**一次性**的：挂上去、到点自己摘。
   // 以前这件事靠 `.piece.is-landing` 这个**持久**类 + `.piece-face` 上 key 的变化
@@ -618,7 +630,7 @@ export function Board({
   return (
     <div className={`board ${thinking ? 'is-thinking' : ''} ${setupMode ? 'is-setup' : ''}`}>
       <div
-        className={`board-surface ${drag ? 'is-dragging' : ''}`}
+        className={`board-surface ${drag ? 'is-dragging' : ''} ${flipping ? 'is-flipping' : ''}`}
         ref={surfaceRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -669,7 +681,7 @@ export function Board({
           })}
 
         {/* 可走点位 */}
-        {targets.map((sq) => {
+        {targets.map((sq, i) => {
           const { file, rank } = parseSquare(sq)
           const { x, y } = toPercent(file, rank, flipped)
           const occupied = game.pieces.some((p) => p.square === sq)
@@ -683,7 +695,8 @@ export function Board({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              style={{ left: `${x}%`, top: `${y}%` }}
+              /* --i：可走点出场的序号，CSS 拿它排 18ms 一档的波次 */
+              style={{ left: `${x}%`, top: `${y}%`, '--i': i } as CSSProperties}
               data-target=""
               data-square={sq}
               data-over={dragSquare === sq ? 'true' : 'false'}
@@ -893,6 +906,13 @@ export function Board({
              服务端够快时「确认」会在同一帧里把时长改回 0，过渡根本起不来。 */
           const wait = glideRef.current.get(p.id) ?? 0
 
+          /* 开场波次：从近端一行行向远端落（displayRow 0 = 最底行），
+             行间 44ms、行内每颗 4ms —— 最后一颗的 delay 约 430ms，
+             加上 CSS 里那 180ms 基础延迟与 340ms 落定，整段开场不到 1s。
+             只在首渲染给值；booted 之后恒 0，重开 / 悔棋都不再编排。 */
+          const displayRow = flipped ? rank : 9 - rank
+          const enterDelay = bootedRef.current ? 0 : displayRow * 44 + file * 4
+
           const canGrab =
             setupMode || (!thinking && game.status.state === 'playing' && p.side === game.turn)
 
@@ -908,6 +928,7 @@ export function Board({
                 isDragging ? 'dragging' : '',
                 canGrab ? 'is-grabbable' : '',
                 impactId === p.id ? 'is-impact' : '',
+                enterDelay > 0 || !bootedRef.current ? 'is-entering' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -916,6 +937,7 @@ export function Board({
                   '--cx': `${cx}px`,
                   '--cy': `${cy}px`,
                   '--glide-dur': `${wait}ms`,
+                  '--enter-delay': `${enterDelay}ms`,
                 } as CSSProperties
               }
               aria-label={`${p.side === 'red' ? '红' : '黑'}${p.glyph}于 ${effectiveSquare}`}

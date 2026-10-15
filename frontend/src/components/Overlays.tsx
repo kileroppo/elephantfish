@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useExitPhase } from '../hooks/useExitPhase'
 import type { Toast } from '../hooks/useGame'
 
 export function Toasts({
@@ -37,18 +38,28 @@ const SHORTCUTS: { keys: string; what: string }[] = [
   { keys: '/', what: '聚焦到录入框' },
 ]
 
-export function HelpOverlay({ onClose }: { onClose: () => void }) {
+export function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [mounted, leaving] = useExitPhase(open)
+
   useEffect(() => {
+    if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [open, onClose])
+
+  if (!mounted) return null
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+    <div className={`overlay${leaving ? ' is-leaving' : ''}`} onClick={onClose}>
+      <div
+        className={`sheet${leaving ? ' is-leaving' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <header className="sheet-head">
           <h2>这台软件怎么用</h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
