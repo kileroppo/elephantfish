@@ -387,6 +387,27 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* 思考一开，底色与描边要「染」过去，不是「跳」过去 ——
+     状态切换本身是界面在应答，不该是硬切 */
+  transition: background-color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+
+/* 应手区三态（等待 / 思考 / 应手）互换时的入场。这条链是
+   「你录了 → 它在算 → 它给了」的应答，入场就是它自己的反馈：
+   200ms 淡入带一点上浮，只播一次、不循环 —— 「思考期间全站停摆」
+   管的是自己会动的东西（呼吸、旋转、数值滑动），不是状态换的那一帧。 */
+.hero-thinking,
+.hero-content,
+.hero-idle {
+  animation: heroSwap 200ms var(--ease-out) both;
+}
+
+@keyframes heroSwap {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
 .engine-hero.is-thinking {
@@ -546,6 +567,8 @@ kbd {
   background: var(--paper-2);
   font-size: 12px;
   color: var(--ink-2);
+  /* 排队条从应手区下面「长」出来，不是闪现 */
+  animation: rise 200ms var(--ease-out) both;
 }
 
 .type-toggle-bar {
@@ -569,6 +592,8 @@ kbd {
   transition: color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
     background var(--dur-fast) var(--ease-out);
+  /* 收起录入栏时这个按钮会重新挂载 —— 回来也得是淡入，不能闪回来 */
+  animation: fadeIn 180ms var(--ease-out) both;
 }
 
 .type-toggle-btn kbd {

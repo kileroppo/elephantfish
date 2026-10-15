@@ -5,7 +5,7 @@
 // 五套既有的自检（几何 / 拖拽 / 键盘 / 位移机制 / 滑行）会全绿，于是没人知道
 // 手感已经没了。这一套专守「动效还在不在、编排还成不成序列」。
 //
-// 十一条断言，各守一件事：
+// 十三条断言，各守一件事：
 //   1 开场编排成序列     顶栏 → 回合条 → 棋盘，animation-delay 必须递增
 //   2 棋子落盘成波次     pieceEnter 的 delay 至少 3 个不同值，最大 ≤ 700ms
 //   3 悬停预告           可走的棋子悬停时盘面真的欠身（face 的 translateY 上移）
@@ -16,10 +16,13 @@
 //   8 可走点成波次       选中后 3 枚以上可走点的 delay 不能是同一个值
 //   9 弹层退场           关掉之后还带 is-leaving 多活一程（真播退场动画），随后卸载
 //  10 翻转视角           盘面真的收窄过，且**换视角那一下发生在最窄处**（换早了还是硬切）
-//  11 开场不掉帧         开场编排播放期的 rAF 帧间隔 p50 与最长帧都要站得住
+//  11 应手区换态         等待/思考/应手三态挂载都播 heroSwap，底色变化是过渡不是瞬跳
+//  12 落笔反馈           录一手之后：应手卡 stampIn、应手区 heroSwap、棋谱最新一手 stampIn
+//  13 开场不掉帧         开场编排播放期的 rAF 帧间隔 p50 与最长帧都要站得住
 //
-// 牙齿检验（--teeth）：注入一段 CSS 把开场编排、弹层退场与翻转视角一起关掉
-// （animation:none），第 1、2、7、9、10 条必须红 —— 证明它们盯的是真东西，不是摆设。
+// 牙齿检验（--teeth）：注入一段 CSS 把开场编排、弹层退场、翻转视角与应手区入场
+// 一起关掉（animation:none），第 1、2、7、9、10、11、12 条必须红 ——
+// 证明它们盯的是真东西，不是摆设。
 //
 //   node motion.mjs [url] [--teeth]
 
@@ -27,7 +30,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
-import { urlFromArgv, openBrowser, waitIdle } from './_contract.mjs'
+import { urlFromArgv, openBrowser, waitIdle, typeMove, reset } from './_contract.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const url = urlFromArgv(process.argv)
@@ -49,13 +52,25 @@ if (teeth) {
       s.textContent =
         '.topbar,.stage-head,.board,.piece{animation:none!important}' +
         '.board-surface.is-flipping{animation:none!important}' +
-        '.overlay.is-leaving,.sheet.is-leaving,.result-veil.is-leaving{animation:none!important}'
+        '.overlay.is-leaving,.sheet.is-leaving,.result-veil.is-leaving{animation:none!important}' +
+        '.hero-thinking,.hero-content,.hero-idle,.hero-action-card,.move-cell.is-last{animation:none!important}'
       document.head.appendChild(s)
     }
     if (document.head) kill()
     else document.addEventListener('DOMContentLoaded', kill)
   })
 }
+
+// 起手先把局面复位：服务端的棋是**持久**的，上一轮跑到将死就停在那儿 ——
+// 那时「找不到可走的棋子 / legal_moves 为空」全是假红，跟动效一点关系没有。
+// 必须在 goto 之前做（走 Node 侧 fetch，about:blank 上发不了相对请求）；
+// 在页面里 reset 的话，这一页的开场演的是旧局面，复位触发的重渲染又把
+// bootedRef 置位了，第 2 条「落盘成波次」从此再也量不到。
+await fetch(new URL('/api/new', url), {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ engine_side: 'red', think_ms: 900 }),
+}).catch(() => {})
 
 // -------------------- 1 / 2 / 7：开场编排 -------------------- //
 // 边加载边抓：pieceEnter 是一次性动画，等页面稳了再读就只剩 none（类已被摘）。
@@ -135,6 +150,9 @@ else if (tail < 300)
 else ok(`开场压轴 ${Math.round(tail)}ms ≤ 1200ms（棋盘段 ${Math.round(boardTotal)} · 落盘段 ${Math.round(pieceTotal)}）`)
 
 // -------------------- 3：可走棋子的悬停预告 -------------------- //
+// 开场是引擎先手（reset 时 engine_side:'red'），必须等它思考完、真正轮到人，
+// 盘上才会有 is-grabbable 的子 —— 不等的话量到的是「引擎思考中」的假空盘。
+await waitIdle(page)
 const piece = page.locator('.piece.is-grabbable').first()
 const pieceCount = await piece.count()
 if (pieceCount === 0) {
@@ -159,13 +177,18 @@ if (pieceCount === 0) {
 }
 
 // -------------------- 4：按钮按压反馈 -------------------- //
-// 只挑**可见**的按钮：侧栏收起时里面的 .btn 仍在 DOM 里，但它们 visibility:hidden，
-// 鼠标压根命中不到，:hover/:active 都不生效 —— 量出来会是一副「按压没做」的假象。
-let btn = page.locator('.btn:not(:disabled):visible').first()
-let kind = '.btn'
+// 挑控件有两条教训：
+//  · 侧栏收起时里面的 .btn 仍在 DOM 里，但 visibility:hidden，鼠标命中不到，
+//    :hover/:active 都不生效 —— 量出来是一副「按压没做」的假象。
+//  · 引擎思考时的「采用当前最优步」是**过客**：引擎一落子它就卸载。
+//    count() 时它还在、evaluate() 时就没了，撞出 30s 超时。
+// 所以先等引擎思考结束（轮到人），再挑**全程可见**的顶栏 icon-btn。
+await waitIdle(page)
+let btn = page.locator('.icon-btn:visible').first()
+let kind = '.icon-btn'
 if ((await btn.count()) === 0) {
-  btn = page.locator('.icon-btn:visible').first()
-  kind = '.icon-btn'
+  btn = page.locator('.btn:not(:disabled):visible').first()
+  kind = '.btn'
 }
 if ((await btn.count()) === 0) {
   bad('找不到可见的按钮，按压反馈无从验证')
@@ -377,7 +400,69 @@ if (pieceCount === 0) {
   }
 }
 
-// -------------------- 11：开场这段不掉帧 -------------------- //
+// -------------------- 11：应手区换态有入场 -------------------- //
+// 应手区是全站的「应答链」：等待 → 思考 → 应手，每换一次都是界面在回话。
+// 硬切的话这条链是哑的。守两件事：三态各自挂载时都播 heroSwap，
+// 以及底色的「染」是过渡（transition 里有 background-color）不是瞬跳。
+{
+  const hero = await page.evaluate(() => {
+    const box = document.querySelector('.engine-hero')
+    const inner = box?.querySelector('.hero-thinking, .hero-content, .hero-idle')
+    return {
+      tp: box ? getComputedStyle(box).transitionProperty : '',
+      state: inner ? inner.className.split(' ')[0] : null,
+      anim: inner ? getComputedStyle(inner).animationName : '',
+    }
+  })
+  if (!hero.state) {
+    bad('应手区三态一个都不在（hero-thinking / hero-content / hero-idle）—— 结构变了，断言要跟着改')
+  } else if (hero.anim !== 'heroSwap') {
+    bad(`应手区「${hero.state}」挂载时没有入场动画（animation-name = ${hero.anim || '空'}）—— 换态是硬切`)
+  } else if (!hero.tp.includes('background-color')) {
+    bad(`应手区底色没有过渡（transition-property = ${hero.tp}）—— 思考一开始底色是跳过去的`)
+  } else {
+    ok(`应手区换态  ${hero.state} 入场播 heroSwap · 底色走过渡`)
+  }
+}
+
+// -------------------- 12：录一手之后，应手与棋谱都「落笔」 -------------------- //
+// 走一手（走文本录入这条路，跟人一样），等引擎回完：
+// 应手卡要重新盖印（stampIn）、应手区整体要播换态入场（heroSwap）、
+// 棋谱里最新那一手要播盖印（stampIn 在 .move-cell.is-last 上）。
+{
+  const mv = await page.evaluate(async () => {
+    const st = await fetch('/api/state').then((r) => r.json())
+    return st.state?.game?.legal_moves?.[0]?.iccs ?? null
+  })
+  if (!mv) {
+    bad('读不到合法走法（legal_moves 为空）—— 没法录棋，这条无从验证')
+  } else {
+    await typeMove(page, mv)
+    await waitIdle(page)
+    await page.waitForSelector('.hero-action-card', { timeout: 15000 }).catch(() => {})
+    const after = await page.evaluate(() => {
+      const card = document.querySelector('.hero-action-card')
+      const content = document.querySelector('.hero-content')
+      const last = document.querySelector('.move-cell.is-last')
+      return {
+        card: card ? getComputedStyle(card).animationName : null,
+        content: content ? getComputedStyle(content).animationName : null,
+        last: last ? getComputedStyle(last).animationName : null,
+      }
+    })
+    const misses = []
+    if (after.card === null) misses.push('应手卡不在')
+    else if (!after.card.includes('stampIn')) misses.push(`应手卡没盖印（${after.card}）`)
+    if (after.content !== 'heroSwap') misses.push(`应手区没播换态入场（${after.content ?? '不在'}）`)
+    if (after.last !== 'stampIn') misses.push(`棋谱最新一手没盖印（${after.last ?? '不在'}）`)
+    if (misses.length) bad(`录完一手之后：${misses.join('；')}`)
+    else ok(`录一手  应手卡 stampIn · 应手区 heroSwap · 棋谱 is-last stampIn`)
+    // 别把这手棋留给别人：复位到初始局面，后面的采样与别的套件都按开局来
+    await reset(page)
+  }
+}
+
+// -------------------- 13：开场这段不掉帧 -------------------- //
 // 32 颗棋子同时落盘是整站最重的一帧序列。奖项级的底线不是「好看」而是
 // 「不卡」：这里拿开场 1.8s 里的 rAF 帧间隔说事 —— p50 与最长帧都要站得住。
 const perfCtx = await browser.newContext({ viewport: { width: 1600, height: 980 } })
@@ -432,7 +517,10 @@ if (frames.length < 30) {
 // -------------------- 汇总 -------------------- //
 console.log('='.repeat(64))
 console.log('  动效品质自检')
-if (teeth) console.log('  （--teeth：开场编排已人为关掉，第 1、2 条应当红）')
+if (teeth)
+  console.log(
+    '  （--teeth：动画已人为关掉，凡靠 animation 说事的断言——1/2/7/9/10/11/12——都应当红）',
+  )
 console.log('='.repeat(64))
 for (const line of notes) console.log(line)
 if (problems.length) {
