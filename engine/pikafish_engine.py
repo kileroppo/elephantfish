@@ -160,22 +160,47 @@ class PikafishEngine:
                     if not line or "readyok" in line:
                         break
 
+    def _kill_locked(self):
+        """丢掉当前子进程。调用方必须已持有 self.lock（quit 会自己拿锁，不能在这里调）。"""
+        proc, self.proc = self.proc, None
+        self._is_ready = False
+        if proc is None:
+            return
+        try:
+            if proc.poll() is None:
+                proc.kill()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=1.0)
+        except Exception:
+            pass
+
+    def _restart_locked(self):
+        """进程死了就换一个新的。上一轮把引擎弄崩之后，这一手是唯一的活路。"""
+        self._kill_locked()
+        self._ensure_proc()
+
     def quit(self):
         """退出引擎进程。"""
         with self.lock:
-            if self.proc is not None:
-                try:
-                    if self.proc.poll() is None:
-                        self._send("quit")
-                        self.proc.wait(timeout=1.0)
-                except Exception:
+            proc, self.proc = self.proc, None
+            self._is_ready = False
+            if proc is None:
+                return
+            try:
+                if proc.poll() is None:
                     try:
-                        self.proc.kill()
+                        proc.stdin.write("quit\n")
+                        proc.stdin.flush()
                     except Exception:
                         pass
-                finally:
-                    self.proc = None
-                    self._is_ready = False
+                    proc.wait(timeout=1.0)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
 
     def search(
         self,
@@ -186,22 +211,46 @@ class PikafishEngine:
         time_limit: float = 2.5,
         external_stop=None,
         start_fen: Optional[str] = None,
+        multipv: int = 1,
+        max_nodes: Optional[int] = None,
     ) -> Generator[Dict[str, Any], None, None]:
         """执行搜索并逐步 yield 每一层的评估结果。
 
-        yield 字段格式与 Searcher.search 保持一致：
+        ``max_nodes``：节点预算，发成 UCI 的 ``go nodes N``。对局度量只认这个
+        刻度 —— ``movetime`` 在同一台机器上会随负载漂 2~3 倍，跨机器更没法比，
+        拿它当预算等于把结果绑在「当时这台电脑忙不忙」上。给了预算时
+        ``time_limit`` 不取消，退化成看门狗（子进程卡死总得有个收手的钟）。
+
+        字段名与 ``Searcher.search`` 一致，**但「分」不是同一个单位**：
+        这里是 UCI 惯例的 centipawn（一兵 = 100），内置引擎是它自己价值表
+        的分（一兵 = 44）。折算成接缝唯一的单位由 ``engine._normalize``
+        完成，别在这里、更别在下游做任何一次「顺手除一下」。
+
             depth: 已完成搜索深度
             move: 绝对坐标走法 (from_idx, to_idx)
-            score: 侧方视角评分（正=对当前走子方有利，单位分）
+            score: 侧方视角评分，centipawn（正=对当前走子方有利）；杀棋时无意义
             mate: 是否杀棋
+            mate_in: 杀棋还有几步（非负）；None = 这不是杀棋
+            mate_sign: 杀棋方向（+1 走子方成杀 / -1 走子方被杀）
             nodes: 累计节点
             time: 耗时秒数
             nps: 每秒节点数
             pv: 主变绝对坐标列表 [(from, to), ...]
             pv_iccs: 主变 ICCS 走法列表 ['h2e2', ...]
+            multipv: 根着法排名，1 起
+            bound: 'exact' / 'lowerbound' / 'upperbound'
         """
         with self.lock:
+            # 上一轮把引擎喂崩了的话，这里先换一个新的：
+            # 否则后面每一次 _send 都是 Errno 22，整局再也出不了招。
+            if self.proc is not None and self.proc.poll() is not None:
+                self._kill_locked()
             self._ensure_proc()
+
+            # MultiPV 是**持久**选项，每次搜索都显式设一遍：不设的话上一次多线
+            # 搜索的宽度会悄悄渗进这一次单线搜索 —— 皮卡鱼照样每层吐 N 条，
+            # 而调用方以为自己要的是第 1 名。
+            self._send(f"setoption name MultiPV value {max(1, int(multipv))}")
 
             # 组装 position 命令
             # 如果是从初始局面开局且有走子历史，使用 position startpos moves ...
@@ -223,15 +272,33 @@ class PikafishEngine:
                 fen = nt.to_fen(board, red_to_move)
                 pos_cmd = f"position fen {fen}"
 
-            self._send(pos_cmd)
-
-            # 组装 go 命令：使用 movetime (毫秒)
-            movetime_ms = int(time_limit * 1000)
-            go_cmd = f"go movetime {movetime_ms}"
+            # 组装 go 命令。UCI 里多个限度同时给 = 按**先到**的那个收手，所以：
+            # 带 max_nodes 时 movetime 只是看门狗（子进程卡死总得有个收手的钟），
+            # 不带预算才让时间主导（产品走棋的老行为，一行都没变）。
+            # time_limit 为 None 就不发 movetime —— 纯节点预算的度量要的是
+            # 「一个时间刻度都不掺」；顺手把老的 int(None * 1000) 会炸的坑填了。
+            go_cmd = "go"
+            if time_limit:
+                go_cmd += f" movetime {int(time_limit * 1000)}"
+            if max_nodes:
+                go_cmd += f" nodes {int(max_nodes)}"
             if max_depth and max_depth < 100:
                 go_cmd += f" depth {max_depth}"
+            if go_cmd == "go":
+                # 「go」光杆 = 一直搜到外部 stop。度量台走到这里只可能是参数写错，
+                # 静默无上限搜下去会把整轮结果绑在时钟上，正是这套尺子要避免的。
+                raise ValueError(
+                    'go 命令没有任何限度：max_nodes / time_limit / max_depth 至少要有一个')
 
-            self._send(go_cmd)
+            try:
+                self._send(pos_cmd)
+                self._send(go_cmd)
+            except OSError:
+                # 发命令的时候进程刚好死了（比如它认为 position 里的着法非法）：
+                # 换一个进程重来一次，别把「引擎已死」这个状态带出这一手。
+                self._restart_locked()
+                self._send(pos_cmd)
+                self._send(go_cmd)
 
             last_info = None
             stop_sent = False
@@ -245,7 +312,18 @@ class PikafishEngine:
 
                 line = self.proc.stdout.readline()
                 if not line:
-                    break
+                    # 进程死了（最典型的原因：position 里给了它认为非法的着法，
+                    # pikafish 会直接 exit(1)）。这时必须把死进程丢掉并**报错**，
+                    # 不能装作「无着可走」—— 那会让对局静默停摆。
+                    code = self.proc.poll()
+                    detail = ''
+                    try:
+                        detail = (self.proc.stderr.read() or '').strip().splitlines()[-1][:160]
+                    except Exception:
+                        pass
+                    self._kill_locked()
+                    raise RuntimeError(
+                        '皮卡鱼进程异常退出（code=%s）%s' % (code, ('：' + detail) if detail else ''))
                 line = line.strip()
 
                 if line.startswith("bestmove"):
@@ -274,7 +352,11 @@ class PikafishEngine:
                 if line.startswith("info depth"):
                     parsed = self._parse_info_line(line)
                     if parsed:
-                        last_info = parsed
+                        # bestmove 只该盖在**排名第一**那条线上：多线时最后读到的
+                        # 一条往往是 rank 2 / rank 3，把最终决出的那手挪到它头上，
+                        # 报出去的排名就是错位的（分数没错，棋不是那支的棋）。
+                        if int(parsed.get("multipv") or 1) <= 1:
+                            last_info = parsed
                         yield parsed
 
     def _parse_info_line(self, line: str) -> Optional[Dict[str, Any]]:
@@ -298,14 +380,24 @@ class PikafishEngine:
                     data["score"] = score_val
                     data["mate"] = False
                 elif score_type == "mate":
+                    # 不再折算成 ±(30000−n) 那种自造大数。它既不是 centipawn
+                    # 也不是内置引擎的分，下游按任何一种分母去除它都会得出
+                    # 离谱的数；而「几步杀」这个真相在折算里被丢掉了。
+                    # 距离用 mate_in（UCI 的 mate n 本来就是步数，正=走子方
+                    # 成杀、负=走子方被杀），score 只剩方向，由接缝换成锚点分。
                     data["mate"] = True
-                    # 换算成类似 MATE_UPPER 的大分
-                    mate_sign = 1 if score_val > 0 else -1
-                    data["score"] = mate_sign * (30000 - abs(score_val))
+                    data["mate_in"] = abs(score_val)
+                    data["mate_sign"] = 1 if score_val > 0 else -1
                 i += 3
-                # 跳过 upperbound / lowerbound 标志
+                # upperbound / lowerbound 不是噪声，是这条线分数的**可信程度**：
+                # 截断来的分数只能当边界用。当精确值报出去，讲解层就会拿一个
+                # 界去算「你这一手比最优差多少」，说出来的数没有依据。
                 if i < n and tokens[i] in ("upperbound", "lowerbound"):
+                    data["bound"] = tokens[i]
                     i += 1
+            elif tok == "multipv" and i + 1 < n:
+                data["multipv"] = int(tokens[i + 1])
+                i += 2
             elif tok == "nodes" and i + 1 < n:
                 data["nodes"] = int(tokens[i + 1])
                 i += 2
@@ -342,9 +434,18 @@ class PikafishEngine:
             "move": best_move,
             "score": data.get("score", 0),
             "mate": data.get("mate", False),
+            # 杀棋的距离与方向各走各的：mate_in 是「还有几步」（非负），
+            # mate_sign 是方向（+1 走子方成杀 / -1 走子方被杀）。原始 cp 分在
+            # 杀棋时压根不存在，所以方向不能靠 score 的数值去猜 —— 这一点
+            # 由 adapter 声明，接缝负责换成锚点分（见 engine._normalize）。
+            "mate_in": data.get("mate_in"),
+            "mate_sign": data.get("mate_sign"),
             "nodes": data.get("nodes", 0),
             "time": data.get("time", 0.0),
             "nps": data.get("nps", 0),
             "pv": pv_tuples,
             "pv_iccs": pv_moves_iccs,
+            # 单线模式皮卡鱼也带 ``multipv 1``，真没带就是 1；bound 同理。
+            "multipv": data.get("multipv", 1),
+            "bound": data.get("bound", "exact"),
         }

@@ -27,6 +27,11 @@ class Game:
         self.engine_side = engine_side if engine_side in (RED, BLACK) else RED
         self.board = core.initial
         self.red_to_move = True
+        # 本局的**起始局面**。UCI 引擎要靠它把棋谱还原成局面：
+        # 摆棋/载入局面开局的棋，用 `position startpos moves ...` 重放必然错位
+        # （startpos 是「红先的标准开局」，而这里的起点可能是黑先、也可能是残局），
+        # pikafish 会判定为非法着法然后 exit(1)，之后整局都再也出不了招。
+        self.start_fen = nt.to_fen(core.initial, True)
         self.records = []            # 每步的详细记录
         self.boards = [core.initial]  # 每个局面（绝对坐标）
         self.sides = [True]           # 每个局面的行棋方（True=红）
@@ -103,10 +108,15 @@ class Game:
     def is_legal(self, move):
         return move in self.legal_moves()
 
-    def push(self, move, by=None, eval_red=None, depth=None, think_time=None):
+    def push(self, move, by=None, eval_red=None, depth=None, think_time=None,
+             mate_in=None):
         """落子并生成一条棋谱记录。
 
         ``by`` 取值 ``'engine'`` / ``'opponent'``，缺省按执子方推断。
+        ``eval_red`` 是**红方视角的 centipawn**（接缝唯一的单位）。杀棋时它
+        只是方向，距离必须靠 ``mate_in`` 一起记下来 —— 否则棋谱里那一行
+        要么显示成一个荒谬的小数，要么只能靠「分数够大就当杀棋」去猜，
+        而那个猜测正是以前把「让一车」念成「1197 步杀」的原因。
         """
         mv = (move[0], move[1])
         side = self.turn
@@ -152,6 +162,9 @@ class Game:
             'check': self.in_check(),
             'mate': False,
             'eval': eval_red,
+            # 杀棋距离（步，0 = 已被将死）。方向不重复带，看 eval 的正负。
+            # None = 引擎这一层给的不是杀棋分。
+            'mate_in': mate_in,
             'depth': depth,
             'time': think_time,
         }
@@ -315,6 +328,9 @@ class Game:
         # 载入的局面可能根本不合法（比如老将已经没了），这里温和地挡一下
         self.board = board
         self.red_to_move = red_to_move
+        # 记下归一化后的起始局面：后续每一步都要从这里 + 棋谱重建，
+        # 少了它，UCI 引擎只能退回 startpos（见 __init__ 里的说明）。
+        self.start_fen = nt.to_fen(board, red_to_move)
         self.boards = [board]
         self.sides = [red_to_move]
         self.records = []

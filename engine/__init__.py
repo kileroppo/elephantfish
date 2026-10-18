@@ -24,6 +24,7 @@ from .engine import (                 # noqa: F401
     Engine, EngineInfo, EngineSet, SearchRequest,
     BuiltinEngine, PikafishAdapter, default_engines,
     PIKAFISH, BUILTIN, PREFERENCE_NAMES,
+    BOUND_EXACT, BOUND_LOWER, BOUND_UPPER, BOUND_NAMES,
 )
 
 __all__ = [
@@ -38,5 +39,6 @@ __all__ = [
     'Engine', 'EngineInfo', 'EngineSet', 'SearchRequest',
     'BuiltinEngine', 'PikafishAdapter', 'default_engines',
     'PIKAFISH', 'BUILTIN', 'PREFERENCE_NAMES',
+    'BOUND_EXACT', 'BOUND_LOWER', 'BOUND_UPPER', 'BOUND_NAMES',
 ]
 

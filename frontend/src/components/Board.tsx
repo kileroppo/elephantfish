@@ -18,6 +18,7 @@ import {
   RIVER_LABELS,
   ROWS,
   glideMs,
+  landMs,
   squareAt,
   toPixel,
   toPercent,
@@ -25,6 +26,7 @@ import {
   parseSquare,
   pixelToSquare,
 } from '../lib/board'
+import { useExitPhase } from '../hooks/useExitPhase'
 
 /** 正在被拖拽的一颗子。bx/by 是棋盘坐标系里的像素位置，
  *  渲染时直接写进 --cx/--cy，所以不需要在渲染期读 getBoundingClientRect。 */
@@ -37,6 +39,36 @@ interface DragState {
 /** 落子反馈自身的时长。涟漪（520ms）比压实（320ms）长，两者错开收尾，
  *  所以这个类要挂满最长的那个。 */
 const IMPACT_MS = 520
+
+/** 被吃残影从挂载到卸载。CSS 里 pieceKnockback 走 220ms，这里给到 240ms 收干净。 */
+const KNOCK_MS = 240
+
+/** 可走点与选中月牙环还多活多久（见 hooks/useExitPhase）。入场有波次（240ms 加每颗
+ *  18ms），退场只做「收回去」这一件事，比入场短一半 —— 拖长了就变成挡下一次点击。
+ *  比 CSS 里那两条 targetOut / crescentOut 的 110ms 多出 60ms，这截留白是必需的：
+ *  is-leaving 随 React 提交挂上，动画却要等下一次绘制才起步，天生晚一帧；而退场常常正好
+ *  打断在入场那波动画上（落子前刚点过这颗子），同一元素换动画要多等第二帧才起步。
+ *  实测 110ms 的动画在打断情形下要到 ~154ms 才播完，定时器短于它就等于把节点收在半路
+ *  摘掉。--ease-exit 又把最陡的一段压在末尾，半路摘掉恰好是「啪」地没。 */
+const MARK_OUT_MS = 170
+
+/** 将军那一响在 DOM 上多留多久。CSS 里 checkAlarm 走 640ms，这里给到 700ms ——
+ *  类挂上之后动画最早也要等下一次绘制才起步，摘早了就是把尾巴剪在半路（同一件事
+ *  在退场那两条上踩过一次，见上面 MARK_OUT_MS 那段）。尾巴本来就散到 opacity 0 了，
+ *  多留 60ms 不挡任何一次点击。 */
+const CHECK_ALARM_MS = 700
+
+/** 落点上那颗「已被服务端摘掉、画面还没让它倒」的被吃子。 */
+interface Victim {
+  square: string
+  glyph: string
+  side: Side
+}
+
+/** 同上，再加撞飞这一下需要的两个量：从哪来（决定方向），翻几个身。 */
+interface KnockSeed extends Victim {
+  from: string
+}
 
 /** 本地预判最多活这么久。到点服务端还没认，就判这一手落空、就地回位。
  *  这条兜底只该在「服务端拒绝了这一手」时走到（正常情况下 ply 一变就把预判撤了）。 */
@@ -62,6 +94,13 @@ interface BoardProps {
   onSetupPickBoardSquare?: (square: string | null) => void
   /** 正在翻转视角（「收窄 → 换 → 展开」这一段的头尾）。见 App 里的 turnBoard。 */
   flipping?: boolean
+  /**
+   * 只读：复盘台用它。盘上的子一颗都不许抓、一点都不许点 —— 回放那一局不是
+   * 再走一局。这道闸门写在这里而不是靠「传一副没有合法着法的快照」间接实现：
+   * 后者一旦有人给快照补上 `legal_moves`，回放盘就又能动棋了，而那正是这件事
+   * 最不该发生的形式。
+   */
+  readOnly?: boolean
 }
 
 export function Board({
@@ -71,6 +110,7 @@ export function Board({
   pv = [],
   onMove,
   flipping = false,
+  readOnly = false,
   setupMode = false,
   setupPieces,
   selectedTrayPiece = null,
@@ -148,8 +188,28 @@ export function Board({
   // 触发 React 重挂载来重播。那等于把「什么时候播」绑死在 React 的重建上：
   // 加不出分级时序，还得每落一手白重建一次 DOM。
   const [impactId, setImpactId] = useState<number | null>(null)
-  const showImpact = useRef<number | null>(null)
+  /** 落点时钟的两个计时器，都拿着「它属于哪颗子」—— 这一手被服务端拒绝时要按号撤掉
+   *  （见 commitMove 的 rollBack）。都用 ref 拿着、自己管自己的命，原因见下面那个
+   *  effect 顶上「故意不返回 cleanup」那段。 */
+  const landTimer = useRef<{ id: number; handle: number } | null>(null)
+  const settleTimer = useRef<{ id: number; handle: number } | null>(null)
   const hideImpact = useRef<number | null>(null)
+  const hideKnock = useRef<number | null>(null)
+  /** 排好的落点那一拍要吃掉的那颗子。在 effect 里存、落点回调里取 —— 翻滚量只能在
+   *  回调里摇：Math.random 写在渲染期，StrictMode 调两遍就摇出两个数。 */
+  const knockRef = useRef<KnockSeed | null>(null)
+  const [knock, setKnock] = useState<(KnockSeed & { kr: number }) | null>(null)
+  /** 已经响过落点的那一手 ply。落点框与替身都靠它退场（见 airborne）。 */
+  const [landedPly, setLandedPly] = useState(-1)
+  /** 该响「将军」那一响的那一格。**一次性**，跟涟漪排在同一拍上、到点自己摘 ——
+   *  静态那圈朱砂说的是「还被将着」，这一响说的是「刚刚被将了」，两件事不能混在一个类里。 */
+  const [alarmSquare, setAlarmSquare] = useState<string | null>(null)
+  const hideAlarm = useRef<number | null>(null)
+  /** 落点回调读的两样「现在是什么」都写在 ref 里：它排的是三百多毫秒之后，
+   *  闭包里那份 state 还是排队那一帧的（那会儿服务端还没回，records 里根本没有这一手）。
+   *  跟 knockRef 同一个理由 —— 时序归回调，内容归最新那一帧。 */
+  const recordsRef = useRef(game.records)
+  recordsRef.current = game.records
 
   // 选中哪一格归 Board 自己管。以前它住在上层，于是「点一下到底算选中还是落子」
   // 要绕一圈：Board 把格子报上去，上层判完再把 selected/targets 传回来。走这条
@@ -165,6 +225,22 @@ export function Board({
     if (setupMode || !effectivePicked) return []
     return game.legal_moves.filter((m) => m.from === effectivePicked).map((m) => m.to)
   }, [setupMode, effectivePicked, game.legal_moves])
+
+  /* 落子、取消选中之后，可走点与月牙环不许一帧剪掉 —— 入场有编舞，退场也得有一程，
+     不然「开」与「关」的手法不对等，手感当场掉一档（详见 hooks/useExitPhase 那段）。
+     多活这一程里必须拿**最后那一组**继续画：picked 已经空了，targets 现算就是空数组，
+     照现在的值渲染就是第一帧什么都不剩，退场动画播给谁看。
+     冻在 ref 里、渲染期写是刻意的：换成 effect 就晚一帧，那一帧画面上点已经没了
+     （同一件事在落点替身上也踩过，见 standIn）。 */
+  const [dotsShown, dotsLeaving] = useExitPhase(!setupMode && targets.length > 0, MARK_OUT_MS)
+  const lastDots = useRef<{ sq: string; capture: boolean }[]>([])
+  const dots = targets.map((sq) => ({ sq, capture: game.pieces.some((p) => p.square === sq) }))
+  if (dots.length) lastDots.current = dots
+
+  const [crescentShown, crescentLeaving] = useExitPhase(!!effectivePicked, MARK_OUT_MS)
+  const lastPicked = useRef<string | null>(null)
+  if (effectivePicked) lastPicked.current = effectivePicked
+  const crescentSq = effectivePicked ?? (crescentShown ? lastPicked.current : null)
 
   // 服务端认了这一手就把预判撤掉。**只认 ply 与 turn 这两个「确认信号」** ——
   // 原来依赖里还挂着 game.pieces，那是个陷阱：pieces 每一轮轮询都是新数组，
@@ -190,6 +266,7 @@ export function Board({
     const timer = window.setTimeout(() => {
       prevVisual.current.set(id, from)
       setPendingMove(null)
+      cancelArrival(id) // 同上：这一手没落地，落点那几拍也不许响
     }, PENDING_MS)
     return () => window.clearTimeout(timer)
   }, [pendingMove])
@@ -228,15 +305,47 @@ export function Board({
   const solo = moved.length === 1 ? moved[0] : null
   if (solo && canGlide) glideRef.current.set(solo.id, glideMs(solo.from, solo.to))
 
-  /** 排一次落子反馈。
+  /** 这一手吃掉的是哪颗子（没吃子返回 null）。
    *
-   *  时机是关键：反馈必须等滑行**结束**才响，否则棋子还在半路上就开始压盘，
-   *  看着像两个人各干各的。所以这里按这一手的滑行时长延后 wait 毫秒再挂类。
+   *  两条来源按「服务端认了没有」分家：
+   *    预判期间 —— 它还站在 game.pieces 里，照着落点找就行；
+   *    确认之后 —— 服务端已经把它摘掉了（**引擎的那一手尤其如此，它根本没有预判**），
+   *                只能从这一手的记录里读它的字与颜色。
+   *  击退方向不在这里算：那要拿 flipped 换算，归渲染期管。 */
+  const victimAt = (from: string, to: string, moverId: number): KnockSeed | null => {
+    const standing = game.pieces.find((p) => p.square === to && p.id !== moverId)
+    if (standing) {
+      return { square: to, glyph: standing.glyph, side: standing.side, from }
+    }
+    const rec = game.records[game.ply - 1]
+    if (rec?.captured && rec.to === to) {
+      return {
+        square: to,
+        glyph: rec.captured_glyph || rec.captured,
+        side: rec.side === 'red' ? 'black' : 'red',
+        from,
+      }
+    }
+    return null
+  }
+
+  /** 排一次落子。一整手棋的「发生了什么」都压在这一拍上：涟漪、被吃子的撞飞、
+   *  落点框显形，还有 useGame 里那一声落子音 —— 它们必须是**同一个时刻**，
+   *  差二十几毫秒人眼就听得出来「声音先落、子还在滑」。
+   *
+   *  两个时刻，各排各的（这是这一段的分工，别把它们并成一个）：
+   *    landMs(from, to) —— 棋子**看着落定**的那一刻（滑行时长的 87.5%）。
+   *      音效一直就排在这里；涟漪和撞飞以前排在 glideMs（100%），于是听着落子了
+   *      画面还在滑，且被吃子早在两百多毫秒前就从盘上消失了（见下面 doomed 那段）。
+   *    glideMs(from, to) —— 位移真正结束。这一拍只做收尾：把时长交还给 0，否则
+   *      --glide-dur 残留在 DOM 上，之后 200~360ms 里只要 --u 一变（开抽屉、
+   *      缩放窗口），这颗子会莫名其妙再滑一次。
    *
    *  **故意不返回 cleanup。** 这个 effect 的依赖里有 game.pieces，而它每一轮
    *  轮询都会换一个新数组 —— 一旦按惯例写 cleanup clearTimeout，那个计时器
    *  每 100 多毫秒就会被清掉一次、而重跑时又因为「没有换格」直接 return，
-   *  于是类永远摘不掉。两个计时器都用 ref 拿着，自己管自己的命。
+   *  于是类永远摘不掉。计时器都用 ref 拿着，自己管自己的命；
+   *  唯一会主动撤它们的地方是「这一手被服务端拒绝」（见 cancelArrival）。
    *
    *  用的是上面渲染期算好的 moved，不在这里重算一遍 —— 否则「渲染看到的」与
    *  「effect 算出的」是两个时刻的视图，两边可能对不上（两边都以 moved 为准）。 */
@@ -257,7 +366,7 @@ export function Board({
       return
     }
 
-    const { id } = landed
+    const { id, from, to } = landed
     // 时长是渲染期锁好的。悔棋那种 canGlide 为假的时候这里取不到值，wait = 0 ——
     // 于是那颗子直接站回原位，且下面那句 isPrediction/advanced 也会判成「不是落子」。
     const wait = glideRef.current.get(id) ?? 0
@@ -266,28 +375,68 @@ export function Board({
     const isPrediction = pendingMove?.id === id
     const advanced = game.ply === plyRef.current + 1
     plyRef.current = game.ply
+    // 落点那一拍属于**哪一手**。预判时 ply 还没走，所以它是「下一手」——
+    // 替身与落点框都按这个号退场（见下面 airborne），不能直接拿闭包里的 game.ply 用。
+    const targetPly = isPrediction ? game.ply + 1 : game.ply
+    knockRef.current = victimAt(from, to, id)
 
-    if (showImpact.current) window.clearTimeout(showImpact.current)
+    if (landTimer.current) window.clearTimeout(landTimer.current.handle)
+    if (settleTimer.current) window.clearTimeout(settleTimer.current.handle)
     if (hideImpact.current) window.clearTimeout(hideImpact.current)
-    showImpact.current = window.setTimeout(() => {
-      if (isPrediction || advanced) {
+    if (hideKnock.current) window.clearTimeout(hideKnock.current)
+    // 这里**不清**hideAlarm：上一响的退场定时器自己带号（回调只在「还是那一格」时才置空），
+    // 取消它反而会让 is-check-alarm 在一手不将军的棋之后永久留着。
+
+    landTimer.current = {
+      id,
+      handle: window.setTimeout(() => {
+        landTimer.current = null
+        if (!(isPrediction || advanced)) return
+        setLandedPly(targetPly)
         setImpactId(id)
         hideImpact.current = window.setTimeout(
           () => setImpactId((curr) => (curr === id ? null : curr)),
           IMPACT_MS,
         )
-      }
-      // 这一段位移收尾，把时长交还给 0 —— 否则 --glide-dur 会残留在 DOM 上，
-      // 之后 200~360ms 里只要 --u 一变（开抽屉、缩放窗口），这颗子会再滑一次。
-      glideRef.current.delete(id)
-      forceSettle()
-    }, wait)
+        const seed = knockRef.current
+        if (seed) {
+          // 撞击的方向留给渲染期换算（要跟 flipped 走），这里只摇翻滚量
+          setKnock({ ...seed, kr: (Math.random() > 0.5 ? 1 : -1) * (3 + Math.random() * 4) })
+          hideKnock.current = window.setTimeout(() => setKnock(null), KNOCK_MS)
+        }
+        // 将军那一响排在同一拍上：这一手的记录说它把王将住了，就在棋子**看着落定**
+        // 的那一刻把类挂到被将的那颗王身上 —— 与落子音（useGame 的 voiceFor 里
+        // 同一个 landMs）同步。读 recordsRef 而不是闭包里的 game.records：回调跑起来
+        // 已经是三百多毫秒之后，那会儿服务端的确认早到了。
+        const rec = recordsRef.current.find((r) => r.ply === targetPly)
+        const alarmSq = checkSquareRef.current
+        if (rec?.check && alarmSq) {
+          if (hideAlarm.current) window.clearTimeout(hideAlarm.current)
+          setAlarmSquare(alarmSq)
+          hideAlarm.current = window.setTimeout(
+            () => setAlarmSquare((curr) => (curr === alarmSq ? null : curr)),
+            CHECK_ALARM_MS,
+          )
+        }
+      }, landMs(from, to)),
+    }
+    settleTimer.current = {
+      id,
+      handle: window.setTimeout(() => {
+        settleTimer.current = null
+        glideRef.current.delete(id)
+        forceSettle()
+      }, wait),
+    }
   }, [moved, game.pieces, pendingMove])
 
   useEffect(
     () => () => {
-      if (showImpact.current) window.clearTimeout(showImpact.current)
+      if (landTimer.current) window.clearTimeout(landTimer.current.handle)
+      if (settleTimer.current) window.clearTimeout(settleTimer.current.handle)
       if (hideImpact.current) window.clearTimeout(hideImpact.current)
+      if (hideKnock.current) window.clearTimeout(hideKnock.current)
+      if (hideAlarm.current) window.clearTimeout(hideAlarm.current)
     },
     [],
   )
@@ -311,6 +460,10 @@ export function Board({
     const king = game.pieces.find((p) => p.char.toLowerCase() === 'k' && p.side === game.turn)
     return king ? king.square : null
   }, [game.in_check, game.pieces, game.turn])
+  /** 最新那一帧上「被将的王在哪」。落点回调在三百多毫秒之后才跑，那时服务端早就把
+   *  in_check 带回来了 —— 读闭包里的 kingInCheck 拿到的是排队那一刻的 null。 */
+  const checkSquareRef = useRef<string | null>(null)
+  checkSquareRef.current = kingInCheck
 
   // 胜方的王：终局时亮起一圈朱砂余光
   const victorKing = useMemo(() => {
@@ -321,55 +474,41 @@ export function Board({
     return king ? king.square : null
   }, [game.status.state, game.status.winner, game.pieces])
 
-  // 吃子物理动量反应：记录被吃掉的棋子残影
-  const [capturedGhost, setCapturedGhost] = useState<{
-    id: string
-    square: string
-    glyph: string
-    side: Side
-    kx: number
-    ky: number
-    kr: number
-  } | null>(null)
-
-  useEffect(() => {
-    if (!game.last_move || !game.last_move.captured) {
-      return
+  /* ---- 落点时钟：这一手还悬在半空中吗 ------------------------------------ //
+   *
+   *  「落定」那一刻之前，落点上不该出现落点框、也不该出现被撞飞的残影 —— 它们和
+   *  涟漪、落子音一起排在同一拍（见上面那个 effect）。判据是：站在落点上的那颗子
+   *  还在滑（glideRef 里有它），且它这一手的落点还没响过。
+   *
+   *  为什么非得**渲染期派生**，而不是像以前那样在 effect 里 setState 挂残影：
+   *  effect 至少晚一帧，而**服务端确认那一帧**被吃的那颗子已经从 game.pieces 里没了。
+   *  差的就是那一帧 —— 棋子还在半路上，落点已经空了，看着像子掉进盘里。
+   *  下面 standIn 那段补的就是这一帧。 */
+  const airborne = (() => {
+    if (setupMode || !game.last_move) return false
+    if (landedPly === game.ply) return false
+    const sq = game.last_move.to
+    for (const p of game.pieces) {
+      const at = p.id === pendingMove?.id ? pendingMove.to : p.square
+      if (at === sq) return glideRef.current.has(p.id)
     }
-    const { from, to } = game.last_move
-    const fromP = parseSquare(from)
-    const toP = parseSquare(to)
-    const df = toP.file - fromP.file
-    const dr = toP.rank - fromP.rank
-    const dist = Math.hypot(df, dr) || 1
-    // 屏幕坐标系：df 向右为正，dr 在非翻转下 rank 增加（向上）即 Y 变小（向上）
-    const screenKx = df / dist
-    const screenKy = (flipped ? dr : -dr) / dist
-    const kr = (Math.random() > 0.5 ? 1 : -1) * (3 + Math.random() * 4)
+    return false
+  })()
 
-    // 找到被吃掉的棋子 glyph 和 side
-    const lastRec = game.records[game.ply - 1]
-    const glyph = lastRec?.captured_glyph || game.last_move.captured || '子'
-    const moverPiece = game.pieces.find((p) => p.square === to)
-    const moverSide = moverPiece ? moverPiece.side : (game.turn === 'red' ? 'black' : 'red')
-    const victimSide: Side = moverSide === 'red' ? 'black' : 'red'
-
-    const ghostId = `ghost-${game.ply}-${to}`
-    setCapturedGhost({
-      id: ghostId,
-      square: to,
-      glyph,
-      side: victimSide,
-      kx: screenKx,
-      ky: screenKy,
-      kr,
-    })
-
-    const timer = window.setTimeout(() => {
-      setCapturedGhost((curr) => (curr?.id === ghostId ? null : curr))
-    }, 240)
-    return () => window.clearTimeout(timer)
-  }, [game.ply, game.last_move, flipped, game.pieces, game.records, game.turn])
+  /** 落点上那颗「已被服务端摘掉、但还没被撞飞」的被吃子 —— 由这一手的记录现推。
+   *  预判期间它整个儿还活着（走下面 pieces 循环里的 is-doomed），两者不重叠。 */
+  const standIn = (() => {
+    if (!airborne) return null
+    const rec = game.records[game.ply - 1]
+    if (!rec?.captured || rec.ply !== game.ply) return null
+    if (!game.last_move || rec.to !== game.last_move.to) return null
+    return {
+      square: rec.to,
+      glyph: rec.captured_glyph || rec.captured,
+      side: (rec.side === 'red' ? 'black' : 'red') as Side,
+      from: rec.from,
+    } satisfies Victim & { from: string }
+  })()
 
   const pvSquares = useMemo(() => {
     const out: { from: string; to: string }[] = []
@@ -410,6 +549,7 @@ export function Board({
   /** 这颗子现在能不能被拿走。轮到的、还没结束、引擎没在算 —— 三者缺一不可。 */
   const grabbable = (square: string | null): boolean => {
     if (!square) return false
+    if (readOnly) return false
     if (setupMode) {
       return activePieces.some((p) => p.square === square)
     }
@@ -420,6 +560,17 @@ export function Board({
 
   /** 现在能不能动棋。三个入口（拖、点、键盘）都过这一道。 */
   const canPlay = (): boolean => setupMode || (!thinking && game.status.state === 'playing')
+
+  /** 撤掉排在落点那几拍。只在「这一手被服务端拒绝」时走 —— 落点时钟是提前排好的，
+   *  手没落成却照样响涟漪、照样把一颗好子撞飞，画面就表演了一件没发生过的事。
+   *  按**身份号**撤：期间可能已经排上了下一手的落点，别人的账不许动（同 moveSeq 那套）。 */
+  const cancelArrival = (id: number) => {
+    if (landTimer.current?.id === id) {
+      window.clearTimeout(landTimer.current.handle)
+      landTimer.current = null
+      knockRef.current = null
+    }
+  }
 
   /** 落子。**合法性只在这一处判**，上层收到的永远是已经核对过的一步。 */
   const commitMove = (from: string, to: string): boolean => {
@@ -433,7 +584,7 @@ export function Board({
     setPicked(null)
 
     // 服务端当场说「不收」时立刻回位，不等 PENDING_MS 那个兜底。否则这最多 800ms
-    // 里画面停在一步服务端根本没认的棋上 —— 连被预判吃掉的敌子都一直是隐身的，
+    // 里画面停在一步服务端根本没认的棋上 —— 连那颗被判死的敌子都一直压着颜色等死，
     // 那是在展示一个不存在的局面。
     const seq = (moveSeq.current += 1)
     const rollBack = () => {
@@ -441,6 +592,7 @@ export function Board({
       // 把「上一帧位置」记回去，于是这次回位是**瞬回**：不滑，也不再响一次反馈
       prevVisual.current.set(mover.id, from)
       setPendingMove(null)
+      cancelArrival(mover.id)
     }
     void onMove(mv.iccs).then((ok) => {
       if (!ok) rollBack()
@@ -681,25 +833,25 @@ export function Board({
           })}
 
         {/* 可走点位 */}
-        {targets.map((sq, i) => {
-          const { file, rank } = parseSquare(sq)
+        {(dotsShown ? lastDots.current : []).map((d, i) => {
+          const { file, rank } = parseSquare(d.sq)
           const { x, y } = toPercent(file, rank, flipped)
-          const occupied = game.pieces.some((p) => p.square === sq)
           return (
             <div
-              key={`t${sq}`}
+              key={`t${d.sq}`}
               className={[
                 'target',
-                occupied ? 'target-capture' : '',
-                dragSquare === sq ? 'is-over' : '',
+                d.capture ? 'target-capture' : '',
+                dragSquare === d.sq ? 'is-over' : '',
+                dotsLeaving ? 'is-leaving' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
               /* --i：可走点出场的序号，CSS 拿它排 18ms 一档的波次 */
               style={{ left: `${x}%`, top: `${y}%`, '--i': i } as CSSProperties}
               data-target=""
-              data-square={sq}
-              data-over={dragSquare === sq ? 'true' : 'false'}
+              data-square={d.sq}
+              data-over={dragSquare === d.sq ? 'true' : 'false'}
             />
           )
         })}
@@ -748,17 +900,18 @@ export function Board({
         })()}
 
         {/* 选中棋子周围的清透月牙高光圆环（精准对齐图一） */}
-        {effectivePicked && (() => {
-          const { file, rank } = parseSquare(effectivePicked)
+        {crescentSq && (() => {
+          const { file, rank } = parseSquare(crescentSq)
           const { x, y } = toPercent(file, rank, flipped)
           return (
             <span
-              key={`selected-crescent-${effectivePicked}`}
-              className="selected-crescent-ring"
+              key={`selected-crescent-${crescentSq}`}
+              className={`selected-crescent-ring${crescentLeaving ? ' is-leaving' : ''}`}
               style={{
                 left: `${x}%`,
                 top: `${y}%`,
               }}
+              data-crescent=""
               aria-hidden="true"
             >
               <svg viewBox="0 0 100 100" className="crescent-svg" aria-hidden="true">
@@ -800,95 +953,99 @@ export function Board({
           )
         })()}
 
-        {/* 上一步的起终点：
-            起点：柔光白圈点（指示从何处起步）
-            终点：典雅微光取景落点框 */}
+        {/* 上一步的起点：一走就标，不必等落定 —— 它标的是「刚空出来的那一格」。 */}
         {!setupMode && game.last_move && (
-          <>
-            <span
-              key={`from-${game.ply}-${game.last_move.from}`}
-              className="last-marker last-from"
-              style={{
-                left: `${toPercent(parseSquare(game.last_move.from).file, parseSquare(game.last_move.from).rank, flipped).x}%`,
-                top: `${toPercent(parseSquare(game.last_move.from).file, parseSquare(game.last_move.from).rank, flipped).y}%`,
-              }}
-            />
-            <span
-              key={`to-${game.ply}-${game.last_move.to}`}
-              className={`last-marker last-to last-to-${game.last_move.by}${
-                game.last_move.captured ? ' last-to-capture' : ''
-              }`}
-              style={{
-                left: `${toPercent(parseSquare(game.last_move.to).file, parseSquare(game.last_move.to).rank, flipped).x}%`,
-                top: `${toPercent(parseSquare(game.last_move.to).file, parseSquare(game.last_move.to).rank, flipped).y}%`,
-              }}
-            >
-              <span className="last-to-rotator" aria-hidden="true">
-                <svg className="last-to-spinner" viewBox="0 0 100 100" aria-hidden="true">
-                  <defs>
-                    <filter id="softArcGlow" x="-30%" y="-30%" width="160%" height="160%">
-                      <feGaussianBlur stdDeviation="1" result="blur" />
-                      <feMerge>
-                        <feMergeNode in="blur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-                  </defs>
-                  <g>
-                    <animateTransform
-                      attributeName="transform"
-                      type="rotate"
-                      from="0 50 50"
-                      to="360 50 50"
-                      dur="8s"
-                      repeatCount="indefinite"
-                    />
-                    <circle className="spinner-arcs" cx="50" cy="50" r="43" filter="url(#softArcGlow)" />
-                  </g>
-                </svg>
-              </span>
-            </span>
-          </>
+          <span
+            key={`from-${game.ply}-${game.last_move.from}`}
+            className="last-marker last-from"
+            style={{
+              left: `${toPercent(parseSquare(game.last_move.from).file, parseSquare(game.last_move.from).rank, flipped).x}%`,
+              top: `${toPercent(parseSquare(game.last_move.from).file, parseSquare(game.last_move.from).rank, flipped).y}%`,
+            }}
+          />
         )}
 
-        {/* 被吃棋子的物理受力击退滑移 */}
-        {!setupMode && capturedGhost && (() => {
-          const { file, rank } = parseSquare(capturedGhost.square)
-          const { x, y } = toPixel(file, rank, flipped)
-          return (
-            <div
-              key={capturedGhost.id}
-              className={`piece ${capturedGhost.side} piece-ghost-knockback`}
-              style={
-                {
-                  /* 定位跟别的棋子同一套：写板面像素，不写 left/top。
-                     残影的 pieceKnockback 关键帧也拿 --piece-base 当基座。 */
-                  '--cx': `${x}px`,
-                  '--cy': `${y}px`,
-                  '--kx': capturedGhost.kx,
-                  '--ky': capturedGhost.ky,
-                  '--kr': `${capturedGhost.kr}deg`,
-                } as CSSProperties
-              }
-              aria-hidden="true"
-            >
-              <span className="piece-face">
-                <span className="piece-glyph">{capturedGhost.glyph}</span>
-              </span>
-            </div>
-          )
-        })()}
+        {/* 落点框：**排在落点那一拍显形**（airborne 期间压住）。
+            框比子先到，等于画面先宣布「这儿落了一颗子」，再回头看着它滑过来 ——
+            它和涟漪、落子音、被撞飞的残影是同一拍上的事，不该各响各的。 */}
+        {!setupMode && game.last_move && !airborne && (
+          <span
+            key={`to-${game.ply}-${game.last_move.to}`}
+            className={`last-marker last-to last-to-${game.last_move.by}${
+              game.last_move.captured ? ' last-to-capture' : ''
+            }`}
+            style={{
+              left: `${toPercent(parseSquare(game.last_move.to).file, parseSquare(game.last_move.to).rank, flipped).x}%`,
+              top: `${toPercent(parseSquare(game.last_move.to).file, parseSquare(game.last_move.to).rank, flipped).y}%`,
+            }}
+          >
+            {/* 旋转交给 CSS：`.last-to-rotator` 上一条 transform 动画，整族弧环跟着转。
+                原来这里是 SVG 的 <animateTransform>（8s 无限）配一个 feGaussianBlur ——
+                SMIL 的旋转不走合成器，每一帧都重画一遍带高斯模糊的描边，而且从第一手
+                棋起挂到终局，是整站最久的常驻开销。换成父元素的 transform 之后，弧环
+                连同它的 drop-shadow 只栅格化一次，之后每帧只是把那张图转个角度。 */}
+            <span className="last-to-rotator" aria-hidden="true">
+              <svg className="last-to-spinner" viewBox="0 0 100 100" aria-hidden="true">
+                <circle className="spinner-halo" cx="50" cy="50" r="43" />
+                <circle className="spinner-arcs" cx="50" cy="50" r="43" />
+              </svg>
+            </span>
+          </span>
+        )}
+
+        {/* 落点上那颗被吃子 —— 同一个位置、两段画面：
+              替身（standIn）：服务端已经把它从 game.pieces 里摘掉，可滑行还没结束。
+                由这一手的记录在**渲染期**现推一个顶着 —— 换成 effect 挂载就晚一帧，
+                而那一帧画面上是「棋子还在半路、落点已经空了」。
+              残影（knock）：落点那一拍起，它带着动量被撞飞，播完自己走。
+            定位跟别的子同一套：只交板面像素给 --cx/--cy，不写 left/top。 */}
+        {!setupMode &&
+          (() => {
+            const shown = knock ?? standIn
+            if (!shown) return null
+            const { file, rank } = parseSquare(shown.square)
+            const from = parseSquare(shown.from)
+            const { x, y } = toPixel(file, rank, flipped)
+            const df = file - from.file
+            const dr = rank - from.rank
+            const dist = Math.hypot(df, dr) || 1
+            return (
+              <div
+                key={`${knock ? 'knock' : 'stand'}-${shown.square}-${game.ply}`}
+                className={`piece ${shown.side} ${knock ? 'piece-ghost-knockback' : 'is-doomed'}`}
+                style={
+                  {
+                    '--cx': `${x}px`,
+                    '--cy': `${y}px`,
+                    // 屏幕坐标系：df 向右为正；dr 在非翻转下 rank 增加（向上）即 Y 变小
+                    '--kx': df / dist,
+                    '--ky': (flipped ? dr : -dr) / dist,
+                    '--kr': `${'kr' in shown ? shown.kr : 0}deg`,
+                  } as CSSProperties
+                }
+                aria-hidden="true"
+              >
+                <span className="piece-face">
+                  <span className="piece-glyph">{shown.glyph}</span>
+                </span>
+              </div>
+            )
+          })()}
         {/* 棋子：纯净位移，其它棋子保持绝对静止。
             用 piecesInOrder 而不是 game.pieces —— 顺序必须是稳定的，原因见它上面那段。 */}
         {piecesInOrder.map((p) => {
-          /* 被预判吃掉的子立刻隐身，好让走子的那颗先一步站到落点上。
-             **判据只能是「它是不是正在走的那一颗」，不能拿 side 去跟 game.turn 比** ——
-             确认落地那一帧 turn 已经翻面了，走子那颗自己就满足「side ≠ 当前轮次」，
-             于是连它一起被摘掉：同一颗子换了个 DOM 节点，跑到一半的 transform 过渡
-             当场作废，棋子直接出现在终点。整套「落子滑行」看不到，真凶就在这一行。 */
-          if (pendingMove && p.id !== pendingMove.id && p.square === pendingMove.to) {
-            return null
-          }
+          /* 被这一步吃掉的那颗子。**判据只能是「它是不是正在走的那一颗」，不能拿 side
+             去跟 game.turn 比** —— 确认落地那一帧 turn 已经翻面了，走子那颗自己就满足
+             「side ≠ 当前轮次」，于是连它一起被摘掉：同一颗子换了个 DOM 节点，跑到一半的
+             transform 过渡当场作废，棋子直接出现在终点。整套「落子滑行」看不到，真凶就在
+             这一行（.devtools/glide.mjs 文件头 (a) 记着这次翻车）。
+             以前命中这条判据就直接 return null（让敌子在预判那一帧隐身），代价是这颗子
+             在它**还该看得见**的整个滑行途中都不在画面上了 —— 滑行 210~360ms，而残影要到
+             服务端确认才挂得上来，「被撞飞」发生在一颗两百多毫秒前就消失的子上。
+             现在它留在盘上：压到走子那颗底下（.is-doomed）、点不到、颜色稍暗（死子不跟
+             活子争），一路活到落点那一拍由替身接手（见上面 standIn 那段）。 */
+          const doomed =
+            !!pendingMove && p.id !== pendingMove.id && p.square === pendingMove.to
 
           const isDragging = drag?.from === p.square
           const effectiveSquare =
@@ -924,9 +1081,13 @@ export function Board({
                 p.side,
                 effectivePicked === p.square ? 'is-selected' : '',
                 kingInCheck === p.square ? 'is-check' : '',
+                alarmSquare === p.square ? 'is-check-alarm' : '',
                 victorKing === p.square ? 'is-victor' : '',
                 isDragging ? 'dragging' : '',
                 canGrab ? 'is-grabbable' : '',
+                doomed ? 'is-doomed' : '',
+                // 正在滑的那一颗要盖过落点上的死子（两者同格，见 .is-doomed 那段）
+                wait > 0 ? 'is-gliding' : '',
                 impactId === p.id ? 'is-impact' : '',
                 enterDelay > 0 || !bootedRef.current ? 'is-entering' : '',
               ]

@@ -3,6 +3,9 @@ import { Board } from './components/Board'
 import { RelayConsole } from './components/RelayConsole'
 import { AnalysisPanel } from './components/AnalysisPanel'
 import { MoveList } from './components/MoveList'
+import { MistakeBook } from './components/MistakeBook'
+import { GameShelf } from './components/GameShelf'
+import { ReplayDesk, type ReplaySeed } from './components/ReplayDesk'
 import { ControlRail } from './components/ControlRail'
 import { TopBar } from './components/TopBar'
 import { SetupPanel } from './components/SetupPanel'
@@ -26,6 +29,18 @@ export default function App() {
   const [flipped, setFlipped] = useState(() => localStorage.getItem(LS_FLIP) === '1')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem(LS_SOUND) !== '0')
   const [help, setHelp] = useState(false)
+  /**
+   * 复盘台开在哪一局、停在哪一手（null = 没开）。
+   *
+   * 它开的永远是**存档里的那一局**，与底下正在走的这一局没有关系：读它的这两个
+   * 接口（/api/games、/api/game）一根手指都不碰会话，也不进 130ms 轮询。
+   */
+  const [replay, setReplay] = useState<ReplaySeed | null>(null)
+  const openReplay = useCallback((gameId: string) => setReplay({ gameId, focusPly: null }), [])
+  const openReplayAt = useCallback(
+    (gameId: string, ply: number | null) => setReplay({ gameId, focusPly: ply }),
+    [],
+  )
 
   // 默认专注模式：默认左右两栏全收起，只留棋盘和应手区
   const [railL, setRailL] = useState(() => localStorage.getItem(LS_RAIL_L) === '1')
@@ -183,6 +198,11 @@ export default function App() {
       }
       if (typing) return
 
+      // 复盘台开着时键盘归它（←/→/Home/End/Esc 自己处理）。这一层里那些会动
+      // **眼下这一局**的键一律不接：Ctrl+Z 悔棋、Ctrl+N 开新局、F 翻视角、
+      // Space 采用引擎当前最好的一步 —— 人在看历史，手不该碰到现在。
+      if (replay) return
+
       if (setup.active && (e.key === 'Delete' || e.key === 'Backspace')) {
         if (setup.pickedBoardSquare) {
           e.preventDefault()
@@ -217,7 +237,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [g, game, handleNewGame, turnBoard])
+  }, [g, game, handleNewGame, turnBoard, replay, setup])
 
   const onToggleEngineSide = useCallback(() => {
     if (setup.active) {
@@ -481,10 +501,24 @@ export default function App() {
           aria-hidden={!railR}
           {...(railR ? {} : { inert: '' })}
         >
-          <AnalysisPanel game={game} task={g.task} thinking={g.thinking} />
+          <AnalysisPanel
+            game={game}
+            task={g.task}
+            analysis={g.state.analysis}
+            thinking={g.thinking}
+          />
           <MoveList game={game} />
+          {/* 错题本读的是存档里那些**历次**对局，与眼下这一局无关：它只在一开始
+              和按「重读」时才发请求，不进 130ms 那条轮询 —— 读它不改任何东西。 */}
+          <MistakeBook onReplay={openReplayAt} />
+          {/* 复盘架同上：一局一行，点一行开复盘台。有判分的那几局才谈得上「值得重看」。 */}
+          <GameShelf onPick={openReplay} />
         </aside>
       </main>
+
+      {/* 复盘台：常挂，开与关都交给它自己（和 HelpOverlay 同一套），
+          因为退场那 180ms 还要留在 DOM 里播。 */}
+      <ReplayDesk seed={replay} onClose={() => setReplay(null)} />
 
       <Toasts items={g.toasts} onDismiss={g.dismissToast} />
       {/* 常挂：开与关都交给它自己（关掉时还要多活 180ms 播退场），

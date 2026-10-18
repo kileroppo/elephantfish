@@ -1,4 +1,4 @@
-// `npm test` 的入口：起一个服务，把三套界面自检依次跑一遍，汇总退出码。
+// `npm test` 的入口：起一个服务，把界面自检依次跑一遍，汇总退出码。
 //
 // 为什么需要它：`.devtools/package.json` 以前**没有任何 scripts**，也就是说
 // README 里写的 `npm test = audit + drag + kbd` 是句空话 —— 那条命令什么都没跑。
@@ -18,14 +18,26 @@ import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
 const PYTHON = process.env.EF_PYTHON || 'python'
+// 界面自检也不许往用户的真档（data/elephantfish.sqlite）里写测试棋 ——
+// 那本账是越下越厚的，跑一次自检多出六局假棋就废了。存档本身是可选的，
+// 所以这里指到临时文件，而不是关掉它：关掉的话 HTTP 层少跑一条真实写路径。
+const ARCHIVE = join(tmpdir(), `ef-run-${randomUUID()}.sqlite`)
 // motion.mjs 守的是「动效还在不在」：编排成不成序列、悬停/按压有没有反馈、
 // 有没有退化成 transition:all、reduced-motion 有没有真的压住。它坏掉时页面照样
 // 能下棋，前面几套几何/位移断言一条都不会红 —— 所以它是独立的一票。
-const CHECKS = ['audit.mjs', 'drag.mjs', 'kbd.mjs', 'frames.mjs', 'glide.mjs', 'motion.mjs']
+// grade-wording.mjs 守的是判分那句话**配不配得上那个数**：它不碰画面，
+// 直接把 format.ts 里那个纯函数拿来问（Node 自带 TS 类型剥离，import 得动 .ts），
+// 所以它跟服务起没起来无关，放在最后只是让画面那几套先出结论。
+// replay.mjs 守的是复盘台：它自己得先下一小局、等判分落进存档，才有东西可回放，
+// 所以它是这套里最慢的一票 —— 但它量的那块盘不在其它任何一套的视野里。
+const CHECKS = ['audit.mjs', 'drag.mjs', 'kbd.mjs', 'frames.mjs', 'glide.mjs', 'motion.mjs',
+  'replay.mjs', 'grade-wording.mjs']
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`)
@@ -56,6 +68,7 @@ console.log(`  服务 ${url}   解释器 ${PYTHON}\n`)
 const server = spawn(PYTHON, [join('server', 'app.py'), String(port)], {
   cwd: root,
   stdio: ['ignore', 'pipe', 'pipe'],
+  env: { ...process.env, EF_STORE_PATH: ARCHIVE },
 })
 let serverLog = ''
 server.stdout.on('data', (d) => (serverLog += d))

@@ -5,19 +5,28 @@ set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
 rem ==================================================
 rem  elephantfish - 转述对局台  (Windows)
-rem  用法： start.bat [端口]      默认端口 8010
+rem  用法： start.bat [端口] [lan]
+rem         默认端口 8010，仅本机可访问
+rem         加 lan（例如 start.bat 8010 lan）则绑定 0.0.0.0，
+rem         同网段其他设备可用 http://本机IP:8010/ 打开
 rem  停止： 在这个窗口按 Ctrl+C
 rem ==================================================
 
 cd /d "%~dp0"
 
 set "PORT=8010"
-if not "%~1"=="" set "PORT=%~1"
+set "LAN=no"
+if /i "%~1"=="lan" (
+    set "LAN=yes"
+) else if not "%~1"=="" set "PORT=%~1"
+if /i "%~2"=="lan" set "LAN=yes"
+if /i "!LAN!"=="yes" set "EF_HOST=0.0.0.0"
 set "URL=http://localhost:!PORT!/"
 
 echo ==================================================
 echo   elephantfish - 转述对局台
 echo ==================================================
+if /i "!LAN!"=="yes" echo   [局域网模式] 绑定 0.0.0.0，启动后看下面打印的局域网地址
 echo.
 
 rem ---------- 找 Python ----------

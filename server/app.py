@@ -13,6 +13,9 @@
 * ``POST /api/engine-move``   轮到引擎时让它出招
 * ``GET  /api/task/<id>``     轮询搜索进度（深度 / 评分 / 节点 / 主变）
 * ``POST /api/undo``          录错了往回退，回到「等对方出招」的界面状态
+* ``GET  /api/mistakes``      错题本：跨历次对局按局面聚合的判分（**只读**）
+* ``GET  /api/games``         历次对局列表（``?limit=`` 可换页，**只读**）
+* ``GET  /api/game``          某一局的每一手，够把它一手手摆回盘上（``?game_id=``，**只读**）
 
 搜索放在后台线程里跑，前端轮询进度，所以深度一层层涨上去的过程是看得见的，
 不会出现「点了没反应，三秒后突然蹦出一步棋」。
@@ -38,7 +41,7 @@ import os
 import sys
 import traceback
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 # 让 `python server/app.py` 与 `import server.app` 两种用法都能找到包
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -69,6 +72,96 @@ def _health():
 
 
 # --------------------------------------------------------------------------- #
+# 错题本（只读）
+# --------------------------------------------------------------------------- #
+
+def _mistakes():
+    """错题本：跨历次对局，按**局面**聚合已经存下的判分。
+
+    这条路由**不属于会话**，而且是刻意不归的：它讲的不是「眼下这一局」，是存档里
+    那些局。挂到 ``GameSession`` 上就等于给它一把 ``self.lock``，而它一根手指都
+    不该碰棋 —— 它对状态的全部影响就是读了一份库。聚合与「算不算错」那道门槛
+    全在 ``server/store.py``，这里只把结果包成 Reply。
+    """
+    book = SESSION.store.mistake_book()
+    book['ok'] = True
+    return Reply(book)
+
+
+# --------------------------------------------------------------------------- #
+# 历史局与逐手回放（只读）
+# --------------------------------------------------------------------------- #
+
+def _parse_limit(raw):
+    """``?limit=`` 解析成 int 或 ``None``；返回 ``(值, 错误说明)``。
+
+    空值当「没传」处理，交给存档那一侧的缺省常量决定给多少 —— 界面上「换一页」
+    的按钮传个空串是常事，那里不该 400。给的是负数或非数字就如实拒绝：把它悄悄
+    当成缺省，等于让一个写错的参数变成一次没人察觉的全表读。
+    """
+    if raw in (None, ''):
+        return None, None
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return None, f'limit 要是一个整数，收到的是 {raw!r}'
+    if value < 0:
+        return None, f'limit 不许为负，收到 {value}（0 表示不封顶）'
+    return value, None
+
+
+def _games(query):
+    """历次对局的列表，新的在前 —— UI 拿它**挑一局**来逐手回放。
+
+    与 ``_mistakes`` 同一条纪律：这条路由**不属于会话**，而且是刻意不归的。它读
+    的是存档里那些局，不是眼下这一局，``self.lock`` 一根手指都不碰（``Store`` 里
+    拿的是管连接的那把 ``_lock``），不起搜索、不写表、也不回一份 ``state`` 快照。
+    参数只有一个 ``limit``，缺省用 ``store.GAMES_LIMIT_DEFAULT``；``0`` 不封顶，
+    被切掉的行数在 ``summary.truncated`` 里如实说，不靠 limit 藏数据。
+    """
+    limit, error = _parse_limit(query.get('limit'))
+    if error:
+        return Reply({'ok': False, 'message': error, 'limit': query.get('limit')}, 400)
+    out = SESSION.store.recent_games(limit=limit)
+    out['ok'] = True
+    return Reply(out)
+
+
+def _game(query):
+    """某一局的每一手，按 ply 升序：光靠存档就能把这一局一手手摆回盘上。
+
+    回放要的**全部**真值都在这一份里：``game.start_fen`` 加每手的 ``iccs`` 就够
+    规则层重放一遍，每手的 ``fen_before`` 让界面不必自己算就能把某一手摆出来，
+    ``review`` 整份原样带回来（里面有什么键由判分那一侧决定，这里一概不看）。
+
+    同样不碰会话、不碰 ``sess.lock``、不写库。三种「没有」分开回答，因为它们是
+    三件不同的事，界面要念的话也不一样：
+
+    * 没传 ``game_id`` → 400，那是请求写错了；
+    * 存档关着 → 503 并说明 ``store_enabled=False``。回 404 是撒谎：这一局不是
+      「不在库里」，是**根本没有库**可查；
+    * 库里确实没有这一局 → 404，而且**不带 plies** —— 交回一副空棋谱会被读成
+      「这局一步没走」，那是拿一个不存在的东西假装存在。
+    """
+    game_id = (query.get('game_id') or '').strip()
+    if not game_id:
+        return Reply({'ok': False, 'message': '缺少 game_id 参数：GET /api/game?game_id=…'},
+                     400)
+
+    replay = SESSION.store.game_replay(game_id)
+    if not replay.get('found'):
+        if not replay.get('store_enabled'):
+            return Reply({'ok': False, 'found': False, 'store_enabled': False,
+                          'game_id': game_id,
+                          'message': '存档未开启（EF_STORE=off），没有可回放的棋谱'}, 503)
+        return Reply({'ok': False, 'found': False, 'store_enabled': True,
+                      'game_id': game_id,
+                      'message': f'存档里没有这一局：{game_id}'}, 404)
+    replay['ok'] = True
+    return Reply(replay)
+
+
+# --------------------------------------------------------------------------- #
 # 路由
 # --------------------------------------------------------------------------- #
 
@@ -87,11 +180,33 @@ ROUTES = {
     '/api/opponent/poll': SESSION.poll_opponent,
 }
 
-# 没有一条 GET 用得上查询串，所以这里不传 query —— 少一个没人看的参数。
+# GET 分两张表。这张里的每一条都**不问参数**：会话的快照、探活、错题本。
+# 以前这里写过一句「没有一条 GET 用得上查询串，所以这里不传 query —— 少一个
+# 没人看的参数」，那句话是对的，所以现在也不用把参数硬塞给这些处理器：要读
+# 查询串的那几条进了下面那张 ``QUERY_ROUTES``，签名自己说它要什么。
 GET_ROUTES = {
     '/api/state': SESSION.state_reply,
     '/api/health': _health,
+    '/api/mistakes': _mistakes,
 }
+
+# 要读查询串的那几条（历次对局列表 / 某一局的逐手回放）。处理器收一个解析好的
+# 参数 dict —— 解析只在这里做一次，别每条路由各自 ``split('&')`` 一遍。
+QUERY_ROUTES = {
+    '/api/games': _games,
+    '/api/game': _game,
+}
+
+
+def _query_params(raw):
+    """``limit=3&game_id=abc`` → ``{'limit': '3', 'game_id': 'abc'}``。
+
+    同一个键重复出现时取**第一个**：两种挑法都说得通，但挑了就得写下来，否则
+    哪天「列表页传了两次 limit」在两个实现里读出两个意思。空值保留 —— 界面点
+    「不限」时传上来的就是 ``?limit=``，那是「没传」而不是「传了个坏值」。
+    """
+    return {key: values[0] for key, values in
+            parse_qs(raw, keep_blank_values=True).items()}
 
 
 # --------------------------------------------------------------------------- #
@@ -195,12 +310,23 @@ class Handler(SimpleHTTPRequestHandler):
             self._fail(exc)
 
     def do_GET(self):
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
 
         route = GET_ROUTES.get(path)
         if route is not None:
             try:
                 self._reply(route())
+            except Exception as exc:                      # noqa: BLE001
+                self._fail(exc)
+            return
+
+        # 这两条要读查询串（limit / game_id），所以走单独一张表：参数解析在这一处
+        # 做完，处理器拿到的就是一个 dict，不在每条路由里各拆一遍。
+        query_route = QUERY_ROUTES.get(path)
+        if query_route is not None:
+            try:
+                self._reply(query_route(_query_params(parsed.query)))
             except Exception as exc:                      # noqa: BLE001
                 self._fail(exc)
             return
@@ -268,6 +394,49 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
 
 
+def _lan_ips():
+    """本机可用的局域网 IPv4 列表，越可能被同网段访问到的越靠前。
+
+    要过滤掉几类「看着像内网、其实同网段打不进来」的地址：
+    198.18.0.0/15 是代理软件 TUN 网卡常用的段，100.64.0.0/10 是 Tailscale 这类
+    CGNAT 组网，169.254 是链路本地——它们经常排在真实网卡前面，直接用
+    「connect 一个外网地址取本地 IP」的老办法就会被带偏。
+    """
+    import ipaddress
+    import socket
+
+    def usable(ip):
+        try:
+            a = ipaddress.IPv4Address(ip)
+        except ValueError:
+            return False
+        if a.is_loopback or a.is_link_local or a.is_unspecified:
+            return False
+        return not (a in ipaddress.IPv4Network('198.18.0.0/15')
+                    or a in ipaddress.IPv4Network('100.64.0.0/10'))
+
+    seen = []
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if usable(ip) and ip not in seen:
+                seen.append(ip)
+    except OSError:
+        pass
+
+    def rank(ip):
+        if ip.startswith('192.168.'):
+            return 0
+        if ip.startswith('10.'):
+            return 1
+        if ip.startswith('172.'):
+            return 2
+        return 3
+
+    seen.sort(key=rank)
+    return seen
+
+
 def run(port=8010, host='127.0.0.1'):
     # 让后台搜索线程和 HTTP 线程公平轮转，否则搜索时页面会卡
     sys.setswitchinterval(0.002)
@@ -291,7 +460,19 @@ def run(port=8010, host='127.0.0.1'):
 
     print('=' * 58)
     print('  elephantfish 转述对局台')
-    print(f'  打开   http://{host}:{chosen}/')
+    # 这一行固定写 127.0.0.1：tools/run_server.py 靠它从日志里认出实际端口
+    print(f'  本机   http://127.0.0.1:{chosen}/')
+    if host in ('0.0.0.0', '::', ''):
+        lan_ips = _lan_ips()
+        if lan_ips:
+            for idx, ip in enumerate(lan_ips):
+                label = '局域网' if idx == 0 else '      '
+                print(f'  {label} http://{ip}:{chosen}/')
+        else:
+            print('  局域网 未取到本机 IP，请用 ipconfig 自查')
+        print('  注意   同网段任何机器都能打开并操作，用完记得关')
+    else:
+        print(f'  绑定   {host}:{chosen}（仅本机可访问）')
     print(f'  静态   {STATIC_DIR}')
     print('  停止   Ctrl+C')
     print('=' * 58)
@@ -304,8 +485,20 @@ def run(port=8010, host='127.0.0.1'):
 
 
 if __name__ == '__main__':
+    # host 优先级：--host 参数 > 环境变量 EF_HOST > 默认仅本机
     port = 8010
-    for arg in sys.argv[1:]:
-        if arg.isdigit():
+    host = os.environ.get('EF_HOST') or '127.0.0.1'
+    argv = sys.argv[1:]
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ('--host', '-H') and i + 1 < len(argv):
+            host = argv[i + 1]
+            i += 2
+            continue
+        if arg.startswith('--host='):
+            host = arg.split('=', 1)[1]
+        elif arg.isdigit():
             port = int(arg)
-    run(port)
+        i += 1
+    run(port, host)

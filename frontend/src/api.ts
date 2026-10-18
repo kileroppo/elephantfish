@@ -1,4 +1,11 @@
-import type { ApiReply, AppState, SearchTask } from './types'
+import type {
+  ApiReply,
+  AppState,
+  GamesReply,
+  MistakeBookReply,
+  ReplayReply,
+  SearchTask,
+} from './types'
 
 const BASE = ''
 
@@ -82,6 +89,10 @@ export const api = {
     engine_type?: 'pikafish' | 'builtin'
     threads?: number
     hash_mb?: number
+    analyze?: boolean
+    analyze_ms?: number
+    analyze_depth?: number
+    analyze_width?: number
   }) =>
     request<ApiReply>('/api/settings', { method: 'POST', body: JSON.stringify(payload) }),
 
@@ -95,4 +106,28 @@ export const api = {
     request<ApiReply>('/api/opponent/poll', { method: 'POST', body: '{}' }),
 
   health: () => request<{ ok: boolean; engine: string; python: string }>('/api/health'),
+
+  /**
+   * 错题本：服务端只读存档的一趟聚合，不带 payload、也不参加 130ms 轮询。
+   * 它讲的是历次对局，与眼下这一局的状态没有因果关系 —— 读它不会改变任何一局。
+   */
+  mistakes: () => request<MistakeBookReply>('/api/mistakes'),
+
+  /**
+   * 历次对局的列表（挑一局来回放）。同样是只读、不进轮询。
+   * `limit` 只有界面要「还有 N 局没列」时才传；缺省交给服务端的常量。
+   */
+  games: (limit?: number) =>
+    request<GamesReply>(
+      limit === undefined ? '/api/games' : `/api/games?limit=${encodeURIComponent(limit)}`,
+    ),
+
+  /**
+   * 某一局的每一手 —— 回放要的全部真值都在这一份里（`start_fen` + 有序 ICCS，
+   * 每手再带一个 `fen_before` 好让界面不必自己推）。
+   * 库里没有这一局 / 存档关着都会抛 `ApiError`（404 与 503 是两件不同的事，
+   * 服务端的 `message` 已经把它区分开了，这里不替它改口）。
+   */
+  game: (gameId: string) =>
+    request<ReplayReply>(`/api/game?game_id=${encodeURIComponent(gameId)}`),
 }

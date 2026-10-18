@@ -38,6 +38,10 @@ TABLE_SIZE = 1_500_000
 HISTORY_CAP = 1 << 22
 MAX_PLY = 256
 
+# 「没有节点预算」的哨兵值。不能用 core.INF —— 那是 3696，是给分数用的量级，
+# 拿它当节点上限等于把搜索砍到 3696 个节点。这里要的是「永远碰不到」。
+NO_BUDGET = 1 << 62
+
 # 吃子排序用的子力档位（MVV-LVA：优先吃大子、用小子去吃）
 RANK = {'P': 1, 'A': 2, 'B': 2, 'N': 4, 'C': 5, 'R': 9, 'K': 64}
 
@@ -59,6 +63,19 @@ def _from_tt(score, ply):
     return score
 
 
+def _mate_in(score):
+    """把杀棋分翻成「还有几步杀」（非负），不是杀棋分就给 None。
+
+    搜索里的杀棋分一律写作 ``±(MATE_UPPER - ply)``，ply 是**距根节点的层数**。
+    人读的是「步」：ply=1 是我一步成杀，ply=2 是对手一步杀我，ply=3 是我两步
+    成杀 —— 所以 步 = (ply + 1) // 2。方向不在这里带，接缝约定看 score 的符号。
+    """
+    if abs(score) < MATE_LOWER:
+        return None
+    ply = max(0, MATE_UPPER - abs(score))
+    return (ply + 1) // 2
+
+
 class Searcher:
     """有状态的搜索引擎。
 
@@ -75,6 +92,7 @@ class Searcher:
         self.nodes = 0
         self.stop = False
         self.deadline = None
+        self.node_budget = NO_BUDGET
         self.external_stop = None
         self._start = 0.0
         self.path = []
@@ -88,14 +106,24 @@ class Searcher:
         self.history = [0] * (256 * 256)
         self.nodes = 0
         self.stop = False
+        self.node_budget = NO_BUDGET
 
     # ------------------------------------------------------------------ #
     # 时间与中断
     # ------------------------------------------------------------------ #
 
     def _tick(self):
-        """每 1024 个节点查一次时间，别把时间浪费在 time() 上。"""
-        if self.deadline is not None and time.time() > self.deadline:
+        """每 1024 个节点查一次时间，别把时间浪费在 time() 上。
+
+        节点预算判在**最前面**：它是 ``tools/arena2.py`` 那把 A/B 尺子的唯一刻度。
+        时间会随机器负载漂、深度会随战术漂（一个连将就能把深度顶满），
+        只有「一共展开了多少个节点」两边都可数、都复现得了。
+        预算这一路不进 ``elif`` 链：收手顺序是「先预算、再时限、再外部叫停」，
+        这样带预算跑时 ``time_limit`` 只可能扮演看门狗，不可能反过来主导结果。
+        """
+        if self.nodes >= self.node_budget:
+            self.stop = True
+        elif self.deadline is not None and time.time() > self.deadline:
             self.stop = True
         elif self.external_stop is not None and self.external_stop():
             self.stop = True
@@ -131,8 +159,15 @@ class Searcher:
     # ------------------------------------------------------------------ #
 
     def _qsearch(self, pos, alpha, beta, ply):
+        # 收手之后再进来的调用，一个节点都不许记 —— 否则退栈途中还会往计数器里加，
+        # 「nodes 恒 <= 预算」就漏了上界（实测漏 2）。判在自增前面才是硬的。
+        if self.stop:
+            return alpha
         self.nodes += 1
-        if not (self.nodes & 1023):
+        # 预算越线的那一拍必须马上问一次，不能等 1024 的整拍：自增是 +1，
+        # 于是在「展开的正是第 budget 个节点」这里就地收手，nodes 恒 <= budget
+        # —— arena2 的节点预算断言全靠这个上界是硬的。
+        if self.nodes >= self.node_budget or not (self.nodes & 1023):
             self._tick()
         if self.stop:
             return alpha
@@ -206,8 +241,14 @@ class Searcher:
     # ------------------------------------------------------------------ #
 
     def _negamax(self, pos, depth, alpha, beta, ply, ext=0):
+        # 同 ``_qsearch``：收手之后进来的调用不计节点，预算的上界才是硬的。
+        if self.stop:
+            return alpha
         self.nodes += 1
-        if not (self.nodes & 1023):
+        # 预算越线的那一拍必须马上问一次，不能等 1024 的整拍：自增是 +1，
+        # 于是在「展开的正是第 budget 个节点」这里就地收手，nodes 恒 <= budget
+        # —— arena2 的节点预算断言全靠这个上界是硬的。
+        if self.nodes >= self.node_budget or not (self.nodes & 1023):
             self._tick()
         if self.stop:
             return alpha
@@ -377,6 +418,59 @@ class Searcher:
                 break
         return best, best_move
 
+    def _search_root_multipv(self, pos, moves, depth, alpha, beta,
+                             multipv, root_is_red):
+        """根节点多线排名：把根着法逐一带窗搜一遍，按分数从好到差排回来。
+
+        返回 ``[(分数, 走法, 界标, 主变)]``（名次由调用方按顺序给）。走法仍是
+        引擎视角的相对坐标 —— 与 ``_search_root`` 一样，翻不翻交给接缝的 adapter；
+        主变则和 ``principal_variation`` 一样，已经是绝对坐标。
+
+        窗口纪律照抄单线那套：第一支全窗，其余先零窗试探，只有确实抬高了
+        alpha 的才值得全窗复搜。差别只有一处 —— **不在 beta 截断处收手**：
+        排名要的是每一支各值多少，砍掉后面那些就排不出来了。
+
+        分数不能一律当成精确值报出去：对 alpha 试探失败的着法拿回来的只是
+        **上界**（真值只会更差），把 beta 打穿的只是**下界**。讲解的时候把上界
+        当精确分说给学员，等于谎报「你这一手比最优差多少」，所以界标必须一起交出去。
+        """
+        entries = []
+        cur = alpha
+        for idx, m in enumerate(moves):
+            nd = depth - 1
+            child = pos.move(m)
+            if idx == 0:
+                score = -self._negamax(child, nd, -beta, -cur, 1)
+            else:
+                score = -self._negamax(child, nd, -cur - 1, -cur, 1)
+                if score > cur and score < beta:
+                    # 零窗里冒头了：这一支要进排名，得全窗复搜拿精确值
+                    score = -self._negamax(child, nd, -beta, -cur, 1)
+            if self.stop:
+                break
+            if score > cur:
+                bound = LOWER if score >= beta else EXACT
+                cur = score
+            else:
+                # 连 alpha 都没越过：这个分数只是上界，别拿它当值比大小
+                bound = UPPER
+
+            # 主变必须趁现在提。晚一步就不行了：接着搜别的根着法会把子树里的
+            # 置换表项覆盖掉，事后再回头拿到的是被别的线污染过的走法。
+            # 长度与单线对齐 —— 根那一步算第 1 手，所以子树只取 9 手。
+            head = flip_move(m) if not root_is_red else m
+            entries.append((score, m, bound,
+                            [head] + self.principal_variation(child,
+                                                              not root_is_red, 9)))
+            if cur >= beta:
+                # 整扇窗口都不够用了：这一趟的排名没有意义，
+                # 让外面的渴求窗口循环放宽 beta 重来。
+                break
+
+        # 稳定排序：同分的保持搜索顺序，上一局排在前面的不会莫名其妙掉到后面
+        entries.sort(key=lambda e: -e[0])
+        return entries[:multipv]
+
     # ------------------------------------------------------------------ #
     # 主变提取
     # ------------------------------------------------------------------ #
@@ -422,18 +516,29 @@ class Searcher:
 
     def search(self, pos, max_depth=32, time_limit=None,
                game_history=(), external_stop=None, root_is_red=True,
-               use_book=True):
-        """迭代加深搜索，每完成一层 yield 一次快照。
+               use_book=True, multipv=1, max_nodes=None):
+        """迭代加深搜索，每完成一层 yield 一次快照（多线时每层 yield N 次）。
 
-        产出字段：
-            depth  已完成的深度
-            move   引擎视角坐标的走法 ``(from_idx, to_idx)``
-            score  侧方视角评分（正=对走子方有利）
-            mate   是否为杀棋分数
-            nodes  累计节点数
-            time   累计耗时（秒）
-            nps    每秒节点数
-            pv     主变（引擎视角坐标列表）
+        ``max_nodes``：节点预算。到了就停，**而且保证 ``nodes`` 不超过它**
+        （见 ``_tick`` 与两处自增）。对局度量只能用这个刻度：时间预算在
+        同一台机器上都会因为负载漂 2~3 倍，深度预算会因为战术漂（连将把
+        深度顶满），只有展开的节点数在两侧都同口径。
+
+        产出字段（**这里的 score 还是内置价值表自己的分，一兵 44**，
+        翻成接缝的 centipawn 由 ``engine.BuiltinEngine`` 去做）：
+            depth    已完成的深度
+            move     引擎视角坐标的走法 ``(from_idx, to_idx)``
+            score    侧方视角评分（正=对走子方有利）
+            mate     是否为杀棋分数
+            mate_in  杀棋还有几步（非负；None = 不是杀棋）
+            nodes    累计节点数
+            time     累计耗时（秒）
+            nps      每秒节点数
+            pv       主变（绝对坐标列表）
+            multipv  根着法排名，1 起
+            bound    分数是精确值还是界（``EXACT`` / ``LOWER`` / ``UPPER``）
+
+        ``multipv=1`` 就是原来那套单线输出：每层一次、rank 恒为 1、界标恒为精确。
         """
         self.gen += 1
         self.nodes = 0
@@ -441,6 +546,8 @@ class Searcher:
         self.external_stop = external_stop
         self._start = time.time()
         self.deadline = (self._start + time_limit) if time_limit else None
+        # 预算为 None 时给一个永远碰不到的哨兵，省掉热路径上的 None 判断
+        self.node_budget = int(max_nodes) if max_nodes else NO_BUDGET
 
         # 世代号让旧记录失效，但旧记录仍占内存，超限时整表回收一次
         if len(self.tt) > TABLE_SIZE:
@@ -461,6 +568,7 @@ class Searcher:
         if not moves:
             yield {
                 'depth': 0, 'move': None, 'score': -MATE_UPPER, 'mate': True,
+                'mate_in': _mate_in(-MATE_UPPER),
                 'nodes': 0, 'time': 0.0, 'nps': 0, 'pv': [],
             }
             return
@@ -475,6 +583,8 @@ class Searcher:
             if abs_m is not None:
                 engine_m = abs_m if root_is_red else flip_move(abs_m)
                 if engine_m in moves:
+                    # 开局库只有一条推荐着法，没有「第 2 名」可排，
+                    # 所以 multipv 要几条都只交回 rank 1 这一条（分数是库给的占位分）。
                     elapsed = time.time() - self._start
                     yield {
                         'depth': 1,
@@ -501,8 +611,18 @@ class Searcher:
                 alpha, beta = -INF, INF
 
             widen = delta
+            ranked = None
             while True:
-                score, move = self._search_root(pos, moves, depth, alpha, beta)
+                if multipv > 1:
+                    ranked = self._search_root_multipv(
+                        pos, moves, depth, alpha, beta, multipv, root_is_red)
+                    if not ranked:
+                        # 只可能是停表打断在第一支之前 —— 那就没有什么可排的，
+                        # 下面的 self.stop 分支会把这一层整个丢掉。
+                        break
+                    score, move = ranked[0][0], ranked[0][1]
+                else:
+                    score, move = self._search_root(pos, moves, depth, alpha, beta)
                 if self.stop:
                     break
                 if score <= alpha:
@@ -530,16 +650,24 @@ class Searcher:
                 moves.insert(0, best_move)
 
             elapsed = time.time() - self._start
-            yield {
-                'depth': depth,
-                'move': best_move,
-                'score': best_score,
-                'mate': abs(best_score) >= MATE_LOWER,
-                'nodes': self.nodes,
-                'time': elapsed,
-                'nps': int(self.nodes / elapsed) if elapsed > 0 else 0,
-                'pv': self.principal_variation(pos, root_is_red),
-            }
+            if ranked is None:
+                # 单线：一层一条，分数是全窗搜出来的精确值，排名就是第 1
+                ranked = [(best_score, best_move, EXACT,
+                           self.principal_variation(pos, root_is_red))]
+            for rank, (r_score, r_move, bound, pv) in enumerate(ranked, 1):
+                yield {
+                    'depth': depth,
+                    'move': r_move,
+                    'score': r_score,
+                    'mate': abs(r_score) >= MATE_LOWER,
+                    'mate_in': _mate_in(r_score),
+                    'nodes': self.nodes,
+                    'time': elapsed,
+                    'nps': int(self.nodes / elapsed) if elapsed > 0 else 0,
+                    'pv': pv,
+                    'multipv': rank,
+                    'bound': bound,
+                }
 
             if self.deadline and time.time() > self.deadline:
                 break
@@ -549,13 +677,21 @@ class Searcher:
     # ------------------------------------------------------------------ #
 
     def think(self, pos, max_depth=8, time_limit=2.0, game_history=(),
-              root_is_red=None, use_book=True):
-        """一次性拿到最好的一步，返回 ``(move, info)``。"""
+              root_is_red=None, use_book=False, max_nodes=None):
+        """一次性拿到最好的一步，返回 ``(move, info)``。
+
+        ``use_book`` 的默认值从 ``True`` 翻成了 ``False``：便利方法替调用方
+        做主吃开局库，老 ``tools/arena.py`` 就被这一手坑了 —— 带书的一侧
+        开局即中定式，不带书的一侧照旧搜索，量出来的 Elo 差大半是开局库的，
+        不是被测改动。开局库必须是调用方**显式点**的变量，不能是默认。
+        ``search()`` 的默认值没动：产品走棋（``server/session.py`` 经接缝
+        传 ``use_book``）与既有直调方的行为要维持原样。
+        """
         if root_is_red is None:
             root_is_red = (len(game_history) % 2 == 1) if game_history else True
         last = None
         for info in self.search(pos, max_depth=max_depth, time_limit=time_limit,
                                 game_history=game_history, root_is_red=root_is_red,
-                                use_book=use_book):
+                                use_book=use_book, max_nodes=max_nodes):
             last = info
         return (last['move'] if last else None), (last or {})

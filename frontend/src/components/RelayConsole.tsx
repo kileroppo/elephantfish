@@ -134,7 +134,8 @@ export function RelayConsole({
             </button>
             <div key={`m${lastEngineMove.ply}`} className="hero-meta">
               深度 {lastEngineMove.depth} · 耗时 {seconds(lastEngineMove.time)}
-              {lastEngineMove.eval !== null && ` · 评估 ${scoreText(lastEngineMove.eval)}`}
+              {lastEngineMove.eval !== null
+                && ` · ${scoreText(lastEngineMove.eval, lastEngineMove.mate_in ?? null)}`}
             </div>
           </div>
         ) : (

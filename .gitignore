@@ -31,3 +31,13 @@ Thumbs.db
 *.tmp
 *.7z
 nohup.out
+
+# 存档（越用越值钱的本地数据，不入库）
+data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
+# arena2 每次跑闸门都覆盖这份报告，是机器产物不是资料
+data/learned/last_gate.json
+
+# Qoder 的本地合并备份与 agent worktree（同名文件的副本，入库只会制造混乱）
+.qoder/

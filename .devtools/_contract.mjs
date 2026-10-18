@@ -85,6 +85,11 @@ export const post = (page, path, body) =>
     [path, body],
   )
 
+/** 读那三个**只读**存档接口。用 POST 打它们会得到「未知接口」—— 那是契约的一部分，
+ *  所以这里单独开一个口子，别让脚本作者顺手抄了 post 的写法去按 GET 的路。 */
+export const getJSON = (page, path) =>
+  page.evaluate((p) => fetch(p).then((r) => r.json()), path)
+
 // --------------------------------------------------------------------------- //
 // 盘面契约
 // --------------------------------------------------------------------------- //
@@ -103,7 +108,12 @@ export const boardInfo = (page) =>
   })
 
 export const piece = (page, square) => page.locator(`[data-piece][data-square="${square}"]`)
-export const target = (page, square) => page.locator(`[data-target][data-square="${square}"]`)
+/** 可走点。`:not(.is-leaving)` 是必须的：取消选中 / 落子之后，那几枚点还要多活 140ms
+ *  播退场（见 Board 的 MARK_OUT_MS），它们照样带 `data-target`。不加这一条，
+ *  「选中一颗子之后数到几枚点」会把上一轮的尸体一起数进来 —— 第 8 条动效断言
+ *  就是这么被误判成「12 枚的 delay 全是 0ms」的（退场那一程重写 animation 简写，delay 归零）。 */
+export const target = (page, square) =>
+  page.locator(`[data-target][data-square="${square}"]:not(.is-leaving)`)
 
 /** 当前被选中的那个格子（没有就是 null）。 */
 export const selectedSquare = (page) =>
@@ -213,6 +223,77 @@ export const queuedText = (page) =>
   page.evaluate(
     () => document.querySelector('[data-relay-queued]')?.dataset.relayQueued ?? null,
   )
+
+// --------------------------------------------------------------------------- //
+// 复盘契约（错题本 / 复盘架 / 复盘台）
+// --------------------------------------------------------------------------- //
+
+// 这三样读的都是**存档**，不是会话，所以它们既不在 130ms 轮询里、也不跟着对局变。
+// 界面改起来很安静（复盘台里没有一个字是新的，全是 format.ts 那句判分），坏了也不会
+// 报错 —— 只会摆出一副对不上的盘。所以这里锚 data-*，而且**盘要限定作用域**：
+// 复盘台开着的时候页面上有**两块** `[data-board]`，底下那块还是现场对局的。
+// 上面那些盘面几何用的都是全局 querySelector，那是对的（它们从不在台上跑）；
+// 这里的 desk* 一律加 `[data-replay]` 前缀，否则读回来的ply是别人的。
+
+/** 复盘架的某一行（没有这一局就是 null）。 */
+export const shelfRow = (page, gameId) =>
+  page.locator(`[data-shelf] [data-shelf-game="${gameId}"]`)
+
+/** 轨里复盘架在不在。 */
+export const shelfPresent = (page) => page.evaluate(() => !!document.querySelector('[data-shelf]'))
+
+/** 右轨默认是**收起**的（`aria-hidden` + `inert`）：错题本与复盘架都在里面，
+ *  不去按那枚标签，它们在 DOM 里存在却永远点不到。抽屉开合那一下要过渡宽度，
+ *  所以点开之后还要等它落定，否则 Playwright 会一直重试「element is not visible」。 */
+export async function openRightRail(page) {
+  const tab = page.locator('.rail-tab-right')
+  if ((await tab.getAttribute('aria-expanded')) !== 'true') {
+    await tab.click()
+    await page.waitForTimeout(520)
+  }
+  await page.locator('.rail-right.is-open').waitFor({ state: 'visible', timeout: 8000 })
+}
+
+/** 复盘台当前的读数，一次取全。 */
+export const deskInfo = (page) =>
+  page.evaluate(() => {
+    const el = document.querySelector('[data-replay]')
+    if (!el) return null
+    return {
+      gameId: el.dataset.replayGame ?? null,
+      ply: Number(el.dataset.replayPly),
+      loading: el.dataset.replayLoading === 'true',
+      errored: el.dataset.replayError === '1',
+      at: document.querySelector('[data-replay-at]')?.textContent?.trim() ?? null,
+      now: document.querySelector('[data-replay-now]')?.textContent?.trim() ?? null,
+      why: document.querySelector('[data-replay-why]')?.textContent?.trim() ?? null,
+      rows: document.querySelectorAll('[data-replay-row]').length,
+    }
+  })
+
+/** 台上那块盘：ply 与每一颗子站在哪。作用域锁在 [data-replay] 里。 */
+export const deskBoard = (page) =>
+  page.evaluate(() => {
+    const el = document.querySelector('[data-replay] [data-board]')
+    if (!el) return null
+    const b = el.getBoundingClientRect()
+    return {
+      ply: Number(el.dataset.ply),
+      flipped: el.dataset.flipped === 'true',
+      pieces: [...el.querySelectorAll('[data-piece]')].map((p) => ({
+        piece: p.dataset.piece,
+        side: p.dataset.side,
+        square: p.dataset.square,
+      })),
+      box: { width: b.width, height: b.height },
+    }
+  })
+
+/** 关掉复盘台（Esc），并等到那一层真的从 DOM 上退下去。 */
+export async function closeDesk(page) {
+  await page.keyboard.press('Escape')
+  await page.locator('[data-replay]').waitFor({ state: 'detached', timeout: 8000 })
+}
 
 // --------------------------------------------------------------------------- //
 // 盘面几何

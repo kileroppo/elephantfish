@@ -237,12 +237,18 @@ kbd {
   padding-right: 2px;
   scrollbar-width: thin;
   visibility: hidden;
-  /* 收起：等抽屉合上再隐藏，免得内容在半路突然消失 */
-  transition: visibility 0s linear 420ms;
+  /* 收起：等抽屉合上再隐藏，免得内容在半路突然消失。
+     content-visibility 跟 visibility 一起延后，是为了连**布局**一起省掉：两侧栏轨默认
+     都收着（App.tsx 读 localStorage，没开过就是关的），可里面住着棋谱与解析面板 ——
+     每一次轮询、每一手棋都在重排几百个格子，而它们一个像素都没画出来。visibility 只
+     跳过绘制，不跳过布局；content-visibility: hidden 两个都跳。 */
+  content-visibility: hidden;
+  transition: visibility 0s linear 420ms, content-visibility 0s linear 420ms;
 }
 
 .rail.is-open {
   visibility: visible;
+  content-visibility: visible;
   transition-delay: 0s;
 }
 
@@ -1167,6 +1173,61 @@ kbd {
   color: #fff8f2;
 }
 
+/* ---- 设置里的数字格 ----
+   与 .preset 同一套边框与圆角，只是把「按下去」换成「打进去」。
+   值是右对齐的等宽数字：三个格子并排时，眼睛扫的是个位而不是字头。 */
+.field-grid {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: 4.5em 1fr 2.2em;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  color: var(--ink-mute);
+}
+
+.field-label {
+  white-space: nowrap;
+}
+
+.field input {
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper-0);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink-1);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+/* 正在编辑的那一格自己说出来（草稿还没提交，值和服务端那份不一致） */
+.field.is-editing input,
+.field input:focus-visible {
+  border-color: var(--cinnabar);
+  box-shadow: 0 0 0 2px var(--cinnabar-wash);
+}
+
+.field input:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.field-unit {
+  font-size: 10.5px;
+  color: var(--ink-4);
+}
+
 
 
 
@@ -1359,6 +1420,10 @@ kbd {
   /* 木纹那两层用的是 multiply 混合。开一个独立层叠上下文，
      让它们只和棋盘自己相乘，不会沾到页面背景上。 */
   isolation: isolate;
+  /* 盘内再乱也不许把布局与绘制的影响漏到外面：这 720×720 的格子里同时住着 32 颗会滑的
+     子、一圈可走点、月牙环、落点框、墨痕。有了 contain，任何一颗子的几何变化都只在这块
+     盘里重算，重算的边界也就是盘自己 —— 而它本来就 overflow:hidden，画不出这个框。 */
+  contain: layout style paint;
   /* 棋盘上所有尺寸都按 --u 缩放；这个默认值只是首帧兜底 */
   --u: 0.55;
 }
@@ -1722,6 +1787,42 @@ kbd {
     0 0 calc(var(--u) * 9px) rgba(180, 50, 42, 0.5);
 }
 
+/* 「将军」得在盘上说得出来，不能只在耳边响一声。
+   静态那圈朱砂（上面那条）只说明**状态**；这一条说明**事件** —— 一手棋把王将住了，
+   那一下要有一圈从王底下散出去的朱砂环。它跟涟漪同一个机制：一次性，由 Board 在
+   「看着落定」那一刻挂 `is-check-alarm`（时刻同样是 lib/board.ts 的 landMs，
+   跟落子音、涟漪、撞飞挤在同一拍上），播完自己摘。
+   以前这里写的是「`.piece.is-check` 一挂上就播」—— 那是**持久**类，只要还被将着就一直在：
+   动画只在这个类从无到有的时候播一次，于是悔棋回到同一个被将局面不再响、
+   引擎思考期间轮询重渲染时它也不该重播；更糟的是它在服务端那一帧就播了，
+   比棋子落定早三百多毫秒。挂事件类而不是挂状态类，还顺带让「播几次」变成可控的事。
+   只动 transform + opacity（合成器），环散开就没了，不留常亮的东西 ——
+   被将着这件事由静态朱砂环持续说，不需要一圈动画整局闪个没完。 */
+.piece.is-check-alarm::before {
+  border-width: calc(var(--u) * 2.6px);
+  border-color: rgba(178, 46, 36, 0.92);
+  animation: checkAlarm 640ms var(--ease-out) both;
+}
+
+/* 起点写在 1.02 而不是像涟漪那样从 0.86 起：`.piece::before` 是 inset:0，
+   跟那颗圆面**同一个盒子**，而圆面不透明 —— 缩在 1.0 以内的部分全被自己盖住，
+   等于这一响的前两成时间在做一件看不见的动作。涟漪可以从底下钻出来（它只是
+   落子的余韵），这一响是要报信的，报信的东西得一起步就在画面上。 */
+@keyframes checkAlarm {
+  0% {
+    opacity: 0.95;
+    transform: scale(1.02);
+  }
+  45% {
+    opacity: 0.5;
+    transform: scale(1.18);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.42);
+  }
+}
+
 /* ---- 拿起与拖动 ----
    拖拽时棋子离盘更高，影子随高度进一步沉到右下并放大。 */
 
@@ -1759,7 +1860,8 @@ kbd {
   opacity: 0.66;
 }
 
-/* ---- 落子反馈：一次性的，由 Board 在滑行结束时挂上 is-impact，播完自己摘 ----
+/* ---- 落子反馈：一次性的，由 Board 在**看着落定**那一刻挂上 is-impact，播完自己摘
+   （时刻是 lib/board.ts 的 landMs，跟落子音效同一个数）。
    这里以前挂的是 .piece.is-landing —— 一个**持久**类（只要那颗子还停在
    last_move.to 上就一直在），真正让动画重播的是 .piece-face 上 key 的变化
    导致的 React 重挂载。等于把「什么时候播」绑死在 React 的重建上：加不出
@@ -1829,7 +1931,29 @@ kbd {
   }
 }
 
-/* 被吃棋子的受击动量滑移淡出 */
+/* 被判吃掉、但还站在盘上的那颗子（预判期间是它本尊，确认之后是替身 —— 同一个类、
+   同一个位置，见 Board.tsx 的 doomed / standIn 两段）。
+   它必须活到「落点」那一拍才被撞飞。以前预判一挂上就把它从 DOM 里摘掉，于是这颗子
+   在**还该被看见**的两百多毫秒里根本不存在，撞飞发生在一个看不见的子身上。
+   压到走子那颗（.is-gliding，21）底下：吃子的物理顺序是「先盖住、再把它撞出去」。
+   点不到它（这一颗已经是死子），颜色也压暗一点 —— 死子不跟活子争注意力。 */
+.piece.is-doomed {
+  z-index: 19;
+  pointer-events: none;
+  opacity: 0.88;
+}
+
+/* 正在滑的那一颗抬到静止子（20）之上。没有它，吃子时走子那颗与落点上的死子同格重叠，
+   谁盖谁只看 DOM 顺序 —— 而顺序是按棋子身份号排的（piecesInOrder），于是同一手棋
+   有时「活子压过死子」、有时「死子浮在活子上面」。 */
+.piece.is-gliding {
+  z-index: 21;
+}
+
+/* 被吃棋子的受击动量滑移淡出。
+   击退距离原来是 15 个板面像素 —— 那颗子的半径就有 33，走子那颗又正好压在它上面，
+   15px 只够让它从底下探出一线边（实测约 5 个 CSS 像素），等于看不见。
+   现在推到 26px 并多缩一点：残影明确地从攻击子**底下**被刮出去，才读得出「被撞到」。 */
 .piece.piece-ghost-knockback {
   z-index: 18;
   pointer-events: none;
@@ -1845,8 +1969,8 @@ kbd {
   }
   100% {
     transform: var(--piece-base)
-      translate(calc(var(--kx, 0) * var(--u) * 15px), calc(var(--ky, 0) * var(--u) * 15px))
-      scale(0.86) rotate(calc(var(--kr, 4deg)));
+      translate(calc(var(--kx, 0) * var(--u) * 26px), calc(var(--ky, 0) * var(--u) * 26px))
+      scale(0.82) rotate(calc(var(--kr, 4deg)));
     opacity: 0;
   }
 }
@@ -1884,6 +2008,31 @@ kbd {
   box-shadow:
     0 0 calc(var(--u) * 4px) rgba(255, 255, 255, 0.95),
     0 0 calc(var(--u) * 8px) rgba(255, 255, 255, 0.65);
+}
+
+/* 退场：落子那一刻，可走点是「收回去」的，不是被剪刀剪掉的。
+   只做 opacity + scale —— 两个都归合成器管，不碰布局；比入场的 240ms 短一半，
+   收尾的那一程只负责让眼睛跟得上，拖长了就变成挡下一次点击。
+   这里必须重写整条 animation 简写：只改 animation-name 而把 --i 那条 delay 留着的话，
+   第 12 颗要点等 198ms 才开始收，而节点 170ms 就卸载了 —— 它不是淡出，是「啪」地没的。
+   110ms、比 Board 那个卸载定时器短 60ms：is-leaving 是随 React 提交挂上的，动画要到
+   下一次绘制才真正起步，天生晚一帧；而退场又常常正好打断在入场那波动画上（落子前刚点过
+   这颗子），同一元素换一条动画要多等第二帧才起步 —— 实测这种情形下 110ms 的动画要到
+   ~154ms 才跑完。配 --ease-exit（起步极平、末尾最快）时晚起步最要命 —— 截图量到最后一帧
+   还停在 opacity 0.72，正撞在最陡那一段上被摘掉。留够这 60ms，剪子才落在看不见的地方。 */
+.target.is-leaving {
+  animation: targetOut 110ms var(--ease-exit) both;
+}
+
+@keyframes targetOut {
+  from {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(0.55);
+    opacity: 0;
+  }
 }
 
 /* 键盘走子：棋盘可聚焦，焦点环收在内沿（inset 光晕纪律，不外溢） */
@@ -1963,6 +2112,10 @@ kbd {
   display: none;
 }
 
+/* 脉冲只走 scale + opacity。原来 100% 那一档还顺手把 box-shadow 的模糊半径从
+   12px 推到 16px —— 一条 2s 无限往返的动画里改阴影半径，等于每一帧重算一次辉光，
+   而这一圈光是挂在**每一个**可吃落点上的（选中一颗炮能打三颗子就是三圈）。
+   辉光的呼吸本来就靠「整圈变大」传达，去掉半径这一维看不出来。 */
 @keyframes targetCapturePulse {
   0% {
     transform: translate(-50%, -50%) scale(0.96);
@@ -1971,9 +2124,6 @@ kbd {
   100% {
     transform: translate(-50%, -50%) scale(1.03);
     opacity: 1;
-    box-shadow:
-      0 0 calc(var(--u) * 16px) rgba(255, 255, 255, 0.95),
-      inset 0 0 calc(var(--u) * 12px) rgba(255, 255, 255, 0.55);
   }
 }
 
@@ -2069,6 +2219,25 @@ kbd {
   }
 }
 
+/* 取消选中 / 落子那一刻，月牙环也得有一程收走，不许一帧剪掉（见 Board 的 MARK_OUT_MS）。
+   收的方向跟可走点相反 —— 往外散开再没：它是套在子外面的一圈光，往里缩会被看成
+   「被子吸进去」，而这一步那颗子正好在离开，两个动作撞在同一格上。
+   110ms 的理由同 targetOut：把尾巴留在卸载之前跑完。 */
+.selected-crescent-ring.is-leaving {
+  animation: crescentOut 110ms var(--ease-exit) both;
+}
+
+@keyframes crescentOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, calc(-50% - var(--u) * 6px)) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - var(--u) * 6px)) scale(1.12);
+  }
+}
+
 /* ---- 上一手落子终点：典雅微光取景落点框 ---- */
 
 /* ---- 上一步落子终点：三段柔和晶莹弧环 + 缓慢平稳旋转（贴合舒适，不闪烁，羽化柔边） ---- */
@@ -2085,10 +2254,22 @@ kbd {
   animation: fadeIn 220ms var(--ease-out) both;
 }
 
+/* 旋转挂在父元素的一条 CSS transform 上，不是 SVG 的 <animateTransform>。
+   SMIL 那一版每帧重画一次带高斯模糊的描边，而且绕开了减弱动效那段 —— 底部
+   `prefers-reduced-motion` 只压得动 CSS 动画，压不动 SMIL，偏好设置在这圈光上是失效的。
+   落点框从第一手挂到终局，是全站最久的常驻开销；换成 transform 之后整族弧环只栅格化
+   一次，之后每一帧只是把那张图转个角度。 */
 .last-to-rotator {
   display: block;
   width: 100%;
   height: 100%;
+  animation: lastToSpin 8s linear infinite;
+}
+
+@keyframes lastToSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .last-to-spinner {
@@ -2098,6 +2279,18 @@ kbd {
   overflow: visible;
 }
 
+/* 辉光是画出来的，不是滤出来的：原来这里叠了两层 drop-shadow，底下还有一个 SVG
+   feGaussianBlur，挂在一个**一直在转**的元素上，等于每帧重算一遍滤镜。改成同一条
+   dasharray 的第二道粗描边 —— 粗、淡、圆头，看着还是那圈羽化，成本是零。 */
+.last-to-spinner .spinner-halo {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 52 38;
+  opacity: 0.55;
+}
+
 .last-to-spinner .spinner-arcs {
   fill: none;
   stroke: rgba(255, 255, 255, 0.82);
@@ -2105,26 +2298,32 @@ kbd {
   stroke-linecap: round;
   stroke-dasharray: 52 38;
   opacity: 0.9;
-  filter: drop-shadow(0 0 calc(var(--u) * 2px) rgba(255, 255, 255, 0.75))
-          drop-shadow(0 0 calc(var(--u) * 5px) rgba(255, 255, 255, 0.35));
 }
 
 .last-to-red .spinner-arcs {
   stroke: rgba(255, 255, 255, 0.85);
-  filter: drop-shadow(0 0 calc(var(--u) * 2px) rgba(255, 255, 255, 0.8))
-          drop-shadow(0 0 calc(var(--u) * 5px) rgba(235, 110, 95, 0.45));
+}
+
+.last-to-red .spinner-halo {
+  stroke: rgba(235, 110, 95, 0.45);
 }
 
 .last-to-black .spinner-arcs {
   stroke: rgba(255, 255, 255, 0.85);
-  filter: drop-shadow(0 0 calc(var(--u) * 2px) rgba(255, 255, 255, 0.8))
-          drop-shadow(0 0 calc(var(--u) * 5px) rgba(150, 190, 240, 0.45));
+}
+
+.last-to-black .spinner-halo {
+  stroke: rgba(150, 190, 240, 0.45);
 }
 
 .last-to-capture .spinner-arcs {
   stroke: rgba(255, 255, 255, 0.98);
-  filter: drop-shadow(0 0 calc(var(--u) * 3px) rgba(255, 255, 255, 0.9))
-          drop-shadow(0 0 calc(var(--u) * 7px) rgba(245, 90, 75, 0.7));
+}
+
+.last-to-capture .spinner-halo {
+  stroke: rgba(245, 90, 75, 0.7);
+  stroke-width: 8;
+  opacity: 0.7;
 }
 
 .pv-trace {
@@ -2234,6 +2433,13 @@ kbd {
   animation: none;
 }
 
+/* 落点那圈弧环：它是全站唯一「从第一手挂到终局」的常驻动画，而且思考期间一定在盘上
+   （引擎正是在回应上一手，落点框刚亮着）。原来用 SMIL 转，这一段停摆清单管不着它 ——
+   现在换成 CSS transform 了，才终于停得下来。 */
+.app.is-thinking .last-to-rotator {
+  animation: none;
+}
+
 /* 深度刻度：点亮就是点亮，不要 pop */
 .app.is-thinking .rung {
   animation: none;
@@ -2249,6 +2455,15 @@ kbd {
 
 /* 主变条目：出现就是出现，不从下面升上来 */
 .app.is-thinking .pv-list li {
+  animation: none;
+}
+
+/* 判分块同理：前几名换一批就是换一批，别在引擎抢算力那段时间里跳舞。
+   chip 在思考期间也可能第一次出现（排队的那一步落地时判分已经算好了），
+   停掉的是它的入场，不是它的内容。 */
+.app.is-thinking .rank-row,
+.app.is-thinking .learn-block,
+.app.is-thinking .grade-chip {
   animation: none;
 }
 
@@ -2270,10 +2485,10 @@ kbd {
   transition: none;
 }
 
-/* 被将军的王：思考期间不闪，但那圈朱砂还在（静态基线写在 .piece.is-check 里） */
-.app.is-thinking .piece.is-check .piece-face {
-  animation: none;
-}
+/* 被将军那一响（.piece.is-check-alarm::before）**不进**停摆清单：它是「刚刚发生了一手
+   将军」这件事本身，跟落子音同一拍，正是思考期间要看见的东西。停掉它等于把汇报吞了。
+   要停的是常驻的那类 —— 这里以前写的 `.piece.is-check .piece-face { animation: none }`
+   管的那条动画根本不存在（静态朱砂环是 box-shadow，不是动画），是一条空规则，删了。 */
 
 
 .coord-layer {
@@ -2335,6 +2550,12 @@ kbd {
   }
 }
 
+/* 终局面纱：暗与模糊都画在 ::before 上，只让它淡入淡出。
+   原来这两条动画直接把 `backdrop-filter: blur(0 → 1.5px)` 当关键帧 —— 面纱铺满整块
+   棋盘，模糊半径每一帧都在换，等于每帧重新糊一遍 32 颗子；而这一刻正好是终局落定、
+   最该从容的时候。模糊半径从此是静态的（一挂上就是 1.5px），淡的只是这一层的透明度，
+   糊好的那张图可以留着复用。z-index:-1 让它待在纱的自己的层里、却又压在印章与卡片之下
+   （.result-veil 有 z-index 就是层叠上下文，负值跑不出去）。 */
 .result-veil {
   position: absolute;
   inset: 0;
@@ -2342,23 +2563,28 @@ kbd {
   place-items: center;
   border-radius: var(--r-lg);
   z-index: 50;
+}
+
+.result-veil::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: rgba(247, 242, 232, 0.4);
+  backdrop-filter: blur(1.5px);
   animation: veilDim 400ms var(--ease-out) both;
 }
 
 @keyframes veilDim {
   from {
-    background: rgba(247, 242, 232, 0);
-    backdrop-filter: blur(0);
-  }
-  to {
-    background: rgba(247, 242, 232, 0.4);
-    backdrop-filter: blur(1.5px);
+    opacity: 0;
   }
 }
 
 /* 终局这一层的退场：面纱自己先淡掉，印章与卡片各自「收回去」——
    印章是抬起来（-6px）离开，卡片往回沉，两件东西不同步才像有人来收场 */
-.result-veil.is-leaving {
+.result-veil.is-leaving::before {
   animation: veilLift 220ms var(--ease-out) both;
 }
 
@@ -2371,9 +2597,11 @@ kbd {
 }
 
 @keyframes veilLift {
+  from {
+    opacity: 1;
+  }
   to {
-    background: rgba(247, 242, 232, 0);
-    backdrop-filter: blur(0);
+    opacity: 0;
   }
 }
 
@@ -2555,102 +2783,7 @@ kbd {
 
 
 
-/* 排队中的那一步：引擎还在算，先记下来 */
 
-
-
-
-
-/* ---- 中间那条连接的线 ---- */
-
-
-/* 旅行墨点：把「转述」变成可见的物理过程。
-   桌面端沿水平方向在 ①② 之间旅行；窄屏转述台变竖排，改走垂直方向。 */
-
-.phase-inbound .relay-link-ink {
-  animation: inkIn 560ms var(--ease-out) both;
-}
-
-.phase-outbound .relay-link-ink {
-  background: var(--cinnabar);
-  animation: inkOut 560ms var(--ease-out) both;
-}
-
-/* 思考中的墨点不再呼吸 —— 引擎算它的，人下人的，互不打扰。
-   phase-thinking 已不再由组件发出，这条规则留作墓碑，防止将来误复活。 */
-.phase-thinking .relay-link-ink {
-  opacity: 0;
-}
-
-@keyframes inkIn {
-  0% {
-    opacity: 0;
-    left: 0;
-  }
-  15% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    left: 100%;
-  }
-}
-
-@keyframes inkOut {
-  0% {
-    opacity: 0;
-    left: 100%;
-  }
-  15% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    left: 0;
-  }
-}
-
-
-/* 窄屏：转述台竖排，墨点改走垂直方向 */
-@keyframes inkInV {
-  0% {
-    opacity: 0;
-    top: 0;
-  }
-  15% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    top: 100%;
-  }
-}
-
-@keyframes inkOutV {
-  0% {
-    opacity: 0;
-    top: 100%;
-  }
-  15% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    top: 0;
-  }
-}
 
 
 
@@ -3019,6 +3152,220 @@ kbd {
 }
 
 /* ==========================================================================
+   判分块：轮到人的那次搜索，加上刚刚那一步的判分
+   --------------------------------------------------------------------------
+   它跟上面那些是两种读数：「引擎现在怎么看这个局面」与「你刚才那一手排在第几」，
+   所以自己起一段，用一条虚线跟主变隔开，而不是再往 stat-grid 里塞一格。
+   ========================================================================== */
+
+.learn-block {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--hairline-strong);
+  animation: rise var(--dur) var(--ease-out) both;
+}
+
+.learn-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.learn-head h3 {
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink-mute);
+  font-weight: 500;
+}
+
+.learn-state {
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  color: var(--ink-4);
+  text-align: right;
+}
+
+.learn-state.is-live {
+  color: var(--cinnabar);
+}
+
+.learn-state.is-warn {
+  color: var(--ink-2);
+}
+
+.learn-state.is-bad {
+  color: var(--cinnabar);
+}
+
+.learn-review {
+  margin-bottom: 4px;
+}
+
+.learn-verdict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+/* 面板里这枚 chip 是主角（棋谱里那枚只是批注），大一档 */
+.learn-verdict .grade-chip {
+  font-size: 11px;
+  padding: 3px 9px;
+}
+
+.learn-played {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  color: var(--ink-0);
+}
+
+.learn-played em {
+  font-style: normal;
+  font-family: var(--font-num);
+  font-size: 10px;
+  color: var(--ink-mute);
+  margin-left: 5px;
+}
+
+.learn-sub {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+
+.learn-sub b {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--cinnabar);
+}
+
+/* 一句「为什么」：判分那块与错题本共用（措辞全站只有一个出口，样式也不该两套）。
+   左边一道朱砂细线把它与上面那些读数分开 —— 它不是又一个数字，是主变里盘上真会
+   发生的一件事。
+   不动画：它长在 130ms 轮询的栏里，而父块（.learn-block / 整张错题表）已经各自
+   入过一次场，再叠一层只会让同一句话反复入场。 */
+.learn-why,
+.mistake-why {
+  margin: 8px 0 0;
+  padding: 6px 9px;
+  border-left: 2px solid var(--cinnabar-wash);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  background: var(--paper-1);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.learn-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+
+.live-lines {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--hairline);
+}
+
+/* 前几名的表 */
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rank-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  padding: 4px 7px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  font-size: 12px;
+  /* 入场用同一句 rise（与主变条目、面板同一种语言），只播一次 */
+  animation: rise 260ms var(--ease-out) both;
+}
+
+.rank-row.is-best {
+  border-color: var(--cinnabar-edge);
+  background: linear-gradient(180deg, var(--paper-0), #fbf3e8);
+}
+
+/* 你走的那一手：玉色描边。它不是「好」，只是「在这块表里指认得出你」，
+   所以不用朱砂 —— 朱砂在整个界面里只表示危险与强调。 */
+.rank-row.is-played {
+  border-color: var(--jade);
+  background: var(--jade-wash);
+}
+
+.rank-no {
+  font-family: var(--font-num);
+  font-size: 10px;
+  color: var(--ink-mute);
+}
+
+.rank-cn {
+  font-family: var(--font-display);
+  color: var(--ink-0);
+}
+
+.rank-row.is-best .rank-cn {
+  color: var(--cinnabar);
+}
+
+.rank-score {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.rank-depth {
+  font-family: var(--font-num);
+  font-size: 10px;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+.rank-flag {
+  font-size: 9.5px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: var(--jade);
+  background: rgba(44, 106, 86, 0.14);
+}
+
+.rank-pv {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 1px;
+}
+
+.rank-pv em {
+  font-style: normal;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--paper-1);
+}
+
+/* ==========================================================================
    棋谱
    ========================================================================== */
 
@@ -3036,6 +3383,11 @@ kbd {
   margin: 0 -6px;
   padding: 0 6px;
   scrollbar-width: thin;
+  /* 每一手都要把棋谱带回最新那一行（MoveList 里那句 scrollTop）。
+     没有这一条它就是**硬切**：读到第 40 手时视野猛跳一屏，上一行还没看清就没了。
+     写在 CSS 而不是 JS 里：程序化滚动读的就是这个属性，
+     而滚动由合成器跑，不占落子那几百毫秒的主线程。 */
+  scroll-behavior: smooth;
 }
 
 .move-scroll table {
@@ -3066,6 +3418,10 @@ kbd {
   display: flex;
   align-items: baseline;
   gap: 5px;
+  /* 判分 chip 的文案有长有短（「正解」到「这手 5 步杀，最优 3 步」），
+     装不下就折到第二行 —— 折行难看，截断则是把结论砍掉。 */
+  flex-wrap: wrap;
+  row-gap: 3px;
   padding: 4px 8px;
   border-radius: var(--r-sm);
   font-size: 12.5px;
@@ -3142,12 +3498,80 @@ kbd {
   background: var(--cinnabar);
 }
 
-.move-eval {
+.move-eval,
+.replay-eval {
   margin-left: auto;
   font-family: var(--font-num);
   font-size: 10.5px;
   color: var(--ink-mute);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---- 判分 chip ----
+   颜色说的是这一手怎么样，边框与字重说的是这句话有几分可信：
+   `tone-soft`（名次层面、上限层面能说出口的）一律浅底细字，
+   只有精确差值与「没进前几名」才配得上朱砂。措辞由 lib/format 的 gradeLabel
+   统一给，这里只负责把 tone 翻成颜色 —— 两边都不许自己组织语言。 */
+.grade-chip {
+  font-style: normal;
+  font-size: 9.5px;
+  line-height: 1.3;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--paper-2);
+  color: var(--ink-2);
+  /* 一行的宽度装不下长文案（「这手 5 步杀，最优 3 步」）时让它自己折，
+     也不许截断：截掉的是判分结论的后半句，比难看严重得多 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  animation: gradeIn var(--dur) var(--ease-enter) both;
+}
+
+@keyframes gradeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.94);
+  }
+}
+
+.grade-chip.tone-good {
+  border-color: rgba(44, 106, 86, 0.34);
+  background: var(--jade-wash);
+  color: var(--jade);
+}
+
+.grade-chip.tone-soft {
+  border-color: var(--hairline);
+  background: var(--paper-2);
+  color: var(--ink-2);
+}
+
+.grade-chip.tone-warn {
+  border-color: var(--cinnabar-edge);
+  background: var(--cinnabar-wash);
+  color: var(--cinnabar);
+}
+
+.grade-chip.tone-bad {
+  border-color: transparent;
+  background: linear-gradient(180deg, var(--cinnabar-bright), var(--cinnabar));
+  color: #fff8f2;
+}
+
+.grade-chip.tone-mate {
+  border-color: transparent;
+  background: var(--ink-1);
+  color: var(--paper-0);
+}
+
+/* 「还没有判分」：虚线、最淡的一档。它必须和「判了、而且没问题」看得出区别，
+   又要比任何一条结论都安静 —— 它说的是界面的事，不是人的棋。 */
+.grade-chip.tone-mute {
+  border-style: dashed;
+  border-color: var(--hairline);
+  background: transparent;
+  color: var(--ink-4);
 }
 
 .move-placeholder {
@@ -3159,6 +3583,286 @@ kbd {
   padding: 24px 0;
   text-align: center;
   font-size: 12px;
+  color: var(--ink-mute);
+}
+
+/* ==========================================================================
+   错题本
+   --------------------------------------------------------------------------
+   第三种读数：上面两块讲「眼下这一手」，这块讲「这种局面你在历次对局里错过几次」。
+   数据来自存档的只读投影，所以整块按「账目」排（一题一行、虚线收尾），不跟棋谱共用
+   表格 —— 棋谱按手数排，错题按局面排，两把尺画到一张表上必然有一边失真。
+   ========================================================================== */
+
+.mistakes .panel-head {
+  margin-bottom: 8px;
+}
+
+/* 「重读」只是把只读查询再做一次，不是对局动词，所以它比 .btn 安静一档。
+   点击目标照样撑到 32px（跟上面那些 pill 同一把尺，audit.mjs 四档视口都量这个）；
+   过渡只碰颜色：border-width / padding 是布局属性，落在 motion.mjs 第 17 条
+   帧预算的黑名单里，而这一颗按钮就长在轮询重渲染的栏里。 */
+.mistake-reload {
+  font: inherit;
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 3px 12px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.mistake-reload:hover:not(:disabled) {
+  color: var(--cinnabar);
+  border-color: var(--cinnabar-edge);
+}
+
+.mistake-reload:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.mistake-source {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+/* 整栏本来就在滚（.rail overflow-y:auto），题多时再套一层自己的滚动，
+   免得一本错题把「引擎分析」和「棋谱」顶出画面；高度用 vh 收着，
+   矮视口下不会压出一条只有一行可见的缝。 */
+.mistake-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(288px, 42vh);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.mistake-row {
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--paper-0);
+  padding: 7px 9px;
+}
+
+.mistake-top {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.mistake-side {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  color: var(--ink-1);
+}
+
+/* 谁走这题写在颜色里：同一批 FEN 里红与黑的功课是两道不同的题。 */
+.mistake-row.side-red .mistake-side {
+  color: var(--piece-red);
+}
+
+.mistake-row.side-black .mistake-side {
+  color: var(--piece-black);
+}
+
+.mistake-count {
+  font-family: var(--font-num);
+  font-size: 11px;
+  color: var(--cinnabar);
+}
+
+.mistake-games {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-size: 10px;
+  color: var(--ink-4);
+}
+
+.mistake-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.mistake-best {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.mistake-best b {
+  font-weight: 600;
+  color: var(--cinnabar);
+}
+
+.mistake-best em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  margin-left: 4px;
+}
+
+/* FEN 是这道题的身份证，也是唯一能把两局里的「同一个局面」核对上的字符串，
+   所以宁可写全不省略。它一行装不下：靠 overflow-wrap 硬拆，不许横向溢出
+   （audit.mjs 四档视口扫的就是这个）。 */
+.mistake-fen {
+  display: block;
+  margin-top: 6px;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--ink-4);
+  overflow-wrap: anywhere;
+}
+
+.mistake-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px dashed var(--hairline);
+  font-size: 10px;
+  color: var(--ink-4);
+}
+
+.mistake-blurred {
+  color: var(--ink-3);
+}
+
+/* 这句必须留在账本末尾：读题的人最容易得出的错误结论是「这里没列我那一手，
+   就是下对了」，而 blurred 说的是**证不出**，不是下对。 */
+.mistake-caveat {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+/* 「没题」「存档关着」「库里一局都没有」是三种不同的空，共用这一档字号：
+   它们都比题目本身轻，但都要说出口。 */
+.mistake-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* 「摆到盘上」是这一行里唯一动手的动词，但它开的是只读的复盘台、不是再走一局，
+   所以长相跟着 .btn-ghost 退到页脚同一档字号，只有高度不让步 ——
+   .btn-sm 那 34px 是 audit.mjs 逐颗量的点击目标，压小它换来的省不值。 */
+.mistake-replay {
+  font-size: 10.5px;
+  padding: 0 10px;
+}
+
+/* ==========================================================================
+   复盘架
+   --------------------------------------------------------------------------
+   错题本按局面问「这种局面你错过几次」，这一栏按局问「哪一局值得重看」。
+   两栏并排站在同一根轨里，读的还是同一份存档，所以头部那颗按钮与那行来源
+   直接共用 .mistake-reload / .mistake-source 的长相：同一把尺量出来的两种账，
+   长成一个有边框一个没有，会让人以为它们是两个系统。
+   ========================================================================== */
+
+.shelf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* 与错题本同一把尺：一栏装不下就自己滚，别把「引擎分析」和「棋谱」顶出画面 */
+  max-height: min(232px, 34vh);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* 整行都是按钮：一段点了没反应的空白，是这种列表最容易被当成「坏了」的地方。
+   于是长相全在 .shelf-pick 上，li 只负责排队。 */
+.shelf-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 7px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--paper-0);
+  font: inherit;
+  text-align: left;
+  color: var(--ink-2);
+  cursor: pointer;
+  /* 只碰颜色：border-width / padding 是布局属性，落在 motion.mjs 第 17 条帧预算的
+     黑名单里；这一栏虽然不进轮询，点开一局时整列会重挂，贵的仍是那一帧。 */
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.shelf-pick:hover {
+  border-color: var(--hairline-strong);
+  background: var(--paper-1);
+}
+
+.shelf-kind {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  color: var(--ink-1);
+}
+
+.shelf-count {
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.shelf-side,
+.shelf-when {
+  font-size: 10px;
+  color: var(--ink-4);
+}
+
+.shelf-when {
+  font-family: var(--font-num);
+}
+
+.shelf-over {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ink-mute);
+}
+
+/* 「有几手带着判分」这一句是玉色的：玉在这个界面里指认「你走过的那一手」
+   （见 .rank-row.is-played），而判分本来就只挂在人走的棋上。
+   不借朱砂 —— 朱砂只报危险与强调，一局棋下得坏不等于这一行危险。 */
+.shelf-pick.has-graded .shelf-count {
+  color: var(--jade);
+}
+
+.shelf-more {
+  margin: 8px 0 0;
+  font-size: 10px;
   color: var(--ink-mute);
 }
 
@@ -3363,6 +4067,273 @@ kbd {
   color: var(--ink-3);
 }
 
+/* ==========================================================================
+   复盘台
+   --------------------------------------------------------------------------
+   这层里最大的东西是那块盘，而盘只有一把尺：.board 的 height:100% +
+   aspect-ratio 720/800 + max-width:100%。所以这里做的不是重写尺寸，
+   而是**给那条 height 链一个确定的头** —— .replay-desk 直接定高（窄屏改成按内容长、
+   自己滚，见下面 900 那一档），body 与 board 逐级 stretch，盘就和现场那块同一个比例。
+   另写一套「按宽度算高度」的算法，会在某个窗口宽度上让复盘的盘与对局的盘
+   长得不一样，而那正是「同一条棋谱两种样子」的来源。
+   ========================================================================== */
+
+/* 底下那台机器在回放期间照常 130ms 轮询、照常重绘，这一层糊在其上就不是「开一次
+   算一次」而是每 tick 重糊一整屏 —— 第 17 条帧预算最贵的一档。改吃纯色压暗：
+   要看清的是自己那副盘，不是透过毛玻璃猜底下走到哪了。 */
+.replay-veil {
+  background: rgba(22, 19, 15, 0.58);
+  backdrop-filter: none;
+}
+
+.replay-desk {
+  width: min(1060px, 100%);
+  height: min(88vh, 880px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 18px 22px 16px;
+}
+
+.replay-head {
+  margin-bottom: 12px;
+}
+
+.replay-sub {
+  margin: 4px 0 0;
+  font-family: var(--font-num);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.replay-hint {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+}
+
+.replay-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(272px, 336px);
+  gap: 18px;
+  /* 读下一局的路上不许盘面上出现一个洞：留着上一局，整块压暗、不接点击，
+     比先清空再填上诚实 —— 空的盘会被读成「这一局没走子」。 */
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.replay-body.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.replay-board {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 这一层是整块盘的尺头。盘自己那条 `height:100% + aspect-ratio + max-width:100%`
+   只会「按高度算宽度」，一旦栏高乘出来的宽度超过栏宽，max-width 就把宽度压回去、
+   高度不动 —— 1024 上实测盘成了 578×695，比例 0.832，盘面被拉成长方。
+   所以在垫盘这一层同时给两个上限：比例先由宽度算出一个高，再用 max-height 收进
+   栏高。谁小听谁的，盘自己那条规则就永远落在框里，四档视口量出来都是 0.9000。 */
+.replay-board-wrap {
+  min-width: 0;
+  flex: 0 1 auto;
+  width: 100%;
+  max-height: 100%;
+  aspect-ratio: 720 / 800;
+}
+
+.replay-ctrl {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.replay-at {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  /* 第 12 手 → 第 2 手 少一位，居中那排按钮会跟着左右跳；定宽钉住这一格。
+     宽度是这一行里唯一的数，改它之前先想清楚最大手数。 */
+  min-width: 92px;
+  text-align: center;
+}
+
+.replay-graded {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.replay-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 8px;
+}
+
+.replay-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+  min-height: 40px;
+  font-size: 12.5px;
+  color: var(--ink-1);
+}
+
+.replay-now b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.replay-by {
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+
+.replay-row.side-red .replay-by,
+.replay-now .replay-by.side-red {
+  color: var(--piece-red);
+}
+
+.replay-row.side-black .replay-by,
+.replay-now .replay-by.side-black {
+  color: var(--piece-black);
+}
+
+/* 引擎那一步的评估与棋谱里那个数是同一个数、同一把尺，所以它就是 .move-eval
+   那条规则共用的第二个选择器（见上面棋谱那一段），这里不再定第二次字号。 */
+.replay-start {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.replay-why {
+  flex: 0 0 auto;
+}
+
+/* 棋谱条：一行一手，整行可点。它自己滚，但**不霸占**右栏剩下的空间 ——
+   五手的小局也要让「这一局共几手」那句紧跟在末行下面，中间空出一大片
+   会让人以为这一局还有别的行没渲染出来。长局靠 flex-shrink 收进可用高度。
+   不加逐行入场动画：索引一变整列就重渲染（键是 ply，不重挂），动画只会反复播同一句。 */
+.replay-strip {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.replay-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 7px;
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  font: inherit;
+  text-align: left;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.replay-row:hover {
+  border-color: var(--hairline-strong);
+  background: var(--paper-0);
+}
+
+/* 引擎录的那一手是「它走的」，不是功课：整行退到墨灰，把朱砂留给判分。 */
+.replay-row.by-engine {
+  background: transparent;
+  color: var(--ink-3);
+}
+
+.replay-n {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  color: var(--ink-4);
+  min-width: 20px;
+}
+
+.replay-cn {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--ink-1);
+}
+
+/* 停在哪一手：朱砂描边 + 纸面抬起。这是整列里唯一的「眼下」，
+   错题本与判分块用的都是同一套语言（.rank-row.is-best）。 */
+.replay-row.is-on {
+  border-color: var(--cinnabar-edge);
+  background: linear-gradient(180deg, var(--paper-0), #fbf3e8);
+  color: var(--ink-0);
+}
+
+.replay-row.is-on .replay-cn {
+  color: var(--cinnabar);
+}
+
+.replay-foot {
+  flex: 0 0 auto;
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px dashed var(--hairline);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+/* 窄屏一栏放不下两栏：台子顶满一屏高时，量出来盘那一行只有 402px 高、里面却要放
+   472px 的东西 —— 盘溢出到棋谱条上，压着下面那几行。这里让台子**按内容长、超出自己滚**，
+   行高跟着盘走；盘的尺还是上面那一条（宽度算高、再收进栏高），一处都没换。 */
+@media (max-width: 900px) {
+  .replay-desk {
+    height: auto;
+    max-height: 92vh;
+    padding: 14px 14px 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .replay-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    gap: 10px;
+  }
+
+  .replay-strip {
+    max-height: 34vh;
+    flex: 0 0 auto;
+  }
+
+  .replay-side {
+    min-height: 0;
+  }
+}
+
 .boot {
   height: 100%;
   display: flex;
@@ -3464,8 +4435,12 @@ kbd {
   /* 这里是关键：桌面端 board-wrap 是 flex 里撑满剩余空间的一块，
      所以带着 min-height: 0。到了窄屏它变成 grid 行，min-height: 0 会让
      行高被压到比棋盘还矮 —— 棋盘就会同时顶穿上方的回合条和下方的转述台。
-     恢复 auto，让行高跟着棋盘的内容走。 */
-  .board-wrap {
+     恢复 auto，让行高跟着棋盘的内容走。
+     两条规则都必须限定在 .stage 里：它们说的是「现场那一列」的顺序与行高，
+     而复盘台那块盘也用了 .board-wrap/.board（同一把尺，故意共用）。不限定就会
+     串进那层 —— order: 2 把按钮排到盘上面，height: auto 把盘的尺换成按宽度算，
+     于是「同一条棋谱两种样子」从样式表这一头就成立了（实测 1024 与 414 都中招）。 */
+  .stage > .board-wrap {
     order: 2;
     display: block;
     min-height: auto;
@@ -3483,7 +4458,7 @@ kbd {
     order: 5;
   }
 
-  .board {
+  .stage .board {
     height: auto;
     width: min(100%, 520px);
     margin: 0 auto;
@@ -3492,13 +4467,6 @@ kbd {
 
 
 
-  /* 竖排转述台：墨点改走垂直方向 */
-  .phase-inbound .relay-link-ink {
-    animation-name: inkInV;
-  }
-  .phase-outbound .relay-link-ink {
-    animation-name: inkOutV;
-  }
 }
 
 @media (max-width: 720px) {
@@ -3592,6 +4560,11 @@ kbd {
        animation-delay，只压 duration 的话用户还是要干等编排跑完 */
     animation-delay: 1ms !important;
     transition-delay: 1ms !important;
+  }
+  /* scroll-behavior 不在上面那几条的管辖区里：它不是一个时长，而是「程序化滚动
+     要不要走一段路」。减弱动效的人要的是每一下都直接到位 —— 棋谱那一跳落到底就行。 */
+  * {
+    scroll-behavior: auto !important;
   }
 }
 
