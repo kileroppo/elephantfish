@@ -88,6 +88,9 @@ def run_server(port: int):
     with open(log_path, 'a', encoding='utf-8') as log_file:
         app_script = os.path.join(root_dir, 'server', 'app.py')
         cmd = [sys.executable, '-u', app_script, str(port)]
+        host = os.environ.get('EF_HOST')
+        if host:
+            cmd.extend(['--host', host])
         proc = subprocess.Popen(
             cmd,
             cwd=root_dir,
@@ -135,6 +138,15 @@ def run_server(port: int):
 
     print('', flush=True)
     print(f'完成。服务跑在端口 {target_port} (pid {proc.pid})。', flush=True)
+    if os.environ.get('EF_HOST') in ('0.0.0.0', '::', ''):
+        try:
+            sys.path.insert(0, root_dir)
+            from server.app import _lan_ips
+            lan_ips = _lan_ips()
+            for ip in lan_ips:
+                print(f'局域网地址：http://{ip}:{target_port}/', flush=True)
+        except Exception:
+            pass
     print(f'日志：{log_name}', flush=True)
     print('在这个窗口按 Ctrl+C 就停止服务。', flush=True)
     print('', flush=True)

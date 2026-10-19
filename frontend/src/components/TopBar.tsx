@@ -7,7 +7,9 @@ interface Props {
   flipped: boolean
   soundOn: boolean
   setupMode?: boolean
+  drillMode?: boolean
   onToggleSetup?: () => void
+  onToggleDrill?: () => void
   onToggleEngine?: () => void
   onToggleEngineSide?: () => void
   onFlip: () => void
@@ -22,7 +24,9 @@ export function TopBar({
   connected,
   soundOn,
   setupMode = false,
+  drillMode = false,
   onToggleSetup,
+  onToggleDrill,
   onToggleEngine,
   onToggleEngineSide,
   onFlip,
@@ -110,6 +114,19 @@ export function TopBar({
             断线
           </button>
         )}
+        <button
+          type="button"
+          className={`icon-btn icon-drill${drillMode ? ' is-on' : ''}`}
+          onClick={onToggleDrill}
+          title={drillMode ? '退出精训营，返回转述对局' : '进入精训营（专项题库、实战攻坚与棋力精训）'}
+        >
+          <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6">
+            <circle cx="10" cy="10" r="7" />
+            <circle cx="10" cy="10" r="3.5" />
+            <path d="M10 2v2M10 16v2M2 10h2M16 10h2" />
+          </svg>
+          <span>{drillMode ? '退出实训' : '精训营'}</span>
+        </button>
         <button
           type="button"
           className={`icon-btn icon-setup${setupMode ? ' is-on' : ''}`}

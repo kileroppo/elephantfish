@@ -133,6 +133,18 @@ CREATE TABLE IF NOT EXISTS agg_stats (
     key   TEXT PRIMARY KEY,
     value REAL NOT NULL
 );
+
+-- 实训营学员通关与棋力精通度档案
+CREATE TABLE IF NOT EXISTS training_progress (
+    puzzle_id       TEXT PRIMARY KEY,
+    category        TEXT NOT NULL,
+    status          TEXT NOT NULL,
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    hints_used      INTEGER NOT NULL DEFAULT 0,
+    first_try_pass  INTEGER NOT NULL DEFAULT 0,
+    last_cleared_at REAL,
+    updated_at      REAL NOT NULL
+);
 """
 
 
@@ -712,6 +724,140 @@ class Store:
                 'unreadable': unreadable,
                 'game_id': game_id,
             },
+        }
+
+    # ------------------------------------------------------------------ #
+    # 精训营学员档案（只读与增量记录）
+    # ------------------------------------------------------------------ #
+
+    def get_training_progress(self) -> dict:
+        """获取所有已记录题目的通关进度字典：puzzle_id -> progress dict。"""
+        if self._conn is None:
+            return {}
+        with self._lock:
+            cur = self._conn.execute(
+                'SELECT puzzle_id, category, status, attempts, hints_used, '
+                'first_try_pass, last_cleared_at, updated_at FROM training_progress'
+            )
+            rows = cur.fetchall()
+        out = {}
+        for row in rows:
+            out[row[0]] = {
+                'puzzle_id': row[0],
+                'category': row[1],
+                'status': row[2],
+                'attempts': row[3],
+                'hints_used': row[4],
+                'first_try_pass': bool(row[5]),
+                'last_cleared_at': row[6],
+                'updated_at': row[7],
+            }
+        return out
+
+    def record_training_attempt(self, puzzle_id: str, category: str,
+                                solved: bool, hints_used: int = 0,
+                                first_try: bool = False) -> dict:
+        """记录一次解题尝试或通关。"""
+        if self._conn is None:
+            return {'store_enabled': False}
+        now = time.time()
+        with self._lock:
+            cur = self._conn.execute(
+                'SELECT attempts, hints_used, status, first_try_pass '
+                'FROM training_progress WHERE puzzle_id = ?',
+                (puzzle_id,)
+            )
+            row = cur.fetchone()
+            if row is None:
+                attempts = 1
+                total_hints = hints_used
+                if solved:
+                    status = 'mastered' if hints_used == 0 and first_try else 'solved_with_hints'
+                    first_try_pass = 1 if first_try and hints_used == 0 else 0
+                    cleared_at = now
+                else:
+                    status = 'in_progress'
+                    first_try_pass = 0
+                    cleared_at = None
+                self._conn.execute(
+                    'INSERT INTO training_progress '
+                    '(puzzle_id, category, status, attempts, hints_used, first_try_pass, last_cleared_at, updated_at) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    (puzzle_id, category, status, attempts, total_hints, first_try_pass, cleared_at, now)
+                )
+            else:
+                attempts = row[0] + 1
+                total_hints = max(row[1], hints_used)
+                prev_status = row[2]
+                first_try_pass = row[3]
+                cleared_at = None
+                if solved:
+                    if prev_status == 'mastered':
+                        status = 'mastered'
+                    elif hints_used == 0 and first_try and attempts == 1:
+                        status = 'mastered'
+                        first_try_pass = 1
+                    else:
+                        status = 'solved_with_hints' if prev_status != 'mastered' else 'mastered'
+                    cleared_at = now
+                else:
+                    status = prev_status if prev_status in ('mastered', 'solved_with_hints') else 'in_progress'
+
+                if cleared_at is not None:
+                    self._conn.execute(
+                        'UPDATE training_progress SET attempts = ?, hints_used = ?, status = ?, '
+                        'first_try_pass = ?, last_cleared_at = ?, updated_at = ? WHERE puzzle_id = ?',
+                        (attempts, total_hints, status, first_try_pass, cleared_at, now, puzzle_id)
+                    )
+                else:
+                    self._conn.execute(
+                        'UPDATE training_progress SET attempts = ?, hints_used = ?, status = ?, '
+                        'updated_at = ? WHERE puzzle_id = ?',
+                        (attempts, total_hints, status, now, puzzle_id)
+                    )
+            self._conn.commit()
+
+        return {
+            'store_enabled': True,
+            'puzzle_id': puzzle_id,
+            'status': status,
+            'attempts': attempts,
+            'hints_used': total_hints,
+            'first_try_pass': bool(first_try_pass),
+        }
+
+    def get_training_summary(self) -> dict:
+        """获取学员实训综合战报。"""
+        if self._conn is None:
+            return {'store_enabled': False, 'total_solved': 0, 'mastered': 0, 'by_category': {}}
+        with self._lock:
+            cur = self._conn.execute(
+                'SELECT category, status, first_try_pass FROM training_progress'
+            )
+            rows = cur.fetchall()
+
+        total = len(rows)
+        mastered = sum(1 for r in rows if r[1] == 'mastered')
+        solved = sum(1 for r in rows if r[1] in ('mastered', 'solved_with_hints'))
+        first_try = sum(1 for r in rows if r[2] == 1)
+
+        by_cat: dict = {}
+        for cat, stat, _ in rows:
+            if cat not in by_cat:
+                by_cat[cat] = {'total': 0, 'solved': 0, 'mastered': 0}
+            by_cat[cat]['total'] += 1
+            if stat in ('mastered', 'solved_with_hints'):
+                by_cat[cat]['solved'] += 1
+            if stat == 'mastered':
+                by_cat[cat]['mastered'] += 1
+
+        return {
+            'store_enabled': True,
+            'total_attempted': total,
+            'total_solved': solved,
+            'mastered': mastered,
+            'first_try_accuracy': round((first_try / solved * 100) if solved > 0 else 0.0, 1),
+            'by_category': by_cat,
         }
 
     def close(self):

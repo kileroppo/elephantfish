@@ -1,10 +1,15 @@
 import type {
   ApiReply,
   AppState,
+  GameSnapshot,
   GamesReply,
   MistakeBookReply,
   ReplayReply,
   SearchTask,
+  TrainingHintReply,
+  TrainingPuzzlesReply,
+  TrainingStartReply,
+  TrainingStepReply,
 } from './types'
 
 const BASE = ''
@@ -130,4 +135,44 @@ export const api = {
    */
   game: (gameId: string) =>
     request<ReplayReply>(`/api/game?game_id=${encodeURIComponent(gameId)}`),
+
+  // ---------------- 实训营（Drill Lab）接口 ----------------
+  trainingPuzzles: (category?: string) =>
+    request<TrainingPuzzlesReply>(
+      category ? `/api/training/puzzles?category=${encodeURIComponent(category)}` : '/api/training/puzzles',
+    ),
+
+  trainingStart: (puzzleId: string) =>
+    request<TrainingStartReply>('/api/training/start', {
+      method: 'POST',
+      body: JSON.stringify({ puzzle_id: puzzleId }),
+    }),
+
+  trainingStep: (puzzleId: string, move: string, sandbox = false) =>
+    request<TrainingStepReply>('/api/training/step', {
+      method: 'POST',
+      body: JSON.stringify({ puzzle_id: puzzleId, move, sandbox }),
+    }),
+
+  trainingUndo: (puzzleId: string) =>
+    request<{ ok: boolean; message: string; game: GameSnapshot }>('/api/training/undo', {
+      method: 'POST',
+      body: JSON.stringify({ puzzle_id: puzzleId }),
+    }),
+
+  trainingHint: (puzzleId: string, level: number) =>
+    request<TrainingHintReply>('/api/training/hint', {
+      method: 'POST',
+      body: JSON.stringify({ puzzle_id: puzzleId, level }),
+    }),
+
+  trainingReset: (puzzleId: string) =>
+    request<{ ok: boolean; message: string; game: GameSnapshot; hints_used: number; solved: boolean }>(
+      '/api/training/reset',
+      {
+        method: 'POST',
+        body: JSON.stringify({ puzzle_id: puzzleId }),
+      },
+    ),
 }
+

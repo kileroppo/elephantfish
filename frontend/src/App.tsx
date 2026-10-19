@@ -6,6 +6,7 @@ import { MoveList } from './components/MoveList'
 import { MistakeBook } from './components/MistakeBook'
 import { GameShelf } from './components/GameShelf'
 import { ReplayDesk, type ReplaySeed } from './components/ReplayDesk'
+import { DrillDesk } from './components/DrillDesk'
 import { ControlRail } from './components/ControlRail'
 import { TopBar } from './components/TopBar'
 import { SetupPanel } from './components/SetupPanel'
@@ -41,6 +42,14 @@ export default function App() {
     (gameId: string, ply: number | null) => setReplay({ gameId, focusPly: ply }),
     [],
   )
+
+  /** 精训营状态（开启状态与直达题目 ID） */
+  const [drillOpen, setDrillOpen] = useState(false)
+  const [drillPuzzleId, setDrillPuzzleId] = useState<string | null>(null)
+  const openDrillAt = useCallback((puzzleId?: string) => {
+    setDrillPuzzleId(puzzleId ?? null)
+    setDrillOpen(true)
+  }, [])
 
   // 默认专注模式：默认左右两栏全收起，只留棋盘和应手区
   const [railL, setRailL] = useState(() => localStorage.getItem(LS_RAIL_L) === '1')
@@ -299,7 +308,12 @@ export default function App() {
         flipped={flipped}
         soundOn={soundOn}
         setupMode={setup.active}
+        drillMode={drillOpen}
         onToggleSetup={setup.toggle}
+        onToggleDrill={() => {
+          setDrillPuzzleId(null)
+          setDrillOpen((v) => !v)
+        }}
         onToggleEngine={() => {
           const current = g.state?.settings.engine_type ?? 'pikafish'
           const next = current === 'pikafish' ? 'builtin' : 'pikafish'
@@ -510,7 +524,7 @@ export default function App() {
           <MoveList game={game} />
           {/* 错题本读的是存档里那些**历次**对局，与眼下这一局无关：它只在一开始
               和按「重读」时才发请求，不进 130ms 那条轮询 —— 读它不改任何东西。 */}
-          <MistakeBook onReplay={openReplayAt} />
+          <MistakeBook onReplay={openReplayAt} onDrill={openDrillAt} />
           {/* 复盘架同上：一局一行，点一行开复盘台。有判分的那几局才谈得上「值得重看」。 */}
           <GameShelf onPick={openReplay} />
         </aside>
@@ -519,6 +533,17 @@ export default function App() {
       {/* 复盘台：常挂，开与关都交给它自己（和 HelpOverlay 同一套），
           因为退场那 180ms 还要留在 DOM 里播。 */}
       <ReplayDesk seed={replay} onClose={() => setReplay(null)} />
+
+      {/* 精训营实训台：常挂，开与关交给它自己 */}
+      <DrillDesk
+        open={drillOpen}
+        initialPuzzleId={drillPuzzleId}
+        onClose={() => {
+          setDrillOpen(false)
+          setDrillPuzzleId(null)
+        }}
+        onToast={g.pushToast}
+      />
 
       <Toasts items={g.toasts} onDismiss={g.dismissToast} />
       {/* 常挂：开与关都交给它自己（关掉时还要多活 180ms 播退场），

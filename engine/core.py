@@ -50,6 +50,9 @@ _pst_k[183] = 2508  # e1 (中宫)
 _pst_k[182] = _pst_k[184] = 2505  # d1, f1 (中肋)
 _pst_k[167] = 2496  # e2 (宫顶正中，最危险)
 _pst_k[166] = _pst_k[168] = 2496  # d2, f2 (宫顶两侧)
+# 帅飞将（照面直取）落点在对方九宫（镜像位置），保留老将底分以确保飞将估值达到绝杀量级
+for _sq in (199, 198, 200, 183, 182, 184, 167, 166, 168):
+    _pst_k[254 - _sq] = _pst_k[_sq]
 pst['K'] = tuple(_pst_k)
 
 piece = dict(_base.piece)
@@ -123,7 +126,7 @@ class Position(_base.Position):
 
             # 帅将照面：同一列上中间无子，可直取对方老将
             if p == 'K':
-                for sp in range(i - 16, A9, -16):
+                for sp in range(i - 16, 0, -16):
                     q = board[sp]
                     if q == 'k':
                         yield (i, sp)
@@ -348,11 +351,11 @@ def pieces_of(board):
 def opponent_can_take_king(pos):
     """在 ``pos``（轮到的这方视角）里，对方能否立刻吃掉老将。
 
-    ``value()`` 里吃掉老将的那一步收益必然 >= MATE_SCORE，其它任何
-    吃子都不可能到这个量级（最大子 233 + 位置分 233 = 466）。
+    任何一步吃掉老将（目标格为 'k'）或吃子收益 >= MATE_SCORE 均判定为真。
     """
+    board = pos.board
     for m in pos.gen_moves():
-        if pos.value(m) >= MATE_SCORE:
+        if board[m[1]] == 'k' or pos.value(m) >= MATE_SCORE:
             return True
     return False
 

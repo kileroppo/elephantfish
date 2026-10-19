@@ -534,3 +534,76 @@ export interface ReplayReply extends ApiReply {
   plies: ReplayPly[]
   summary: ReplaySummary
 }
+
+// --------------------------------------------------------------------------- //
+// 实训营（Drill Lab）类型定义
+// --------------------------------------------------------------------------- //
+
+export interface PuzzleCategory {
+  id: string
+  name: string
+  desc: string
+  icon: string
+}
+
+export interface TrainingPuzzle {
+  id: string
+  title: string
+  category: string
+  difficulty: number
+  side: Side
+  target: string
+  fen: string
+  hints: string[]
+  explanation: string
+  status: 'unattempted' | 'in_progress' | 'mastered' | 'solved_with_hints'
+  attempts: number
+  hints_used: number
+  first_try_pass: boolean
+  last_cleared_at: number | null
+}
+
+export interface TrainingSummary {
+  store_enabled: boolean
+  total_attempted: number
+  total_solved: number
+  mastered: number
+  first_try_accuracy: number
+  by_category: Record<string, { total: number; solved: number; mastered: number }>
+}
+
+export interface TrainingPuzzlesReply {
+  ok: boolean
+  categories: PuzzleCategory[]
+  puzzles: TrainingPuzzle[]
+  summary: TrainingSummary
+}
+
+export interface TrainingStartReply {
+  ok: boolean
+  puzzle: TrainingPuzzle
+  game: GameSnapshot
+  hints_used: number
+  solved: boolean
+  sandbox: boolean
+}
+
+export interface TrainingStepReply {
+  ok: boolean
+  outcome: 'continue' | 'solved' | 'bad_move'
+  message: string
+  user_move?: { iccs: string; chinese: string }
+  engine_move?: { iccs: string; chinese: string } | null
+  game: GameSnapshot
+  solved: boolean
+  eval_red?: number
+  explanation?: string
+}
+
+export interface TrainingHintReply {
+  ok: boolean
+  level: number
+  hint: string
+  hints_used: number
+}
+

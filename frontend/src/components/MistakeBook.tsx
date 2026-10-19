@@ -17,9 +17,11 @@ import { bestLineWord, gradeDetail, gradeLabel, relativeTime, sideName, whySente
 interface MistakeBookProps {
   /** 「摆到盘上」：把这一题最差那次所在的那一局、那一手交给复盘台。 */
   onReplay: (gameId: string, ply: number | null) => void
+  /** 「入营重练」：将该失误局面直接作为题目调入精训营进行攻坚实训 */
+  onDrill?: (puzzleId: string) => void
 }
 
-export function MistakeBook({ onReplay }: MistakeBookProps) {
+export function MistakeBook({ onReplay, onDrill }: MistakeBookProps) {
   const [entries, setEntries] = useState<MistakeEntry[] | null>(null)
   const [summary, setSummary] = useState<MistakeSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -83,7 +85,7 @@ export function MistakeBook({ onReplay }: MistakeBookProps) {
       {entries && entries.length > 0 && (
         <ul className="mistake-list">
           {entries.map((e) => (
-            <MistakeRow key={e.fen_before} entry={e} onReplay={onReplay} />
+            <MistakeRow key={e.fen_before} entry={e} onReplay={onReplay} onDrill={onDrill} />
           ))}
         </ul>
       )}
@@ -98,8 +100,8 @@ export function MistakeBook({ onReplay }: MistakeBookProps) {
 
       {listed > 0 && (
         <p className="hint mistake-hint">
-          「摆到盘上」开的是复盘台：它读的是存档里那一局，一手手摆回去，
-          眼下这一局照旧在底下走，不会被动。
+          「摆到盘上」开的是复盘台：它读的是存档里那一局，一手手摆回去；
+          「入营重练」将此局面送入精训营由引擎动态防守实战攻坚。
         </p>
       )}
     </section>
@@ -110,9 +112,11 @@ export function MistakeBook({ onReplay }: MistakeBookProps) {
 function MistakeRow({
   entry,
   onReplay,
+  onDrill,
 }: {
   entry: MistakeEntry
   onReplay: (gameId: string, ply: number | null) => void
+  onDrill?: (puzzleId: string) => void
 }) {
   const review = entry.worst_review
   const grade = gradeLabel(review)
@@ -166,19 +170,31 @@ function MistakeRow({
         {/* 摆上去的是**最差那一次**：这一题上面那句判分与那句「为什么」讲的就是它，
             复盘台停在别处就成了另一道题。存档里没有那一局时（worst_game_id 空）
             这颗按钮整个不出现 —— 按下去读回来一个 404 是骗人。 */}
-        {entry.worst_game_id && (
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm mistake-replay"
-            onClick={() => onReplay(entry.worst_game_id, entry.worst_ply)}
-            title={`把最差那次那一局（${entry.worst_game_id}）摆到复盘台上${
-              entry.worst_ply ? `，停在第 ${entry.worst_ply} 手` : ''
-            }`}
-            data-mistake-replay={entry.worst_game_id}
-          >
-            摆到盘上
-          </button>
-        )}
+        <div className="mistake-actions">
+          {entry.worst_game_id && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm mistake-replay"
+              onClick={() => onReplay(entry.worst_game_id, entry.worst_ply)}
+              title={`把最差那次那一局（${entry.worst_game_id}）摆到复盘台上${
+                entry.worst_ply ? `，停在第 ${entry.worst_ply} 手` : ''
+              }`}
+              data-mistake-replay={entry.worst_game_id}
+            >
+              摆到盘上
+            </button>
+          )}
+          {entry.worst_game_id && onDrill && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm mistake-drill"
+              onClick={() => onDrill(`mistake_${entry.worst_game_id}_${entry.worst_ply ?? 1}`)}
+              title="将该局面送入精训营，进行人机实战防守重练"
+            >
+              入营重练
+            </button>
+          )}
+        </div>
       </div>
     </li>
   )

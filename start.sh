@@ -1,20 +1,47 @@
 #!/usr/bin/env bash
 # ==================================================
 #  elephantfish - 转述对局台  (macOS / Linux)
-#  用法： ./start.sh [端口]      默认端口 8010
+#  用法： ./start.sh [端口] [lan]
+#         默认端口 8010，仅本机可访问
+#         加 lan（例如 ./start.sh 8010 lan 或 ./start.sh lan）则绑定 0.0.0.0，
+#         同网段其他设备可用 http://本机IP:8010/ 打开
 #  停止： 在这个窗口按 Ctrl+C
 # ==================================================
 set -u
 
 cd "$(dirname "$0")" || exit 1
 
-PORT="${1:-8010}"
+PORT="8010"
+LAN="no"
+
+for arg in "$@"; do
+    case "$arg" in
+        lan|--lan|-lan)
+            LAN="yes"
+            ;;
+        [0-9]*)
+            PORT="$arg"
+            ;;
+    esac
+done
+
+if [ "${EF_HOST:-}" = "0.0.0.0" ]; then
+    LAN="yes"
+fi
+
+if [ "$LAN" = "yes" ]; then
+    export EF_HOST="0.0.0.0"
+fi
+
 URL="http://localhost:${PORT}/"
 SERVER_PID=""
 
 echo "=================================================="
 echo "  elephantfish - 转述对局台"
 echo "=================================================="
+if [ "$LAN" = "yes" ]; then
+    echo "  [局域网模式] 绑定 0.0.0.0，同网段设备可访问"
+fi
 echo
 
 # ---------- 找 Python ----------
@@ -84,7 +111,11 @@ try:
     with urllib.request.urlopen(url, timeout=2) as resp:
         data = json.loads(resp.read().decode("utf-8", "replace"))
     if isinstance(data, dict) and (data.get("engine") in ("elephantfish", "pikafish") or "pikafish_available" in data):
-        print("ours")
+        host = data.get("host", "")
+        if host in ("0.0.0.0", "::"):
+            print("ours_lan")
+        else:
+            print("ours_local")
         raise SystemExit(0)
 except Exception:
     pass
@@ -118,11 +149,32 @@ trap cleanup INT TERM EXIT
 # ---------- 先弄清端口上的情况，免得白等一场构建 ----------
 IDENT="$(server_identity "$PORT")"
 
-if [ "$IDENT" = "ours" ]; then
+if [ "$IDENT" = "ours_lan" ] || { [ "$IDENT" = "ours_local" ] && [ "$LAN" != "yes" ]; }; then
     echo "[INFO] elephantfish 已经在端口 $PORT 上跑着，直接打开页面。"
+    if [ "$IDENT" = "ours_lan" ]; then
+        LAN_IPS="$("$PY" -c "import sys; sys.path.insert(0, '.'); from server.app import _lan_ips; print(' '.join(_lan_ips()))" 2>/dev/null || true)"
+        if [ -n "$LAN_IPS" ]; then
+            for ip in $LAN_IPS; do
+                echo "       局域网地址：http://${ip}:${PORT}/"
+            done
+        fi
+    fi
     echo
     open_url "$URL"
     exit 0
+fi
+
+if [ "$IDENT" = "ours_local" ] && [ "$LAN" = "yes" ]; then
+    echo "[WARN] 端口 $PORT 上的 elephantfish 仅限本机访问，但您指定了局域网模式。"
+    if FREE_PORT="$(find_free_port "$PORT")"; then
+        PORT="$FREE_PORT"
+        URL="http://localhost:${PORT}/"
+        echo "       改用端口 ${PORT} 启动局域网服务。"
+    else
+        echo "[ERROR] $PORT 往后 12 个端口都不空闲，请手动指定，例如 ./start.sh 8030 lan"
+        exit 1
+    fi
+    echo
 fi
 
 if [ "$IDENT" = "other" ]; then
@@ -173,7 +225,7 @@ fi
 echo "[2/3] 启动服务，端口 $PORT ..."
 LOG="server-${PORT}.log"
 : > "$LOG"
-"$PY" -u server/app.py "$PORT" > "$LOG" 2>&1 &
+"$PY" -u server/app.py "$PORT" ${EF_HOST:+--host "$EF_HOST"} > "$LOG" 2>&1 &
 SERVER_PID=$!
 
 echo "[3/3] 等服务起来 ..."
@@ -210,6 +262,15 @@ open_url "$URL"
 
 echo
 echo "完成。服务跑在端口 $PORT (pid $SERVER_PID)。"
+if [ "$LAN" = "yes" ]; then
+    LAN_IPS="$("$PY" -c "import sys; sys.path.insert(0, '.'); from server.app import _lan_ips; print(' '.join(_lan_ips()))" 2>/dev/null || true)"
+    if [ -n "$LAN_IPS" ]; then
+        for ip in $LAN_IPS; do
+            echo "局域网地址：http://${ip}:${PORT}/"
+        done
+        echo "提示：同网段设备（手机/平板/电脑）可直接在浏览器打开上述地址访问"
+    fi
+fi
 echo "日志：$LOG"
 echo "在这个窗口按 Ctrl+C 就停止服务。"
 echo

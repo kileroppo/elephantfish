@@ -49,16 +49,21 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 from server.session import GameSession, Reply                       # noqa: E402
+from server.training import TrainingController                       # noqa: E402
 
 STATIC_DIR = os.path.join(_ROOT, 'frontend', 'dist')
 
 # 全进程就这一个对局会话。多对局要靠多开端口，不靠多实例。
 SESSION = GameSession()
+TRAINING = TrainingController(store=SESSION.store, engines=SESSION.engines)
 
 
 # --------------------------------------------------------------------------- #
 # 探活
 # --------------------------------------------------------------------------- #
+
+CURRENT_HOST = '127.0.0.1'
+
 
 def _health():
     """探活。
@@ -68,6 +73,7 @@ def _health():
     """
     body = SESSION.health()
     body['python'] = sys.version.split()[0]
+    body['host'] = CURRENT_HOST
     return Reply(body)
 
 
@@ -178,6 +184,12 @@ ROUTES = {
     '/api/clear-stats': SESSION.clear_stats,
     '/api/opponent/config': SESSION.configure_opponent,
     '/api/opponent/poll': SESSION.poll_opponent,
+    # 精训营对弈接口
+    '/api/training/start': TRAINING.start_drill_reply,
+    '/api/training/step': TRAINING.step_drill_reply,
+    '/api/training/undo': TRAINING.undo_drill_reply,
+    '/api/training/hint': TRAINING.hint_drill_reply,
+    '/api/training/reset': TRAINING.reset_drill_reply,
 }
 
 # GET 分两张表。这张里的每一条都**不问参数**：会话的快照、探活、错题本。
@@ -195,6 +207,7 @@ GET_ROUTES = {
 QUERY_ROUTES = {
     '/api/games': _games,
     '/api/game': _game,
+    '/api/training/puzzles': lambda q: TRAINING.list_puzzles_reply(category=q.get('category')),
 }
 
 
@@ -424,6 +437,21 @@ def _lan_ips():
     except OSError:
         pass
 
+    if not seen:
+        import re
+        import subprocess
+        for cmd in (['ifconfig'], ['ip', '-4', 'addr'], ['ipconfig']):
+            try:
+                out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode('utf-8', errors='ignore')
+                for match in re.finditer(r'(?:inet\s+|IPv4.*?:\s*)(\d+\.\d+\.\d+\.\d+)', out):
+                    ip = match.group(1)
+                    if usable(ip) and ip not in seen:
+                        seen.append(ip)
+                if seen:
+                    break
+            except Exception:
+                continue
+
     def rank(ip):
         if ip.startswith('192.168.'):
             return 0
@@ -438,6 +466,8 @@ def _lan_ips():
 
 
 def run(port=8010, host='127.0.0.1'):
+    global CURRENT_HOST
+    CURRENT_HOST = host
     # 让后台搜索线程和 HTTP 线程公平轮转，否则搜索时页面会卡
     sys.setswitchinterval(0.002)
     handler = functools.partial(Handler, directory=STATIC_DIR)

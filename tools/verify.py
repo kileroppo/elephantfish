@@ -247,6 +247,40 @@ def test_stalemate():
           f"state={st2['state']}")
 
 
+def test_king_facing():
+    section('C2. 王不见王（帅将照面飞将）：任何导致双王对射的着法均为非法送将')
+
+    # 1. 黑将主动走到与红帅同一列（红帅在 f0，黑将在 e9，f 列中间无子）
+    b1 = list(core.initial)
+    for i in core._SQUARES: b1[i] = '.'
+    b1[core.parse('f0')] = 'K'
+    b1[core.parse('e9')] = 'k'
+    b1_str = ''.join(b1)
+    black_moves = [core.render(m[0]) + core.render(m[1]) for m in core.legal_moves(b1_str, False)]
+    check('黑将不可走入与红帅直接照面的 f 列 (e9f9 非法)', 'e9f9' not in black_moves, f'moves={black_moves}')
+    check('黑将可走入不照面的格子 (e9e8, e9d9 合法)', 'e9e8' in black_moves and 'e9d9' in black_moves)
+
+    # 2. 红帅主动走到与黑将同一列
+    b2 = list(core.initial)
+    for i in core._SQUARES: b2[i] = '.'
+    b2[core.parse('e0')] = 'K'
+    b2[core.parse('f9')] = 'k'
+    b2_str = ''.join(b2)
+    red_moves = [core.render(m[0]) + core.render(m[1]) for m in core.legal_moves(b2_str, True)]
+    check('红帅不可走入与黑将直接照面的 f 列 (e0f0 非法)', 'e0f0' not in red_moves, f'moves={red_moves}')
+
+    # 3. 挡在两王之间的棋子不可横向移开
+    b3 = list(core.initial)
+    for i in core._SQUARES: b3[i] = '.'
+    b3[core.parse('e0')] = 'K'
+    b3[core.parse('e9')] = 'k'
+    b3[core.parse('e4')] = 'C'
+    b3_str = ''.join(b3)
+    c_moves = [core.render(m[0]) + core.render(m[1]) for m in core.legal_moves(b3_str, True) if m[0] == core.parse('e4')]
+    check('阻挡两王的炮不可横移让开 (如 e4d4/e4f4 非法)', all(m[2] == 'e' for m in c_moves), f'c_moves={c_moves}')
+    check('阻挡两王的炮可以纵向移动 (如 e4e5 合法)', 'e4e5' in c_moves)
+
+
 # --------------------------------------------------------------------------- #
 # D. 认输之后悔棋
 # --------------------------------------------------------------------------- #
@@ -2535,6 +2569,7 @@ def main():
     positions = test_move_generation(games)
     total_moves = test_notation(games)
     test_stalemate()
+    test_king_facing()
     test_resign_undo()
     test_scoreboard()
     test_pv(args.pv_time)
