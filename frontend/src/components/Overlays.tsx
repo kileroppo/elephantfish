@@ -99,11 +99,9 @@ export function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => v
           ))}
         </ul>
 
-        <h3>关于这个引擎</h3>
+        <h3>关于 AI 引擎</h3>
         <p className="hint">
-          elephantfish 是一个纯 Python 的中国象棋引擎，源自 sunfish 的思路。这里的搜索层
-          把原来的 MTD 二分换成了 PVS + 渴求窗口 + 置换表 + 后期走法削减，深度 7 从 12.8 秒
-          降到 3 秒左右；评估仍是最朴素的子力价值表，所以它靠的是「算得深」，而不是「懂棋」。
+          XQ-Coach 象棋教练支持双引擎自由切换：可使用顶尖开源引擎 <strong>皮卡鱼 Pikafish (NNUE)</strong> 进行深度评估与顽强防守，也可选用纯 Python 内置引擎进行轻量对弈与算法实验。
         </p>
       </div>
     </div>

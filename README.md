@@ -1,18 +1,27 @@
+# XQ-Coach（象棋教练）
+
+> **中国象棋 AI 实训台 & 棋力教练实战系统**  
+> 集成 Pikafish 强力引擎与内置引擎 · 精训营（Drill Lab）· 错题本与复盘台 · 大模型转述对弈
+
 ![Elephantfish](logo/elephantfish.jpg)
 
-## 介绍 
+## 平台介绍
 
-elephantfish 是受到 [sunfish](https://github.com/thomasahle/sunfish) 启发而撰写的纯python的中国象棋引擎，核心代码只有几百行（见 [elephantfish.py](elephantfish.py)）,棋力方面我仅进行过其与象棋小巫师傻瓜难度的一场对局，在我测试的对剧中，elephantfish赢得了比赛。
+**XQ-Coach**（原名 elephantfish）现已从早期极简象棋引擎全面演进为集**棋力实训、错题复盘、动态防守与大模型信使转述**于一体的综合象棋教练平台。
 
-在几天前看到了[sunfish](https://github.com/thomasahle/sunfish)这个项目(是一个国际象棋引擎，只有111行)，觉得很有意思，于是做了一个类似中国象棋版本，中国象棋和国际象棋略有不同，我仅仅单独完成了棋规部分，子力价值表直接的参考了 [象眼](https://www.xqbase.com/league/elephanteye.htm) ,mtd search部分的代码由于原版sunfish写的非常通用，我也就一行未改。
+### 核心功能
+- 🎯 **精训营（Drill Lab）**：内置经典杀法、实用残局与中局战术题库；支持从错题本「一键入营重练」；配备三阶渐进线索启发与分支推演沙盒模式。
+- ⚡ **双引擎驱动**：
+  - **皮卡鱼 Pikafish (NNUE)**：顶级开源象棋引擎，支持动态节点预算、MultiPV 深度推演与顽强防守；
+  - **内置纯 Python 引擎（原 elephantfish 算法基准）**：自包含教学与实验引擎，轻量无需外部依赖。
+- 📊 **智能判分与错题本**：对局中的每一步着法与引擎评分对齐，按局面聚合失误漏着，沉淀为随时可重做的错题与可重放棋谱。
+- 🤖 **大模型转述对局台**：为大模型下棋充当“信使”，支持直接拖拽落子、键盘记谱、应手一键复制。
 
-如果你对于程序中的mtd search看不懂建议先看一些对弈基础理论,比如articles下的几篇文章，如[对弈程序基本技术](articles/对弈程序基本技术.pdf)，其官方网址：https://www.xqbase.com/computer/outline.htm
+---
 
-elephantfish默认会进行5秒钟的思考，当然实际一般会比5秒多一些，如果你想要它进行更长时间搜索以获得更好的性能可以对源码相应位置进行更改。
+## 技术起源与算法基准
 
-如同sunfish一样，我认为elephantfish会是一个很好的平台，由于其代码非常少，可以很方便的进行各种实验，希望各位感兴趣的同学可以尝试对其进行优化. 如果在优化后想要评估和目前版本的棋力差别，可以使用 `tools/arena.py` 中的 self_arena 来将你的代码和elephantfish进行对弈。
-
-如果你觉得这个版本的象棋ai实力不够强，可以看看 [XQpy](https://github.com/bupticybee/XQPy)
+XQ-Coach 的内置轻量引擎起源于受到 [sunfish](https://github.com/thomasahle/sunfish) 启发的开源项目（早期代号 elephantfish），代码位于 [elephantfish.py](elephantfish.py)。原版 `elephantfish.py` 作为整个系统的**棋力基准与回归 oracle** 原样保留，子力价值表参考了 [象眼](https://www.xqbase.com/league/elephanteye.htm)。若需单独运行极简引擎命令行对局：```python elephantfish.py```。
 
 ## 运行截图
 
@@ -63,15 +72,16 @@ python server/app.py 8010                       # 启动服务
 
 ### 让同网段的其他设备访问
 
-服务默认只绑 `127.0.0.1`，手机、平板、另一台电脑是打不开的。要放开：
+Windows 下 `start.bat` 默认已支持局域网访问（绑定 `0.0.0.0`），启动后控制台会把本机的所有可用局域网地址打印出来，用 `http://192.168.x.x:8010/` 打开即可。
 
 ```bash
-start.bat 8010 lan              # Windows
-EF_HOST=0.0.0.0 ./start.sh      # macOS / Linux
+start.bat                       # Windows：默认已支持局域网访问
+start.bat 8010 local            # Windows：若仅允许本机访问加 local
+EF_HOST=0.0.0.0 ./start.sh      # macOS / Linux（或 ./start.sh lan）
 python server/app.py 8010 --host 0.0.0.0   # 手动
 ```
 
-启动后控制台会把本机的所有可用局域网地址打印出来，用 `http://192.168.x.x:8010/` 打开即可。Windows 上第一次可能需要允许防火墙放行（Python 的入站规则）。
+Windows 上第一次可能需要允许防火墙放行（Python 的入站规则）。
 
 没有登录和鉴权，**同网段任何人都能打开并操作棋盘**，用完记得停掉。
 

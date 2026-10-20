@@ -75,7 +75,8 @@ from engine import notation as nt
 
 # 默认落在仓库根的 data/ 下：和 data/fen/ 那个语料目录是同一个意思 ——
 # 都是「越用越值钱、不该跟着代码走」的东西。
-DEFAULT_RELPATH = os.path.join('data', 'elephantfish.sqlite')
+DEFAULT_RELPATH = os.path.join('data', 'xq-coach.sqlite')
+LEGACY_RELPATH = os.path.join('data', 'elephantfish.sqlite')
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS games (
@@ -157,7 +158,11 @@ def resolve_path():
     if override:
         return override
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(root, DEFAULT_RELPATH)
+    target = os.path.join(root, DEFAULT_RELPATH)
+    legacy = os.path.join(root, LEGACY_RELPATH)
+    if not os.path.exists(target) and os.path.exists(legacy):
+        return legacy
+    return target
 
 
 _STORES: dict = {}

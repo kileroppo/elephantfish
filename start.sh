@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==================================================
-#  elephantfish - 转述对局台  (macOS / Linux)
+#  xq-coach - 象棋教练实训台  (macOS / Linux)
 #  用法： ./start.sh [端口] [lan]
 #         默认端口 8010，仅本机可访问
 #         加 lan（例如 ./start.sh 8010 lan 或 ./start.sh lan）则绑定 0.0.0.0，
@@ -37,7 +37,7 @@ URL="http://localhost:${PORT}/"
 SERVER_PID=""
 
 echo "=================================================="
-echo "  elephantfish - 转述对局台"
+echo "  XQ-Coach - 象棋教练实训台"
 echo "=================================================="
 if [ "$LAN" = "yes" ]; then
     echo "  [局域网模式] 绑定 0.0.0.0，同网段设备可访问"
@@ -150,7 +150,7 @@ trap cleanup INT TERM EXIT
 IDENT="$(server_identity "$PORT")"
 
 if [ "$IDENT" = "ours_lan" ] || { [ "$IDENT" = "ours_local" ] && [ "$LAN" != "yes" ]; }; then
-    echo "[INFO] elephantfish 已经在端口 $PORT 上跑着，直接打开页面。"
+    echo "[INFO] xq-coach 已经在端口 $PORT 上跑着，直接打开页面。"
     if [ "$IDENT" = "ours_lan" ]; then
         LAN_IPS="$("$PY" -c "import sys; sys.path.insert(0, '.'); from server.app import _lan_ips; print(' '.join(_lan_ips()))" 2>/dev/null || true)"
         if [ -n "$LAN_IPS" ]; then
@@ -165,7 +165,7 @@ if [ "$IDENT" = "ours_lan" ] || { [ "$IDENT" = "ours_local" ] && [ "$LAN" != "ye
 fi
 
 if [ "$IDENT" = "ours_local" ] && [ "$LAN" = "yes" ]; then
-    echo "[WARN] 端口 $PORT 上的 elephantfish 仅限本机访问，但您指定了局域网模式。"
+    echo "[WARN] 端口 $PORT 上的 xq-coach 仅限本机访问，但您指定了局域网模式。"
     if FREE_PORT="$(find_free_port "$PORT")"; then
         PORT="$FREE_PORT"
         URL="http://localhost:${PORT}/"
@@ -178,7 +178,7 @@ if [ "$IDENT" = "ours_local" ] && [ "$LAN" = "yes" ]; then
 fi
 
 if [ "$IDENT" = "other" ]; then
-    echo "[WARN] 端口 $PORT 被别的程序占着（不是 elephantfish），换一个端口。"
+    echo "[WARN] 端口 $PORT 被别的程序占着（不是 xq-coach），换一个端口。"
     if FREE_PORT="$(find_free_port "$PORT")"; then
         PORT="$FREE_PORT"
         URL="http://localhost:${PORT}/"

@@ -4,29 +4,46 @@ setlocal enabledelayedexpansion
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
 rem ==================================================
-rem  elephantfish - 转述对局台  (Windows)
-rem  用法： start.bat [端口] [lan]
-rem         默认端口 8010，仅本机可访问
-rem         加 lan（例如 start.bat 8010 lan）则绑定 0.0.0.0，
+rem  xq-coach - 象棋教练实训台  (Windows)
+rem  用法： start.bat [端口] [local]
+rem         默认端口 8010，默认支持局域网访问 (0.0.0.0)，
 rem         同网段其他设备可用 http://本机IP:8010/ 打开
+rem         若仅需本机访问，加 local（例如 start.bat 8010 local）
 rem  停止： 在这个窗口按 Ctrl+C
 rem ==================================================
 
 cd /d "%~dp0"
 
 set "PORT=8010"
-set "LAN=no"
-if /i "%~1"=="lan" (
-    set "LAN=yes"
-) else if not "%~1"=="" set "PORT=%~1"
-if /i "%~2"=="lan" set "LAN=yes"
-if /i "!LAN!"=="yes" set "EF_HOST=0.0.0.0"
+set "LAN=yes"
+for %%A in ("%~1" "%~2") do (
+    if not "%%~A"=="" (
+        if /i "%%~A"=="local" (
+            set "LAN=no"
+        ) else if /i "%%~A"=="localhost" (
+            set "LAN=no"
+        ) else if /i "%%~A"=="lan" (
+            set "LAN=yes"
+        ) else (
+            set "PORT=%%~A"
+        )
+    )
+)
+if /i "!LAN!"=="no" (
+    set "EF_HOST=127.0.0.1"
+) else (
+    if not defined EF_HOST set "EF_HOST=0.0.0.0"
+)
 set "URL=http://localhost:!PORT!/"
 
 echo ==================================================
-echo   elephantfish - 转述对局台
+echo   XQ-Coach - 象棋教练实训台
 echo ==================================================
-if /i "!LAN!"=="yes" echo   [局域网模式] 绑定 0.0.0.0，启动后看下面打印的局域网地址
+if /i "!LAN!"=="no" (
+    echo   [本地模式] 绑定 127.0.0.1，仅本机可访问
+) else (
+    echo   [局域网模式] 默认绑定 0.0.0.0，启动后看下面打印的局域网地址
+)
 echo.
 
 rem ---------- 找 Python ----------
@@ -48,14 +65,14 @@ rem ---------- 先弄清端口上的情况，免得白等一场构建 ----------
 for /f "delims=" %%I in ('"%PY%" tools\run_server.py identity !PORT! 2^>nul') do set "IDENT=%%I"
 
 if "!IDENT!"=="ours" (
-    echo [INFO] elephantfish 已经在端口 !PORT! 上跑着，直接打开页面。
+    echo [INFO] xq-coach 已经在端口 !PORT! 上跑着，直接打开页面。
     echo.
     start "" "!URL!"
     exit /b 0
 )
 
 if "!IDENT!"=="other" (
-    echo [WARN] 端口 !PORT! 被别的程序占着（不是 elephantfish），换一个端口。
+    echo [WARN] 端口 !PORT! 被别的程序占着（不是 xq-coach），换一个端口。
     set "FREE_PORT="
     for /f "delims=" %%P in ('"%PY%" tools\run_server.py free-port !PORT! 2^>nul') do set "FREE_PORT=%%P"
     if defined FREE_PORT (

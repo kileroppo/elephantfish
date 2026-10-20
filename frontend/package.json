@@ -1,9 +1,9 @@
 {
-  "name": "elephantfish-relay",
+  "name": "xq-coach",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "中国象棋转述对局台 —— 人当信使，引擎当棋手",
+  "description": "XQ-Coach 象棋教练 —— 中国象棋 AI 实训台 & 棋力实战系统",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

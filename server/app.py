@@ -227,7 +227,7 @@ def _query_params(raw):
 # --------------------------------------------------------------------------- #
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = 'elephantfish-relay'
+    server_version = 'xq-coach'
     # 用 HTTP/1.0：每个请求一条连接。这是个本机应用，轮询频率再高也不差这点
     # 开销，但省掉了长连接下「请求体没读完就和下一个请求串味」的一整类麻烦。
     protocol_version = 'HTTP/1.0'
@@ -383,7 +383,7 @@ class Handler(SimpleHTTPRequestHandler):
         """前端还没构建时，给一页说清怎么构建 —— 至少不是白屏。"""
         body = (
             '<!doctype html><meta charset="utf-8">'
-            '<title>elephantfish</title>'
+            '<title>XQ-Coach · 象棋教练</title>'
             '<body style="font-family:system-ui;max-width:640px;margin:80px auto;'
             'line-height:1.7;color:#333">'
             '<h2>前端还没构建</h2>'
@@ -489,7 +489,7 @@ def run(port=8010, host='127.0.0.1'):
         print(f'端口 {port} 已被占用（可能是旧版 start.bat 还在跑），改用 {chosen}')
 
     print('=' * 58)
-    print('  elephantfish 转述对局台')
+    print('  XQ-Coach · 象棋教练实训台')
     # 这一行固定写 127.0.0.1：tools/run_server.py 靠它从日志里认出实际端口
     print(f'  本机   http://127.0.0.1:{chosen}/')
     if host in ('0.0.0.0', '::', ''):

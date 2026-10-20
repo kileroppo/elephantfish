@@ -89,6 +89,16 @@ class PikafishEngine:
             raise RuntimeError(f"Pikafish 二进制文件未找到: {self.binary_path}")
 
         cwd = os.path.dirname(self.binary_path)
+        # Pikafish 是控制台程序：父进程若没有控制台（后台启动、服务托管），
+        # Windows 会给它新开一个黑色控制台窗口。这里显式要求不创建窗口。
+        extra: Dict[str, Any] = {}
+        if platform.system() == 'Windows':
+            extra['creationflags'] = getattr(
+                subprocess, 'CREATE_NO_WINDOW', 0x08000000)
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = subprocess.SW_HIDE
+            extra['startupinfo'] = si
         self.proc = subprocess.Popen(
             [self.binary_path],
             stdin=subprocess.PIPE,
@@ -97,6 +107,7 @@ class PikafishEngine:
             text=True,
             bufsize=1,
             cwd=cwd,
+            **extra,
         )
 
         # 握手

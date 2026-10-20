@@ -57,7 +57,8 @@ export function TopBar({
           </svg>
         </span>
         <div className="brand-text">
-          <h1>Elephantfish</h1>
+          <h1>XQ-Coach</h1>
+          <p>象棋教练实训台</p>
         </div>
         {engineInfo && (
           <button

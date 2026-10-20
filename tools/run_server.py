@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""elephantfish 启动辅助工具。
+"""xq-coach 启动辅助工具。
 
 配合 start.bat / start.sh 使用：
 - identity <port>: 检查端口上是否正在运行本服务（输出 free / ours / other）
