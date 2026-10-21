@@ -3,6 +3,7 @@ import type { GameRow, GamesSummary } from '../types'
 import { api, ApiError } from '../api'
 import { describeSource } from '../lib/replay'
 import { relativeTime, shortSide, sideName } from '../lib/format'
+import { useUIContext } from '../context/UIContext'
 
 /**
  * 复盘架：存档里**下过的那些局**，新的在前，点一局就开复盘台。
@@ -16,12 +17,14 @@ import { relativeTime, shortSide, sideName } from '../lib/format'
  * 把它挂进轮询就等于让一个「看看下过什么」的请求去跟对局抢带宽。
  */
 
-interface GameShelfProps {
+export interface GameShelfProps {
   /** 点开某一局：把 game_id 交给上层去开复盘台（那里才知道 focusPly 的事）。 */
-  onPick: (gameId: string) => void
+  onPick?: (gameId: string) => void
 }
 
-export function GameShelf({ onPick }: GameShelfProps) {
+export function GameShelf(props: GameShelfProps) {
+  const ui = useUIContext()
+  const onPick = props.onPick ?? ui.openReplay
   const [rows, setRows] = useState<GameRow[] | null>(null)
   const [summary, setSummary] = useState<GamesSummary | null>(null)
   const [error, setError] = useState<string | null>(null)

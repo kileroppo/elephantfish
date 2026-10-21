@@ -171,6 +171,9 @@ class Engine(Protocol):
     def new_game(self) -> None:
         ...
 
+    def stop(self) -> None:
+        ...
+
     def search(self, req: SearchRequest) -> Iterator[EngineInfo]:
         ...
 
@@ -197,6 +200,9 @@ class BuiltinEngine:
 
     def new_game(self) -> None:
         self.searcher = Searcher()
+
+    def stop(self) -> None:
+        pass
 
     def search(self, req: SearchRequest) -> Iterator[EngineInfo]:
         pos = core.make_position(req.board, req.red_to_move)
@@ -249,6 +255,10 @@ class PikafishAdapter:
     def new_game(self) -> None:
         if self.available:
             self.engine.new_game()
+
+    def stop(self) -> None:
+        if self.available:
+            self.engine.stop()
 
     def set_options(self, threads: Optional[int] = None,
                     hash_mb: Optional[int] = None) -> None:
@@ -408,6 +418,12 @@ class EngineSet:
         self.builtin.new_game()
         if self.pikafish:
             self.pikafish.new_game()
+
+    def stop(self) -> None:
+        """中断正在运行的搜索进程。"""
+        self.builtin.stop()
+        if self.pikafish:
+            self.pikafish.stop()
 
     def set_options(self, threads: Optional[int] = None,
                     hash_mb: Optional[int] = None) -> None:

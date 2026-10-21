@@ -7,24 +7,24 @@
 
 :root {
   /* ---- 纸：从最亮的面到最沉的边 ---- */
-  --paper-0: #fdfaf4;
-  --paper-1: #f7f2e8;
-  --paper-2: #efe8db;
-  --paper-3: #e4dac8;
-  --paper-4: #d6c9b1;
+  --paper-0: #fbf8f2;
+  --paper-1: #f6f2ea;
+  --paper-2: #eee8dc;
+  --paper-3: #e3dccd;
+  --paper-4: #d2c9b6;
 
   /* ---- 墨：正文到极淡的线 ---- */
-  --ink-0: #16130f;
+  --ink-0: #1c1915;
   --ink-1: #2a241d;
   --ink-2: #4b4237;
   --ink-3: #776b5b;
   --ink-4: #a19683;
   --ink-mute: #9a8f7d;
-  --hairline: rgba(43, 35, 26, 0.12);
+  --hairline: rgba(30, 26, 20, 0.14);
   --hairline-strong: rgba(43, 35, 26, 0.22);
 
   /* ---- 朱砂：唯一的强调色 ---- */
-  --cinnabar: #b4322a;
+  --cinnabar: #a8322a;
   --cinnabar-bright: #cd4034;
   --cinnabar-wash: rgba(180, 50, 42, 0.1);
   --cinnabar-edge: rgba(180, 50, 42, 0.28);
@@ -35,10 +35,10 @@
   --jade-wash: rgba(44, 106, 86, 0.1);
 
   /* ---- 棋盘 ---- */
-  --board-face-1: #f2e6cb;
-  --board-face-2: #e9d8b4;
-  --board-face-3: #dcc79d;
-  --board-line: #6d5028;
+  --board-face-1: #f3ecdc;
+  --board-face-2: #f0e8d6;
+  --board-face-3: #ece3cf;
+  --board-line: #3a3127;
   --board-vignette: rgba(109, 80, 40, 0.16);
   /* 木纹不是颜色，是两条 feTurbulence 噪声，写在 Board.tsx 的 <defs> 里。
      feColorMatrix 的 values 属性不吃 CSS 变量，所以那两处颜色只能硬编码。 */
@@ -71,19 +71,19 @@
   --light-x: 0.42;
 
   /* ---- 字体 ---- */
-  --font-display: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC",
+  --font-display: "XQ Serif", "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC",
     "SimSun", serif;
-  --font-kai: "STKaiti", "KaiTi", "Kaiti SC", "楷体", "STSong", serif;
+  --font-kai: "XQ Serif", "STKaiti", "KaiTi", "Kaiti SC", "楷体", "STSong", serif;
   --font-ui: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
     system-ui, -apple-system, sans-serif;
   --font-num: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas,
     "Menlo", monospace;
 
   /* ---- 尺寸 ---- */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 16px;
-  --r-xl: 22px;
+  --r-sm: 2px;
+  --r-md: 4px;
+  --r-lg: 8px;
+  --r-xl: 8px;
 
   --shadow-panel: calc(1px * var(--light-x)) 1px 2px rgba(43, 35, 26, 0.05),
     calc(6px * var(--light-x)) 6px 20px -12px rgba(43, 35, 26, 0.2);
@@ -152,4 +152,57 @@
     --dur-slow: 1ms;
     --dur-xl: 1ms;
   }
+}
+
+/* ==========================================================================
+   乌墨：深灰底、米白线。只此一套暗色，其余材质主题已移除。
+   ========================================================================== */
+[data-theme="wumu"] {
+  --paper-0: #1e1e22;
+  --paper-1: #17171a;
+  --paper-2: #202024;
+  --paper-3: #2a2a2f;
+  --paper-4: #3a3a40;
+
+  --ink-0: #f1eadb;
+  --ink-1: #ece4d6;
+  --ink-2: #c4bcae;
+  --ink-3: #8f887c;
+  --ink-4: #66615a;
+  --ink-mute: #77726a;
+
+  --hairline: rgba(236, 228, 214, 0.1);
+  --hairline-strong: rgba(236, 228, 214, 0.22);
+
+  --cinnabar: #d0574a;
+  --cinnabar-bright: #de6a5c;
+  --cinnabar-wash: rgba(208, 87, 74, 0.14);
+  --cinnabar-edge: rgba(208, 87, 74, 0.38);
+
+  --jade: #4a9f84;
+  --jade-bright: #5bb396;
+  --jade-wash: rgba(74, 159, 132, 0.14);
+
+  --board-face-1: #1e1e22;
+  --board-face-2: #1e1e22;
+  --board-face-3: #1e1e22;
+  --board-line: #cfc6b4;
+  --board-vignette: rgba(0, 0, 0, 0);
+
+  --disc-face-1: #2c2c31;
+  --disc-face-2: #2c2c31;
+  --disc-face-3: #2c2c31;
+  --disc-face-deep: #2c2c31;
+  --piece-red: #e0695a;
+  --piece-black: #e4dccb;
+
+  --shadow-panel: none;
+  --shadow-float: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+
+  --trail-red: rgba(224, 105, 90, 0.4);
+  --trail-red-fade: rgba(224, 105, 90, 0.06);
+  --trail-black: rgba(228, 220, 203, 0.3);
+  --trail-black-fade: rgba(228, 220, 203, 0.05);
+
+  color-scheme: dark;
 }

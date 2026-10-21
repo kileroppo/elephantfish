@@ -5,6 +5,7 @@ import type {
   GamesReply,
   MistakeBookReply,
   ReplayReply,
+  SandboxReply,
   SearchTask,
   TrainingHintReply,
   TrainingPuzzlesReply,
@@ -98,6 +99,9 @@ export const api = {
     analyze_ms?: number
     analyze_depth?: number
     analyze_width?: number
+    play_mode?: 'sparring' | 'relay'
+    sparring_level?: 'apprentice' | 'club' | 'master' | 'god'
+    coach_guard?: boolean
   }) =>
     request<ApiReply>('/api/settings', { method: 'POST', body: JSON.stringify(payload) }),
 
@@ -142,10 +146,10 @@ export const api = {
       category ? `/api/training/puzzles?category=${encodeURIComponent(category)}` : '/api/training/puzzles',
     ),
 
-  trainingStart: (puzzleId: string) =>
+  trainingStart: (puzzleId: string, stage: string = 'drill') =>
     request<TrainingStartReply>('/api/training/start', {
       method: 'POST',
-      body: JSON.stringify({ puzzle_id: puzzleId }),
+      body: JSON.stringify({ puzzle_id: puzzleId, stage }),
     }),
 
   trainingStep: (puzzleId: string, move: string, sandbox = false) =>
@@ -166,13 +170,29 @@ export const api = {
       body: JSON.stringify({ puzzle_id: puzzleId, level }),
     }),
 
-  trainingReset: (puzzleId: string) =>
-    request<{ ok: boolean; message: string; game: GameSnapshot; hints_used: number; solved: boolean }>(
+  trainingReset: (puzzleId: string, stage: string = 'drill') =>
+    request<{ ok: boolean; message: string; game: GameSnapshot; hints_used: number; solved: boolean; stage: string; in_rebuttal: boolean }>(
       '/api/training/reset',
       {
         method: 'POST',
-        body: JSON.stringify({ puzzle_id: puzzleId }),
+        body: JSON.stringify({ puzzle_id: puzzleId, stage }),
       },
+    ),
+
+  /** 无状态回放沙盒推演（只读 GET，不污染主对局与存档） */
+  sandbox: (fen: string, move?: string) =>
+    request<SandboxReply>(
+      move
+        ? `/api/sandbox?fen=${encodeURIComponent(fen)}&move=${encodeURIComponent(move)}`
+        : `/api/sandbox?fen=${encodeURIComponent(fen)}`,
+    ),
+
+  /** 走前预演 & 对手企图分步动画接口（只读 GET） */
+  preview: (fen: string, move?: string) =>
+    request<SandboxReply>(
+      move
+        ? `/api/preview?fen=${encodeURIComponent(fen)}&move=${encodeURIComponent(move)}`
+        : `/api/preview?fen=${encodeURIComponent(fen)}`,
     ),
 }
 

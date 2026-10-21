@@ -1,14 +1,17 @@
 import { useEffect } from 'react'
 import { useExitPhase } from '../hooks/useExitPhase'
 import type { Toast } from '../hooks/useGame'
+import { useGameContext } from '../context/GameContext'
+import { useUIContext } from '../context/UIContext'
 
-export function Toasts({
-  items,
-  onDismiss,
-}: {
-  items: Toast[]
-  onDismiss: (id: number) => void
+export function Toasts(props?: {
+  items?: Toast[]
+  onDismiss?: (id: number) => void
 }) {
+  const g = useGameContext()
+  const items = props?.items ?? g.toasts
+  const onDismiss = props?.onDismiss ?? g.dismissToast
+
   return (
     <div className="toast-stack" role="status" aria-live="polite">
       {items.map((t) => (
@@ -30,15 +33,20 @@ const SHORTCUTS: { keys: string; what: string }[] = [
   { keys: '方向键 + 回车', what: '在棋盘上移动光标、选中 / 落子（先点一下棋盘或 Tab 聚焦）' },
   { keys: 'Enter', what: '提交输入框里的走法' },
   { keys: 'Tab', what: '采纳第一个候选走法' },
-  { keys: 'Esc', what: '清空输入 / 关闭弹层' },
+  { keys: 'Esc', what: '清空输入 / 关闭弹层 / 退出禅境' },
   { keys: 'Ctrl + Z', what: '悔一步' },
   { keys: 'Ctrl + N', what: '开新局（保持当前执子方）' },
+  { keys: 'Z', what: '开启 / 退出 禅意极简专注对弈模式' },
+  { keys: 'T', what: '循环切换东方四大美学材质（宣纸·乌木·汝窑·朱漆）' },
   { keys: 'F', what: '翻转棋盘视角' },
   { keys: 'Space', what: '引擎思考时，立即采用当前最好的一步' },
   { keys: '/', what: '聚焦到录入框' },
 ]
 
-export function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function HelpOverlay(props?: { open?: boolean; onClose?: () => void }) {
+  const ui = useUIContext()
+  const open = props?.open ?? ui.help
+  const onClose = props?.onClose ?? (() => ui.setHelp(false))
   const [mounted, leaving] = useExitPhase(open)
 
   useEffect(() => {

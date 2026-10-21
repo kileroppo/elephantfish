@@ -192,6 +192,19 @@ class PikafishEngine:
         self._kill_locked()
         self._ensure_proc()
 
+    def stop(self):
+        """外部主动请求叫停引擎。
+        
+        不加 self.lock：持有锁的工作线程往往正阻塞在 readline() 上，
+        直接向 stdin 写入 stop 可以立即唤醒子进程并让 readline 返回。
+        """
+        try:
+            if self.proc and self.proc.poll() is None and self.proc.stdin:
+                self.proc.stdin.write("stop\n")
+                self.proc.stdin.flush()
+        except Exception:
+            pass
+
     def quit(self):
         """退出引擎进程。"""
         with self.lock:
@@ -314,61 +327,81 @@ class PikafishEngine:
             last_info = None
             stop_sent = False
             start_time = time.time()
+            finished = False
 
-            while True:
-                # 检查外部中断信号
-                if external_stop and external_stop() and not stop_sent:
-                    self._send("stop")
-                    stop_sent = True
+            try:
+                while True:
+                    # 检查外部中断信号
+                    if external_stop and external_stop() and not stop_sent:
+                        self._send("stop")
+                        stop_sent = True
 
-                line = self.proc.stdout.readline()
-                if not line:
-                    # 进程死了（最典型的原因：position 里给了它认为非法的着法，
-                    # pikafish 会直接 exit(1)）。这时必须把死进程丢掉并**报错**，
-                    # 不能装作「无着可走」—— 那会让对局静默停摆。
-                    code = self.proc.poll()
-                    detail = ''
+                    line = self.proc.stdout.readline()
+                    if not line:
+                        # 进程死了（最典型的原因：position 里给了它认为非法的着法，
+                        # pikafish 会直接 exit(1)）。这时必须把死进程丢掉并**报错**，
+                        # 不能装作「无着可走」—— 那会让对局静默停摆。
+                        code = self.proc.poll()
+                        detail = ''
+                        try:
+                            detail = (self.proc.stderr.read() or '').strip().splitlines()[-1][:160]
+                        except Exception:
+                            pass
+                        self._kill_locked()
+                        raise RuntimeError(
+                            '皮卡鱼进程异常退出（code=%s）%s' % (code, ('：' + detail) if detail else ''))
+                    line = line.strip()
+
+                    if line.startswith("bestmove"):
+                        finished = True
+                        parts = line.split()
+                        bm_iccs = parts[1] if len(parts) > 1 else None
+                        if bm_iccs and bm_iccs != "(none)":
+                            bm_move = nt.from_iccs(bm_iccs)
+                            if last_info:
+                                last_info["move"] = bm_move
+                                yield last_info
+                            else:
+                                # 极端情况：一层都没出就出了 bestmove
+                                yield {
+                                    "depth": 1,
+                                    "move": bm_move,
+                                    "score": 0,
+                                    "mate": False,
+                                    "nodes": 100,
+                                    "time": round(time.time() - start_time, 3),
+                                    "nps": 100000,
+                                    "pv": [bm_move],
+                                    "pv_iccs": [bm_iccs],
+                                }
+                        break
+
+                    if line.startswith("info depth"):
+                        parsed = self._parse_info_line(line)
+                        if parsed:
+                            # bestmove 只该盖在**排名第一**那条线上：多线时最后读到的
+                            # 一条往往是 rank 2 / rank 3，把最终决出的那手挪到它头上，
+                            # 报出去的排名就是错位的（分数没错，棋不是那支的棋）。
+                            if int(parsed.get("multipv") or 1) <= 1:
+                                last_info = parsed
+                            yield parsed
+            finally:
+                # 无论正常结束、外部 stop、还是生成器被调用方提前 break / close：
+                # 若未读到 bestmove，必须通知引擎停止并排空管道中的残余输出，
+                # 杜绝上一轮未读完的 bestmove / info 渗入下一次搜索。
+                if not finished and self.proc and self.proc.poll() is None:
+                    if not stop_sent:
+                        try:
+                            self._send("stop")
+                        except Exception:
+                            pass
                     try:
-                        detail = (self.proc.stderr.read() or '').strip().splitlines()[-1][:160]
+                        while self.proc and self.proc.poll() is None:
+                            drain_line = self.proc.stdout.readline()
+                            if not drain_line or drain_line.strip().startswith("bestmove"):
+                                break
                     except Exception:
                         pass
-                    self._kill_locked()
-                    raise RuntimeError(
-                        '皮卡鱼进程异常退出（code=%s）%s' % (code, ('：' + detail) if detail else ''))
-                line = line.strip()
-
-                if line.startswith("bestmove"):
-                    parts = line.split()
-                    bm_iccs = parts[1] if len(parts) > 1 else None
-                    if bm_iccs and bm_iccs != "(none)":
-                        bm_move = nt.from_iccs(bm_iccs)
-                        if last_info:
-                            last_info["move"] = bm_move
-                            yield last_info
-                        else:
-                            # 极端情况：一层都没出就出了 bestmove
-                            yield {
-                                "depth": 1,
-                                "move": bm_move,
-                                "score": 0,
-                                "mate": False,
-                                "nodes": 100,
-                                "time": round(time.time() - start_time, 3),
-                                "nps": 100000,
-                                "pv": [bm_move],
-                                "pv_iccs": [bm_iccs],
-                            }
-                    break
-
-                if line.startswith("info depth"):
-                    parsed = self._parse_info_line(line)
-                    if parsed:
-                        # bestmove 只该盖在**排名第一**那条线上：多线时最后读到的
-                        # 一条往往是 rank 2 / rank 3，把最终决出的那手挪到它头上，
-                        # 报出去的排名就是错位的（分数没错，棋不是那支的棋）。
-                        if int(parsed.get("multipv") or 1) <= 1:
-                            last_info = parsed
-                        yield parsed
 
     def _parse_info_line(self, line: str) -> Optional[Dict[str, Any]]:
         """解析 Pikafish 的 info 字符串。"""

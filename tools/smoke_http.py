@@ -462,7 +462,7 @@ def run(client, store_path):
     # 6 手之后轮到红方，引擎（执红）开搜；6 手已过开局库，会真的搜满 think_ms。
     status, body = client.post('/api/load', {
         'moves': ['h2e2', 'h9g7', 'h0g2', 'b9c7', 'i0h0', 'a9a8'],
-        'engine_side': 'red', 'think_ms': 4000})
+        'engine_side': 'red', 'think_ms': 10000})
     task = body['state'].get('task')
     if task and task.get('status') == 'running':
         status, body = client.get('/api/task/deadbeef0000')
@@ -1107,6 +1107,94 @@ def run(client, store_path):
     check('读历史不改会话状态：/api/state 除了几个现算的时钟，逐字段相同',
           qa == qb, '不同的键：' + str([k for k in qa if qa[k] != qb.get(k)]))
     db3.close()
+
+    # ---- 13. 国手名师精训营：三段式传功、当场反击、法眼点拨与精通晋升 ---- #
+    section('13. /api/training/*（名师精训营端到端：演示、试炼、陷阱反击、大考与精通）')
+
+    st_pz, body_pz = client.get('/api/training/puzzles')
+    puzzles_list = body_pz.get('puzzles') or []
+    cats_list = body_pz.get('categories') or []
+    check('GET /api/training/puzzles -> 200，含四大篇章且含 15 门经典功法 + 实战心魔转化题',
+          st_pz == 200 and body_pz.get('ok') is True
+          and len(cats_list) == 4 and len(puzzles_list) >= 15,
+          f'categories={len(cats_list)} puzzles={len(puzzles_list)}')
+
+    st_start, body_start = client.post('/api/training/start', {
+        'puzzle_id': 'kill_02_chongpao',
+        'stage': 'drill',
+    })
+    check('POST /api/training/start 启动二步连环重炮试炼',
+          st_start == 200 and body_start.get('ok') is True
+          and body_start.get('stage') == 'drill'
+          and len(body_start.get('demo_line') or []) == 2,
+          str(body_start.get('stage')))
+
+    # 故意走陷阱步 c2c8，验证当场反击（rebuttal）
+    st_trap, body_trap = client.post('/api/training/step', {
+        'puzzle_id': 'kill_02_chongpao',
+        'move': 'c2c8',
+    })
+    check('走出次序颠倒陷阱步 c2c8 -> 触发师傅喝止与黑方当场反击（rebuttal=True）',
+          st_trap == 200 and body_trap.get('outcome') == 'bad_move'
+          and body_trap.get('rebuttal') is True
+          and (body_trap.get('engine_move') or {}).get('iccs') == 'c9a7',
+          str(body_trap.get('engine_move')))
+
+    # 悔棋撤销反击，验证盘面回退
+    st_undo, body_undo = client.post('/api/training/undo', {
+        'puzzle_id': 'kill_02_chongpao',
+    })
+    check('POST /api/training/undo 知错退回重走 -> 解除反击态且棋谱归零',
+          st_undo == 200 and body_undo.get('in_rebuttal') is False
+          and len(body_undo['game']['records']) == 0,
+          f"records={len(body_undo['game']['records'])}")
+
+    # 请求一阶法眼提示，随后走完二步正解 -> 状态应为 solved_with_hints
+    st_hint, body_hint = client.post('/api/training/hint', {
+        'puzzle_id': 'kill_02_chongpao',
+        'level': 1,
+    })
+    check('POST /api/training/hint 开启一阶法眼 -> 返回薄弱格视觉坐标',
+          st_hint == 200 and body_hint.get('ok') is True
+          and bool((body_hint.get('visual_data') or {}).get('weakness_squares')),
+          str(body_hint.get('visual_data')))
+
+    client.post('/api/training/step', {'puzzle_id': 'kill_02_chongpao', 'move': 'b2b9'})
+    st_solve1, body_solve1 = client.post('/api/training/step', {
+        'puzzle_id': 'kill_02_chongpao',
+        'move': 'c2c9',
+    })
+    _, after_hint_pz = client.get('/api/training/puzzles')
+    pz_state1 = next((p for p in after_hint_pz['puzzles'] if p['id'] == 'kill_02_chongpao'), {})
+    check('借法眼提示通关二步重炮 -> 绝杀达成，状态记为 solved_with_hints',
+          st_solve1 == 200 and body_solve1.get('solved') is True
+          and pz_state1.get('status') == 'solved_with_hints',
+          f"status={pz_state1.get('status')}")
+
+    # 切入变式实战大考（exam），验证法眼已锁死，且零提示一气呵成后晋升 mastered
+    st_exam, body_exam = client.post('/api/training/reset', {
+        'puzzle_id': 'kill_02_chongpao',
+        'stage': 'exam',
+    })
+    st_exam_hint, _ = client.post('/api/training/hint', {
+        'puzzle_id': 'kill_02_chongpao',
+        'level': 1,
+    })
+    check('切换至 exam 变式大考阶段 -> 法眼提示被严格锁定（返回 400）',
+          st_exam == 200 and body_exam.get('stage') == 'exam' and st_exam_hint == 400,
+          f'exam_hint_status={st_exam_hint}')
+
+    client.post('/api/training/step', {'puzzle_id': 'kill_02_chongpao', 'move': 'b2b9'})
+    st_solve2, body_solve2 = client.post('/api/training/step', {
+        'puzzle_id': 'kill_02_chongpao',
+        'move': 'c2c9',
+    })
+    _, after_exam_pz = client.get('/api/training/puzzles')
+    pz_state2 = next((p for p in after_exam_pz['puzzles'] if p['id'] == 'kill_02_chongpao'), {})
+    check('大考阶段零提示零悔棋一气呵成绝杀 -> 晋升为 mastered（已精通）',
+          st_solve2 == 200 and body_solve2.get('solved') is True
+          and pz_state2.get('status') == 'mastered',
+          f"status={pz_state2.get('status')}")
 
 
 if __name__ == '__main__':

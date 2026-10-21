@@ -2548,6 +2548,91 @@ def test_arena2(lite: bool):
 # 入口
 # --------------------------------------------------------------------------- #
 
+def test_tactics_and_compiler():
+    """P. 棋理特征提取引擎与自动教案编译器（tactics.py）。"""
+    section('P. 棋理与战术特征提取引擎 + 自动教案编译器（engine/tactics.py）')
+    from engine import tactics
+    from server.training import TrainingController
+
+    # 1. 开局攻防图：双马有双车作根，仅双车双炮为无根大子，且无受攻悬空子
+    g0 = tactics.analyze_board_graph(core.initial)
+    check('开局攻防图：红黑双方无受攻悬空子，且双马有车保护、仅双车双炮为无根大子',
+          g0['hanging'] == {'red': [], 'black': []}
+          and {u['square'] for u in g0['unprotected']['red']} == {'a0', 'i0', 'b2', 'h2'}
+          and {u['square'] for u in g0['unprotected']['black']} == {'a9', 'i9', 'b7', 'h7'},
+          str(g0['unprotected']))
+
+    # 2. 贪吃失先诊断：红方开局炮二进七(h2h9)贪吃黑马，自身暴露在黑车攻击下
+    rev_greedy = {
+        'rank': 4, 'status': 'outside', 'loss': 450, 'loss_kind': 'cp',
+        'best_iccs': 'h2e2',
+        'lines': [{
+            'rank': 1, 'iccs': 'h2e2', 'chinese': '炮二平五', 'score': 30,
+            'pv': [
+                {'iccs': 'h2e2', 'chinese': '炮二平五'},
+                {'iccs': 'h9g7', 'chinese': '马8进7'},
+                {'iccs': 'h0g2', 'chinese': '马二进三'},
+            ],
+        }],
+    }
+    diag_greedy = tactics.diagnose_review(core.initial, True, 'h2h9', rev_greedy)
+    check('棋理诊断：炮二进七吃马但暴露无根炮，准确归因为 greedy_capture（#贪吃失先）',
+          diag_greedy['primary_motif'] == 'greedy_capture'
+          and diag_greedy['severity'] == 'critical'
+          and 'h9' in diag_greedy['visual_clues']['weakness_squares'],
+          str(diag_greedy))
+
+    # 3. 错失必杀诊断：best_mate_in 有值而实走非杀棋
+    rev_mate = {
+        'rank': 2, 'status': 'ok', 'loss': None, 'loss_kind': 'mate',
+        'best_iccs': 'h2e2', 'best_mate_in': 2, 'played_mate_in': None,
+        'lines': [{'rank': 1, 'iccs': 'h2e2', 'chinese': '炮二平五', 'score': 10000, 'pv': []}],
+    }
+    diag_mate = tactics.diagnose_review(core.initial, True, 'a3a4', rev_mate)
+    check('棋理诊断：错过 2 步杀棋准确归因为 missed_mate（#错失必杀）',
+          diag_mate['primary_motif'] == 'missed_mate'
+          and diag_mate['severity'] == 'critical',
+          str(diag_mate))
+
+    # 4. 自动教案编译器：错题记录直接编译为含三段式变式 exam_fen、solution_tree、traps 的完整关卡
+    mistake_item = {
+        'fen_before': nt.to_fen(core.initial, True),
+        'side': 'red',
+        'worst_game_id': 'testgame01',
+        'worst_ply': 1,
+        'best_iccs': 'h2e2',
+        'best_chinese': '炮二平五',
+        'worst_iccs': 'h2h9',
+        'worst_chinese': '炮二进七',
+        'worst_loss': 450,
+        'worst_review': {**rev_greedy, 'tactics': diag_greedy},
+    }
+    compiled = tactics.compile_mistake_to_puzzle(mistake_item, 0)
+    check('自动教案编译器：从实战错题生成含多步 solution_tree、traps 与变式 exam_fen 的教案',
+          compiled is not None
+          and 'h2e2' in compiled['solution_tree']
+          and 'h2h9' in compiled['traps']
+          and compiled['exam_fen'] != compiled['fen']
+          and compiled['motif'] == 'greedy_capture',
+          str(compiled and compiled['title']))
+
+    # 5. 无状态复盘沙盒（What-If Sandbox）：只读推演不污染存档
+    tc = TrainingController(store=None, engines=default_engines(prefer=BUILTIN))
+    sb_reply = tc.sandbox_reply({'fen': nt.to_fen(core.initial, True), 'move': 'h2e2'})
+    check('复盘沙盒接口：GET /api/sandbox 无状态推演返回棋理诊断与引擎应手',
+          sb_reply.status == 200
+          and sb_reply.body.get('ok') is True
+          and sb_reply.body['user_move']['iccs'] == 'h2e2'
+          and isinstance(sb_reply.body.get('tactics'), dict)
+          and sb_reply.body['game']['ply'] == 2
+          and len(sb_reply.body.get('bad_steps') or []) >= 2
+          and len(sb_reply.body.get('good_steps') or []) >= 1
+          and len(sb_reply.body.get('opponent_threat_steps') or []) >= 1
+          and isinstance(sb_reply.body.get('pros_cons'), dict)
+          and isinstance(sb_reply.body.get('thinking_guide'), dict),
+          str(sb_reply.body.get('tactics')))
+
+
 def main():
     ap = argparse.ArgumentParser(description='elephantfish 引擎一致性回归自检')
     ap.add_argument('--quick', action='store_true', help='少跑几局，快速冒烟')
@@ -2585,6 +2670,7 @@ def main():
     test_grading()
     test_mistake_book()
     test_replay_read_path()
+    test_tactics_and_compiler()
     if args.arena2:
         test_arena2(lite=not args.arena2_full)
     else:

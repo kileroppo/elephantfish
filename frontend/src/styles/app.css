@@ -512,6 +512,7 @@ kbd {
   font-weight: 700;
   color: var(--cinnabar);
   letter-spacing: 0.1em;
+  white-space: nowrap;
   transition: color var(--dur-fast) var(--ease-out);
 }
 
@@ -1947,30 +1948,155 @@ kbd {
    谁盖谁只看 DOM 顺序 —— 而顺序是按棋子身份号排的（piecesInOrder），于是同一手棋
    有时「活子压过死子」、有时「死子浮在活子上面」。 */
 .piece.is-gliding {
-  z-index: 21;
+  z-index: 25;
 }
 
-/* 被吃棋子的受击动量滑移淡出。
-   击退距离原来是 15 个板面像素 —— 那颗子的半径就有 33，走子那颗又正好压在它上面，
-   15px 只够让它从底下探出一线边（实测约 5 个 CSS 像素），等于看不见。
-   现在推到 26px 并多缩一点：残影明确地从攻击子**底下**被刮出去，才读得出「被撞到」。 */
+.piece.is-gliding .piece-face {
+  transform: translateY(calc(var(--u) * -3.2px)) scale(1.038);
+  box-shadow: var(--face-shadow),
+    0 calc(var(--u) * 2px) calc(var(--u) * 6px) rgba(44, 24, 8, 0.18);
+  transition: transform var(--glide-dur) cubic-bezier(0.2, 0.9, 0.35, 1);
+}
+
+.piece.is-gliding::after {
+  transform: translate(calc(var(--u) * 8.5px * var(--light-x)), calc(var(--u) * 8.5px)) scale(1.06);
+  opacity: 0.72;
+  transition: transform var(--glide-dur) cubic-bezier(0.2, 0.9, 0.35, 1),
+    opacity var(--glide-dur) var(--ease-out);
+}
+
 .piece.piece-ghost-knockback {
   z-index: 18;
   pointer-events: none;
-  animation: pieceKnockback 220ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  animation: pieceKnockback 220ms cubic-bezier(0.18, 0.88, 0.32, 1) forwards;
 }
 
-/* 基座是 --piece-base：定位已经从 left/top 搬到 transform 上了，
-   keyframes 里那个写死的 translate(-50%, -50%) 会把这颗残影送回棋盘左上角。 */
+.piece.piece-ghost-knockback .piece-face {
+  animation: victimStrikeFlash 220ms var(--ease-out) both;
+}
+
+@keyframes victimStrikeFlash {
+  0% {
+    filter: brightness(1.32) contrast(1.15);
+    box-shadow: var(--face-shadow), 0 0 calc(var(--u) * 12px) rgba(255, 235, 180, 0.65);
+  }
+  35% {
+    filter: brightness(1.08) contrast(1.05);
+    box-shadow: var(--face-shadow), 0 0 calc(var(--u) * 5px) rgba(255, 235, 180, 0.25);
+  }
+  100% {
+    filter: brightness(0.85);
+    box-shadow: var(--face-shadow);
+  }
+}
+
 @keyframes pieceKnockback {
   0% {
     transform: var(--piece-base) translate(0, 0) scale(1) rotate(0deg);
-    opacity: 0.95;
+    opacity: 0.98;
+  }
+  24% {
+    transform: var(--piece-base)
+      translate(calc(var(--kx, 0) * var(--u) * 11px), calc(var(--ky, 0) * var(--u) * 11px))
+      scale(1.08) rotate(calc(var(--kr, 5deg) * 1.2));
+    opacity: 0.96;
+  }
+  65% {
+    transform: var(--piece-base)
+      translate(calc(var(--kx, 0) * var(--u) * 31px), calc(var(--ky, 0) * var(--u) * 31px))
+      scale(0.92) rotate(calc(var(--kr, 6deg) * 2.4));
+    opacity: 0.62;
   }
   100% {
     transform: var(--piece-base)
-      translate(calc(var(--kx, 0) * var(--u) * 26px), calc(var(--ky, 0) * var(--u) * 26px))
-      scale(0.82) rotate(calc(var(--kr, 4deg)));
+      translate(calc(var(--kx, 0) * var(--u) * 44px), calc(var(--ky, 0) * var(--u) * 44px))
+      scale(0.7) rotate(calc(var(--kr, 6deg) * 3.6));
+    opacity: 0;
+  }
+}
+
+.capture-burst-ring {
+  position: absolute;
+  inset: -12%;
+  border-radius: 50%;
+  border: calc(var(--u) * 2.2px) solid rgba(220, 75, 45, 0.92);
+  box-shadow: 0 0 calc(var(--u) * 8px) rgba(220, 75, 45, 0.6),
+    inset 0 0 calc(var(--u) * 4px) rgba(255, 220, 160, 0.45);
+  pointer-events: none;
+  animation: captureRingPulse 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  z-index: 10;
+}
+
+.piece.black .capture-burst-ring {
+  border-color: rgba(200, 160, 90, 0.92);
+  box-shadow: 0 0 calc(var(--u) * 8px) rgba(200, 160, 90, 0.65),
+    inset 0 0 calc(var(--u) * 4px) rgba(255, 245, 200, 0.45);
+}
+
+@keyframes captureRingPulse {
+  0% {
+    transform: scale(0.72);
+    opacity: 0.98;
+  }
+  45% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.95);
+    opacity: 0;
+  }
+}
+
+.capture-spark-burst {
+  position: absolute;
+  inset: 10%;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 235, 170, 0.95) 0%,
+    rgba(220, 70, 40, 0.75) 45%,
+    transparent 75%
+  );
+  animation: captureSparksOut 300ms cubic-bezier(0.18, 0.9, 0.35, 1) both;
+  z-index: 9;
+}
+
+.piece.black .capture-spark-burst {
+  background: radial-gradient(
+    circle,
+    rgba(255, 248, 220, 0.95) 0%,
+    rgba(200, 157, 88, 0.8) 45%,
+    transparent 75%
+  );
+}
+
+@keyframes captureSparksOut {
+  0% {
+    transform: scale(0.65) translate(0, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.2)
+      translate(calc(var(--kx, 0) * var(--u) * 16px), calc(var(--ky, 0) * var(--u) * 16px));
+    opacity: 0;
+  }
+}
+
+.piece.is-impact.is-capture-impact::before {
+  animation: pieceCaptureImpactRing 540ms var(--ease-out) both;
+}
+
+@keyframes pieceCaptureImpactRing {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.42;
+  }
+  100% {
+    transform: scale(1.75);
     opacity: 0;
   }
 }
@@ -4451,6 +4577,14 @@ kbd {
     margin-top: var(--board-clearance);
   }
 
+  /* 现场列主操作区：应手台/排局控制台排在棋盘正下方 */
+  .stage > .relay-compact,
+  .stage > .setup-panel,
+  .relay-compact,
+  .setup-panel {
+    order: 3;
+  }
+
   .rail-right {
     order: 4;
   }
@@ -4470,40 +4604,249 @@ kbd {
 }
 
 @media (max-width: 720px) {
-  .workspace,
-  .topbar {
-    padding-left: 12px;
-    padding-right: 12px;
+  .workspace {
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-bottom: 56px;
   }
 
-  /* 一行放不下：品牌 + 引擎徽章本身就占满了手机宽度，翻转/音效/帮助再挤进
-     同一行会横向顶出视口（414px 视口下实测溢出 36px）。
-     让它们换到第二行、右对齐。 */
+  /* 顶栏紧凑双行布局：高度从 100px+ 压缩至 64px 左右，为棋盘腾出宝贵首屏空间 */
   .topbar {
+    padding: 8px 12px 6px;
     flex-wrap: wrap;
-    row-gap: 8px;
+    row-gap: 6px;
   }
+
+  .brand {
+    flex: 1 1 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .brand-mark svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .brand-text h1 {
+    font-size: 15px;
+    letter-spacing: 0.05em;
+    line-height: 1;
+    margin: 0;
+  }
+
+  .brand-text p {
+    display: none;
+  }
+
+  .engine-badge,
+  .engine-side-badge {
+    min-height: 32px;
+    height: 32px;
+    padding: 2px 8px;
+    font-size: 11.5px;
+    gap: 4px;
+    margin-left: 0;
+    flex-shrink: 0;
+  }
+
+  .engine-side-disc {
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+  }
+
+  /* 第二行功能操作条：整齐居中分布，图标+文字精致呈现 */
   .topbar-actions {
     flex: 1 1 100%;
-    justify-content: flex-end;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(43, 35, 26, 0.06);
   }
 
-  /* 手机端页边距只有 12px，棋盘垫收进 10px，不然横向顶出视口 2px */
+  .icon-btn {
+    height: 32px;
+    padding: 0 8px;
+    font-size: 11.5px;
+    gap: 3px;
+    border-radius: var(--r-sm);
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .icon-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* 局面状态指示条 HUD：居中、轻盈且不压迫 */
+  .stage-head {
+    min-height: var(--badge-h);
+    margin-top: 2px;
+    margin-bottom: 0;
+  }
+
+  .turn-badge {
+    min-width: 0;
+    max-width: 100%;
+    height: var(--badge-h);
+    padding: 4px 12px;
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  /* 棋盘：自适应宽度 + 屏幕高度保护，确保首屏完整看全棋盘与底线落子 */
+  .stage .board {
+    width: min(100%, calc((100dvh - 210px) * 720 / 800), 480px);
+    height: auto;
+    margin: 0 auto;
+  }
+
+  /* 手机端页边距微调，棋盘垫收进 8px，防止横向溢出 */
   .board::before {
-    inset: -10px;
+    inset: -8px;
+    border-radius: 20px;
   }
 
-  /* 窄屏上竖排耳片会贴到棋盘边，改成横排小按钮沉到两角 */
+  /* 核心应手区重构：彻底解决「马四进六」竖向挤压折行与多列混乱的难看排版 */
+  .engine-hero {
+    padding: 8px 12px;
+    min-height: 60px;
+    border-radius: var(--r-md);
+  }
+
+  .hero-content {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 6px 10px;
+    width: 100%;
+  }
+
+  .hero-label {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    justify-self: start;
+    font-size: 11.5px;
+    color: var(--ink-mute);
+    line-height: 1.2;
+  }
+
+  .hero-meta {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    justify-self: end;
+    text-align: right;
+    font-size: 11px;
+    color: var(--ink-3);
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .hero-action-card {
+    grid-column: 1 / 3;
+    grid-row: 2 / 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 6px 14px;
+    min-height: 40px;
+    gap: 10px;
+    border-radius: var(--r-md);
+    box-sizing: border-box;
+  }
+
+  .hero-move-cn {
+    font-size: 21px;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+  }
+
+  .hero-move-iccs {
+    font-size: 12px;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+
+  .hero-copy-pill {
+    font-size: 11px;
+    padding: 2px 8px;
+    height: 22px;
+    white-space: nowrap;
+  }
+
+  .hero-thinking {
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+    gap: 8px 10px;
+  }
+
+  .hero-thinking .btn-kbd {
+    display: none; /* 移动触屏隐藏物理 Space 键 */
+  }
+
+  .thinking-title {
+    font-size: 12.5px;
+  }
+
+  .hero-idle {
+    justify-content: center;
+    text-align: center;
+    font-size: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* 文本录入栏紧凑化 */
+  .type-toggle-btn {
+    min-height: 32px;
+    height: 32px;
+    padding: 4px 14px;
+    font-size: 12px;
+    border-radius: 999px;
+  }
+
+  .type-inline-box {
+    padding: 4px 8px;
+    gap: 6px;
+  }
+
+  .type-inline-box input {
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .type-inline-box .btn {
+    height: 32px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  /* 侧栏把手耳片：半透明药丸胶囊，贴底安全区，不遮挡棋盘落子 */
   .rail-tab {
     top: auto;
-    bottom: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
     transform: none;
     writing-mode: horizontal-tb;
-    letter-spacing: 0.18em;
-    padding: 8px 12px;
-    background: var(--paper-0);
+    letter-spacing: 0.15em;
+    height: 32px;
+    padding: 0 10px;
+    font-size: 11.5px;
+    background: rgba(253, 250, 244, 0.94);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     box-shadow: var(--shadow-float);
-    border: 1px solid var(--hairline);
+    border: 1px solid var(--hairline-strong);
+    z-index: 60;
   }
 
   .rail-tab-left {
@@ -4516,36 +4859,28 @@ kbd {
     border-radius: 999px;
   }
 
-  .brand-text p {
-    display: none;
+  .rail-tab-left.is-open,
+  .rail-tab-right.is-open {
+    transform: none;
   }
-
-
 
   .shortcuts {
     grid-template-columns: 1fr;
   }
 
-  /* 手指比鼠标粗，所有控件都要长大一圈 */
+  /* 触控控件尺寸标准（>=32px，适手且不笨重） */
   .btn,
   .seg,
   .btn-sm {
-    height: 40px;
-  }
-  .preset {
-    height: 40px;
+    height: 34px;
     font-size: 12.5px;
   }
-  .icon-btn {
-    height: 40px;
-  }
-  .engine-badge,
-  .engine-side-badge,
-  .type-toggle-btn {
-    min-height: 40px;
+  .preset {
+    height: 34px;
+    font-size: 12px;
   }
   .panel {
-    padding: 16px;
+    padding: 12px;
   }
 }
 
@@ -5110,7 +5445,7 @@ kbd {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -5396,7 +5731,7 @@ kbd {
   font-size: 12px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.12s ease;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .drill-drawer-item:hover {
@@ -5445,3 +5780,1108 @@ kbd {
 }
 
 
+
+/* -------------------------------------------------------------------------- */
+/* 国手名师 · 传功修行体系增强样式                                          */
+/* -------------------------------------------------------------------------- */
+
+/* 今日宗师诊脉横幅 */
+.drill-master-diagnosis {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  background: linear-gradient(90deg, rgba(184, 51, 42, 0.08), rgba(212, 175, 55, 0.08));
+  border-bottom: 1px solid var(--hairline);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.drill-diagnosis-icon {
+  font-weight: 700;
+  color: var(--cinnabar);
+  white-space: nowrap;
+}
+
+.drill-diagnosis-text {
+  color: var(--ink-1);
+  font-style: italic;
+}
+
+/* 三段式修学切换卡条 */
+.drill-stages-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.drill-stage-btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--hairline);
+  background: var(--paper-1);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.drill-stage-btn:hover:not(:disabled) {
+  background: var(--paper-0);
+  color: var(--ink-0);
+  border-color: var(--hairline-strong);
+}
+
+.drill-stage-btn.is-active {
+  background: var(--cinnabar);
+  color: #fff;
+  border-color: var(--cinnabar);
+  box-shadow: 0 2px 6px rgba(184, 51, 42, 0.25);
+}
+
+/* 师傅当场反击惩罚态（Rebuttal Veil & Card） */
+.drill-rebuttal-veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(184, 51, 42, 0.22);
+    z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease forwards;
+}
+
+.drill-rebuttal-card {
+  max-width: 380px;
+  background: var(--paper-0);
+  border: 2px solid var(--cinnabar);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  text-align: center;
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.rebuttal-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rebuttal-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  background: var(--cinnabar);
+  color: #fff;
+  border-radius: 4px;
+}
+
+.rebuttal-head h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cinnabar);
+}
+
+.rebuttal-desc {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-1);
+}
+
+.rebuttal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* 盘面三阶法眼视觉点拨高光 */
+.master-weakness-marker {
+  position: absolute;
+  width: 10%;
+  height: 9%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 25;
+}
+
+.master-weakness-pulse {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px dashed var(--cinnabar);
+  background: rgba(184, 51, 42, 0.18);
+  box-shadow: 0 0 14px rgba(184, 51, 42, 0.45);
+  animation: weaknessBreathe 1.8s infinite ease-in-out;
+}
+
+@keyframes weaknessBreathe {
+  0%, 100% {
+    transform: scale(0.92);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.95;
+  }
+}
+
+/* 核心主攻子高光欠身呼吸 */
+.piece.is-master-key .piece-face {
+  box-shadow: 0 0 0 3px #d4af37, 0 0 16px rgba(212, 175, 55, 0.65) !important;
+  animation: masterKeyFloat 2s infinite ease-in-out;
+}
+
+@keyframes masterKeyFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+
+/* ==========================================================================
+   Awwwards / Webby / FWA 东方美学奢华材质与微交互增强 (Aesthetic Elevation)
+   ========================================================================== */
+
+/* 1. 美学材质主题背景光晕 */
+[data-theme="wumu"] body::before {
+  background-image: radial-gradient(
+      120% 80% at 12% -10%,
+      rgba(215, 175, 120, 0.08),
+      rgba(0, 0, 0, 0) 65%
+    ),
+    radial-gradient(
+      80% 60% at 88% 90%,
+      rgba(200, 157, 88, 0.04),
+      rgba(0, 0, 0, 0) 50%
+    );
+}
+
+[data-theme="ruyao"] body::before {
+  background-image: radial-gradient(
+      120% 80% at 12% -10%,
+      rgba(255, 255, 255, 0.95),
+      rgba(255, 255, 255, 0) 60%
+    ),
+    repeating-linear-gradient(
+      45deg,
+      rgba(39, 112, 92, 0.02) 0 1px,
+      rgba(255, 255, 255, 0) 1px 4px
+    );
+}
+
+[data-theme="zhuqi"] body::before {
+  background-image: radial-gradient(
+      120% 80% at 12% -10%,
+      rgba(255, 230, 210, 0.6),
+      rgba(255, 255, 255, 0) 60%
+    ),
+    repeating-linear-gradient(
+      45deg,
+      rgba(141, 38, 30, 0.02) 0 1px,
+      rgba(255, 255, 255, 0) 1px 4px
+    );
+}
+
+/* 2. 顶栏美学材质切换胶囊 (Theme Switcher Pill) */
+.theme-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  min-height: 32px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-left: 6px;
+  background: var(--paper-2);
+  color: var(--ink-2);
+  border: 1px solid var(--hairline-strong);
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.theme-badge:hover {
+  transform: translateY(-1px);
+  background: var(--paper-3);
+  border-color: var(--ink-3);
+  color: var(--ink-0);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(43, 35, 26, 0.12);
+}
+
+.theme-badge:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.theme-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  box-shadow: 0 0 5px var(--cinnabar);
+}
+
+.theme-badge.theme-wumu .theme-badge-dot {
+  background: #c89d58;
+  box-shadow: 0 0 6px rgba(200, 157, 88, 0.8);
+}
+
+.theme-badge.theme-ruyao .theme-badge-dot {
+  background: #27705c;
+  box-shadow: 0 0 6px rgba(39, 112, 92, 0.6);
+}
+
+.theme-badge.theme-zhuqi .theme-badge-dot {
+  background: #e3bd6e;
+  box-shadow: 0 0 6px rgba(227, 189, 110, 0.8);
+}
+
+.theme-badge-switch {
+  display: inline-block;
+  font-size: 11px;
+  opacity: 0.75;
+  transition: transform var(--dur-fast) var(--ease-spring);
+}
+
+.theme-badge:hover .theme-badge-switch {
+  transform: scale(1.18);
+}
+
+/* 3. 禅意专注模式按钮与印章标记 */
+.icon-zen .zen-seal-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 3px;
+  border: 1px solid var(--cinnabar);
+  color: var(--cinnabar);
+  font-family: var(--font-kai);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform var(--dur-fast) var(--ease-spring),
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.icon-zen.is-on {
+  background: var(--cinnabar-wash);
+  border-color: var(--cinnabar-edge);
+  color: var(--cinnabar);
+}
+
+.icon-zen.is-on .zen-seal-glyph {
+  background: var(--cinnabar);
+  color: #fff;
+  transform: rotate(-6deg);
+}
+
+/* 4. 禅意沉浸视界 (Zen Focus Arena) */
+.app.is-zen-mode .rail-tab {
+  opacity: 0.15;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.app.is-zen-mode .rail-tab:hover {
+  opacity: 0.95;
+}
+
+.zen-hud {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  pointer-events: auto;
+  animation: zenHudIn var(--dur-slow) var(--ease-spring) both;
+}
+
+@keyframes zenHudIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.zen-hud-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 10px;
+  background: var(--paper-0);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  box-shadow: var(--shadow-float);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--ink-1);
+}
+
+.zen-hud-seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--cinnabar);
+  color: #fff;
+  font-family: var(--font-kai);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(180, 50, 42, 0.4);
+}
+
+.zen-hud-title {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-0);
+}
+
+.zen-hud-turn {
+  font-size: 12px;
+  color: var(--ink-3);
+  padding-left: 4px;
+  border-left: 1px solid var(--hairline);
+}
+
+.zen-hud-thinking {
+  color: var(--cinnabar);
+  font-weight: 500;
+  animation: zenPulse 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes zenPulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.zen-hud-exit {
+  font: inherit;
+  font-size: 11px;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--paper-2);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.zen-hud-exit:hover {
+  background: var(--cinnabar-wash);
+  color: var(--cinnabar);
+  border-color: var(--cinnabar-edge);
+}
+
+/* 5. 棋盘触感追光层 (Ambient Specular Sheen) */
+.board-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle 520px at var(--mouse-x, 35%) var(--mouse-y, 30%),
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0) 65%
+  );
+  opacity: 0.85;
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+
+[data-theme="wumu"] .board-surface::after {
+  background: radial-gradient(
+    circle 520px at var(--mouse-x, 35%) var(--mouse-y, 30%),
+    rgba(225, 185, 110, 0.12) 0%,
+    rgba(225, 185, 110, 0) 65%
+  );
+}
+
+[data-theme="ruyao"] .board-surface::after {
+  background: radial-gradient(
+    circle 520px at var(--mouse-x, 35%) var(--mouse-y, 30%),
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0) 65%
+  );
+}
+
+[data-theme="zhuqi"] .board-surface::after {
+  background: radial-gradient(
+    circle 520px at var(--mouse-x, 35%) var(--mouse-y, 30%),
+    rgba(255, 230, 160, 0.14) 0%,
+    rgba(255, 230, 160, 0) 65%
+  );
+}
+
+/* 6. 国手大成朱砂金石通关印章 (Grandmaster Cinnabar Seal Stamp) */
+.drill-victory-seal-stamp {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 14px auto 8px;
+  padding: 12px 20px;
+  animation: sealStampIn 480ms var(--ease-spring) both;
+}
+
+@keyframes sealStampIn {
+  0% {
+    opacity: 0;
+    transform: scale(1.6) rotate(-14deg);
+  }
+  70% {
+    transform: scale(0.96) rotate(-5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-6deg);
+  }
+}
+
+.seal-stamp-border {
+  display: inline-flex;
+  padding: 8px 12px;
+  border: 3.5px double var(--cinnabar);
+  border-radius: 6px;
+  background: var(--cinnabar-wash);
+  box-shadow: inset 0 0 8px rgba(180, 50, 42, 0.2), 0 2px 8px rgba(180, 50, 42, 0.18);
+}
+
+.seal-stamp-chars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 8px;
+  font-family: var(--font-kai);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--cinnabar);
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 1px rgba(180, 50, 42, 0.6);
+}
+
+.seal-stamp-ribbon {
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--cinnabar);
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   第一性原理认知教练：棋理标签 / 师傅扶手 / 病因图谱 / 复盘沙盒
+   ========================================================================== */
+
+.motif-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+  border: 1px solid var(--cinnabar-edge);
+  white-space: nowrap;
+}
+
+.motif-chip.is-accent {
+  font-size: 12px;
+}
+
+.motif-chip.is-sandbox {
+  color: var(--ink-0);
+  background: var(--paper-2);
+  border-color: var(--hairline-strong);
+}
+
+.coach-good-pill {
+  color: var(--jade);
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.coach-interrupt-card {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--cinnabar-edge);
+  border-left: 3px solid var(--cinnabar);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.coach-interrupt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.coach-interrupt-badge {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cinnabar);
+}
+
+.coach-interrupt-ply {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.coach-interrupt-summary {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.coach-interrupt-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.learn-tactics {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.mistake-prescription {
+  margin: 8px 0 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--cinnabar-edge);
+}
+
+.mistake-prescription-head {
+  margin-bottom: 5px;
+}
+
+.mistake-prescription-advice {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.mistake-motif-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+
+.mistake-coach-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.replay-coach-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 6px 0 8px;
+}
+
+.replay-tactics-card,
+.replay-sandbox-card {
+  margin: 6px 0 10px;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline-strong);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.replay-tactics-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.replay-tactics-card.is-critical {
+  border-color: var(--cinnabar-edge);
+}
+
+.replay-sandbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.replay-sandbox-summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+
+/* ==========================================================================
+   直观优劣势分步动画推演器 · 优劣势对比卡 · 第一性原理逆向三问算路助手
+   ========================================================================== */
+
+.drill-puzzle-subtitle {
+  margin: 4px 0 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.drill-side-indicator {
+  font-weight: 700;
+  color: var(--cinnabar);
+}
+
+.drill-rebuttal-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.drill-anim-quickbar,
+.live-helper-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline);
+}
+
+.drill-anim-tab {
+  border-radius: 999px;
+  font-weight: 600;
+  transition: all 0.16s ease;
+}
+
+.drill-anim-tab.is-bad {
+  color: var(--cinnabar);
+  border: 1px solid var(--cinnabar-edge);
+  background: var(--cinnabar-wash);
+}
+.drill-anim-tab.is-bad.is-active {
+  background: var(--cinnabar);
+  color: #fff;
+}
+
+.drill-anim-tab.is-good {
+  color: var(--jade);
+  border: 1px solid rgba(16, 124, 92, 0.32);
+  background: rgba(16, 124, 92, 0.08);
+}
+.drill-anim-tab.is-good.is-active {
+  background: var(--jade);
+  color: #fff;
+}
+
+.drill-anim-tab.is-threat {
+  color: #b45309;
+  border: 1px solid rgba(180, 83, 9, 0.32);
+  background: rgba(245, 158, 11, 0.1);
+}
+.drill-anim-tab.is-threat.is-active {
+  background: #b45309;
+  color: #fff;
+}
+
+/* 🎬 分步动画推演剧场 */
+.drill-theater-card {
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1.5px solid var(--hairline-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drill-theater-card.mode-bad {
+  border-color: var(--cinnabar-edge);
+  background: linear-gradient(180deg, rgba(185, 43, 39, 0.05), var(--paper-1));
+}
+
+.drill-theater-card.mode-good {
+  border-color: rgba(16, 124, 92, 0.35);
+  background: linear-gradient(180deg, rgba(16, 124, 92, 0.05), var(--paper-1));
+}
+
+.drill-theater-card.mode-threat {
+  border-color: rgba(180, 83, 9, 0.35);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.06), var(--paper-1));
+}
+
+.drill-theater-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.drill-theater-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-0);
+}
+
+.drill-theater-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.drill-theater-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.drill-step-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  border: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.drill-step-item:hover {
+  border-color: var(--hairline-strong);
+}
+
+.drill-step-item.is-current {
+  border: 1.5px solid var(--cinnabar);
+  background: var(--cinnabar-wash);
+  box-shadow: 0 2px 8px rgba(185, 43, 39, 0.1);
+}
+
+.drill-step-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.drill-step-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-1);
+}
+
+.drill-step-move {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cinnabar);
+}
+
+.drill-step-plain {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-1);
+}
+
+.drill-step-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.step-pill {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.step-pill.is-gain {
+  color: var(--jade);
+  background: rgba(16, 124, 92, 0.1);
+}
+
+.step-pill.is-loss {
+  color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+}
+
+/* 📊 优劣势直观对比卡 */
+.drill-pros-cons-card {
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pros-cons-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pros-cons-header h4 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-0);
+}
+
+.pros-cons-drop-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+  border: 1px solid var(--cinnabar-edge);
+}
+
+.pros-cons-headline {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-1);
+  line-height: 1.45;
+}
+
+.pros-cons-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .pros-cons-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pros-cons-col {
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  border: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pros-cons-col.is-bad {
+  border-top: 2.5px solid var(--cinnabar);
+}
+
+.pros-cons-col.is-good {
+  border-top: 2.5px solid var(--jade);
+}
+
+.pros-cons-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pros-cons-col-head .col-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-0);
+}
+
+.pros-cons-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 🧠 第一性原理 · 逆向思维 · 对抗三问算路助手 */
+.drill-thinking-card {
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.thinking-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.thinking-card-head h4 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-0);
+}
+
+.thinking-section {
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  border: 1px solid var(--hairline);
+}
+
+.thinking-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--ink-0);
+}
+
+.thinking-badge.is-fp {
+  color: #1d4ed8;
+}
+
+.thinking-badge.is-inv {
+  color: var(--jade);
+}
+
+.thinking-badge.is-adv {
+  color: var(--cinnabar);
+}
+
+.thinking-fp-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.thinking-inv-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.thinking-qa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.thinking-qa-item {
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  background: var(--paper-1);
+  cursor: pointer;
+}
+
+.qa-question {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-0);
+}
+
+.qa-answer {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  margin-top: 2px;
+}
+
+.live-helper-drawer {
+  margin: 6px 0;
+}
+
+.live-helper-loading {
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.live-pros-cons-mini {
+  padding-top: 6px;
+  border-top: 1px dashed var(--hairline);
+  font-size: 12px;
+  color: var(--ink-1);
+}

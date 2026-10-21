@@ -1,17 +1,30 @@
 import { useState } from 'react'
 import type { AppState, Settings, Side } from '../types'
+import { useGameContext } from '../context/GameContext'
+import { useUIContext } from '../context/UIContext'
 
-interface Props {
+export interface ControlRailProps {
   /** 抽屉是否展开。收起时整栏 inert：不可聚焦、读屏跳过，但保持挂载以便滑动过渡 */
-  open: boolean
-  state: AppState
+  open?: boolean
+  state?: AppState
   setupMode?: boolean
   onToggleSetup?: () => void
-  onNewGame: (side: Side) => void
-  onUndo: () => void
-  onResign: () => void
-  onSettings: (patch: Partial<AppState['settings']>) => void
+  onNewGame?: (side: Side) => void
+  onUndo?: () => void
+  onResign?: () => void
+  onSettings?: (patch: Partial<AppState['settings']>) => void
+  playMode?: 'sparring' | 'relay'
+  shadowGuess?: boolean
+  onTogglePlayMode?: () => void
+  onToggleShadowGuess?: () => void
 }
+
+const SPARRING_TIERS = [
+  { id: 'apprentice' as const, label: '🌱 启蒙学徒 (4层)', depth: 4, ms: 400, engine: 'builtin' as const },
+  { id: 'club' as const, label: '🍵 街头棋摊 (6层)', depth: 6, ms: 900, engine: 'builtin' as const },
+  { id: 'master' as const, label: '⚔️ 省冠名手 (12层)', depth: 12, ms: 1500, engine: 'pikafish' as const },
+  { id: 'god' as const, label: '👑 绝顶宗师 (20层)', depth: 20, ms: 3000, engine: 'pikafish' as const },
+]
 
 const THINK_PRESETS = [
   { ms: 600, label: '极速 (0.6s)' },
@@ -28,20 +41,30 @@ const ANALYZE_FIELDS = [
   { key: 'analyze_width', label: '前几名', unit: '条', min: 1, max: 5, step: 1, hint: '排前几名。「没进引擎前 3 名」这句话里的 3 就是它' },
 ] as const
 
-export function ControlRail({
-  open,
-  state,
-  setupMode = false,
-  onToggleSetup,
-  onNewGame,
-  onUndo,
-  onResign,
-  onSettings,
-}: Props) {
+export function ControlRail(props: ControlRailProps) {
+  const g = useGameContext()
+  const ui = useUIContext()
+
+  const open = props.open ?? ui.railL
+  const state = props.state ?? g.state
+  if (!state) return null
+
+  const setupMode = props.setupMode ?? false
+  const onToggleSetup = props.onToggleSetup
+  const onNewGame = props.onNewGame ?? ((side: Side) => void g.newGame(side))
+  const onUndo = props.onUndo ?? (() => void g.undoRound())
+  const onResign = props.onResign ?? (() => void g.resign())
+  const onSettings = props.onSettings ?? ((patch) => void g.updateSettings(patch))
+  const playMode = props.playMode ?? ui.playMode
+  const shadowGuess = props.shadowGuess ?? ui.shadowGuess
+  const onTogglePlayMode = props.onTogglePlayMode ?? ui.togglePlayMode
+  const onToggleShadowGuess = props.onToggleShadowGuess ?? ui.toggleShadowGuess
   const { game, settings } = state
   const [confirmResign, setConfirmResign] = useState(false)
   const over = game.status.state !== 'playing'
   const analyzeOn = settings.analyze !== false
+  const coachGuardOn = settings.coach_guard !== false
+  const activeTier = settings.sparring_level ?? 'master'
 
   return (
     <aside
@@ -50,6 +73,62 @@ export function ControlRail({
       aria-hidden={!open}
       {...(open ? {} : { inert: '' })}
     >
+      <section className="panel">
+        <header className="panel-head">
+          <h2>陪练段位与扶手</h2>
+          <span className="panel-count">{coachGuardOn ? '扶手开' : '静默'}</span>
+        </header>
+        <div className="preset-column">
+          {SPARRING_TIERS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`preset ${activeTier === t.id ? 'is-on' : ''}`}
+              onClick={() =>
+                onSettings({
+                  sparring_level: t.id,
+                  max_depth: t.depth,
+                  think_ms: t.ms,
+                  engine_type: t.engine,
+                })
+              }
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="preset-column" style={{ marginTop: '8px' }}>
+          <button
+            type="button"
+            className={`preset ${coachGuardOn ? 'is-on' : ''}`}
+            aria-pressed={coachGuardOn}
+            onClick={() => onSettings({ coach_guard: !coachGuardOn })}
+            title="开启后，当你在实战中走出严重漏着或丢子缓手时，教练台立即弹出棋理归因与听劝重走提示"
+          >
+            {coachGuardOn ? '⚡ 师傅扶手 · 败着实时点拨' : '师傅扶手已关 · 自由对弈'}
+          </button>
+          {onTogglePlayMode && (
+            <button
+              type="button"
+              className={`preset ${playMode === 'relay' ? 'is-on' : ''}`}
+              onClick={onTogglePlayMode}
+              title="切换实战陪练模式与外部棋局信使转述模式"
+            >
+              {playMode === 'relay' ? '📡 当前：信使代打转述' : '🎯 当前：认知教练陪练'}
+            </button>
+          )}
+          {playMode === 'relay' && onToggleShadowGuess && (
+            <button
+              type="button"
+              className={`preset ${shadowGuess ? 'is-on' : ''}`}
+              onClick={onToggleShadowGuess}
+            >
+              {shadowGuess ? '👁️ 跟师盲猜：已开启' : '跟师盲猜：已关闭'}
+            </button>
+          )}
+        </div>
+      </section>
+
       <section className="panel">
         <header className="panel-head">
           <h2>思考时间</h2>

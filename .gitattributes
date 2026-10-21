@@ -1,0 +1,6 @@
+# Force batch files to have CRLF line endings on checkout
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Bash scripts
+*.sh text eol=lf

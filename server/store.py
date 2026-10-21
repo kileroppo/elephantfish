@@ -72,6 +72,7 @@ import time
 import traceback
 
 from engine import notation as nt
+from engine import tactics
 
 # 默认落在仓库根的 data/ 下：和 data/fen/ 那个语料目录是同一个意思 ——
 # 都是「越用越值钱、不该跟着代码走」的东西。
@@ -367,6 +368,8 @@ def _blank_mistake_summary(store_enabled=True):
         'games': 0,              # 涉及几局 —— 错题本讲的从来不是眼下这一局
         'limit': 0,
         'store_enabled': store_enabled,
+        'motif_counts': {},      # 个人病因图谱：按棋理病因聚合频次
+        'prescription': None,    # 基于最高频病因的教练处方
     }
 
 
@@ -474,7 +477,7 @@ class Store:
                        p.review, g.updated_at
                 FROM plies p
                 JOIN games g ON g.game_id = p.game_id
-                WHERE p.by = 'opponent' AND p.review IS NOT NULL
+                WHERE p.by IN ('opponent', 'human') AND p.review IS NOT NULL
                 ORDER BY p.fen_before, g.updated_at, p.game_id, p.ply
                 """
             ).fetchall()
@@ -551,6 +554,19 @@ class Store:
             if entry['misses'] <= 0:
                 continue
             worst = entry['worst'] or {}
+            w_rev = worst.get('review') or {}
+            w_tactics = w_rev.get('tactics')
+            if not isinstance(w_tactics, dict) and worst.get('played_iccs'):
+                try:
+                    b_fen, r_fen, _h, _m = nt.from_fen(fen)
+                    w_tactics = tactics.diagnose_review(
+                        b_fen, r_fen, worst['played_iccs'], w_rev
+                    )
+                except Exception:
+                    w_tactics = {}
+            w_tactics = w_tactics if isinstance(w_tactics, dict) else {}
+            p_motif = w_tactics.get('primary_motif') or 'lost_tempo'
+            m_info = tactics.MOTIF_CATALOG.get(p_motif, tactics.MOTIF_CATALOG['lost_tempo'])
             entries.append({
                 'fen_before': fen,
                 'side': entry['side'],
@@ -575,6 +591,11 @@ class Store:
                 'worst_game_id': worst.get('game_id', ''),
                 'worst_ply': worst.get('ply'),
                 'worst_review': worst.get('review'),
+                'primary_motif': p_motif,
+                'motif_label': w_tactics.get('motif_label') or m_info['label'],
+                'motif_icon': m_info['icon'],
+                'coach_summary': w_tactics.get('coach_summary') or '',
+                'visual_clues': w_tactics.get('visual_clues') or {},
                 'last_game_id': entry['last_game_id'],
                 'last_ply': entry['last_ply'],
                 'last_at': entry['last_at'],
@@ -583,11 +604,26 @@ class Store:
         summary = _blank_mistake_summary()
         summary['limit'] = limit
         listed = entries[:limit] if limit else entries
+        motif_counts: dict = {}
         for e in entries:
             for key in ('graded_plies', 'misses', 'exact_misses', 'at_least_misses',
                         'mate_misses', 'clean', 'blurred', 'unreadable'):
                 summary[key] += e[key]
             summary['miss_positions'] += 1
+            m_id = e.get('primary_motif') or 'lost_tempo'
+            motif_counts[m_id] = motif_counts.get(m_id, 0) + e['misses']
+        summary['motif_counts'] = motif_counts
+        if motif_counts:
+            top_motif = max(sorted(motif_counts), key=lambda k: motif_counts[k])
+            cat_meta = tactics.MOTIF_CATALOG.get(top_motif, tactics.MOTIF_CATALOG['lost_tempo'])
+            summary['prescription'] = {
+                'motif': top_motif,
+                'label': cat_meta['label'],
+                'icon': cat_meta['icon'],
+                'count': motif_counts[top_motif],
+                'desc': cat_meta['desc'],
+                'advice': cat_meta['advice'],
+            }
         # 只列了错题的局面之外，还有「判过分但一次没错」的局面 —— 它们不进这本账，
         # 但总数不许被 limit 或过滤偷偷抹掉。
         summary['positions'] = len(groups)
@@ -799,7 +835,7 @@ class Store:
                 if solved:
                     if prev_status == 'mastered':
                         status = 'mastered'
-                    elif hints_used == 0 and first_try and attempts == 1:
+                    elif hints_used == 0 and first_try:
                         status = 'mastered'
                         first_try_pass = 1
                     else:
@@ -832,12 +868,20 @@ class Store:
         }
 
     def get_training_summary(self) -> dict:
-        """获取学员实训综合战报。"""
+        """获取学员实训综合战报、宗师评定与每日盲区诊脉。"""
         if self._conn is None:
-            return {'store_enabled': False, 'total_solved': 0, 'mastered': 0, 'by_category': {}}
+            return {
+                'store_enabled': False,
+                'total_solved': 0,
+                'mastered': 0,
+                'rank_title': '初入师门',
+                'diagnosis': '多加演练杀法基本功，筑牢根基。',
+                'recommendations': [],
+                'by_category': {},
+            }
         with self._lock:
             cur = self._conn.execute(
-                'SELECT category, status, first_try_pass FROM training_progress'
+                'SELECT category, status, first_try_pass, hints_used, attempts FROM training_progress'
             )
             rows = cur.fetchall()
 
@@ -847,7 +891,7 @@ class Store:
         first_try = sum(1 for r in rows if r[2] == 1)
 
         by_cat: dict = {}
-        for cat, stat, _ in rows:
+        for cat, stat, _, _, _ in rows:
             if cat not in by_cat:
                 by_cat[cat] = {'total': 0, 'solved': 0, 'mastered': 0}
             by_cat[cat]['total'] += 1
@@ -856,12 +900,40 @@ class Store:
             if stat == 'mastered':
                 by_cat[cat]['mastered'] += 1
 
+        # 师门段位评定
+        if mastered >= 12:
+            rank_title = '宗师出山 · 通权达变'
+        elif mastered >= 8:
+            rank_title = '入室大弟子 · 算度渊深'
+        elif mastered >= 4:
+            rank_title = '登堂弟子 · 势如破竹'
+        elif solved >= 1:
+            rank_title = '开山学徒 · 渐入佳境'
+        else:
+            rank_title = '初入师门 · 虚心向道'
+
+        # 盲区诊脉逻辑
+        kill_stat = by_cat.get('kill_tactics', {'mastered': 0, 'total': 0})
+        end_stat = by_cat.get('endgame', {'mastered': 0, 'total': 0})
+        mid_stat = by_cat.get('midgame', {'mastered': 0, 'total': 0})
+
+        if kill_stat['mastered'] < 2:
+            diagnosis = '基础杀法定式尚未纯熟，当重点攻坚铁门栓、重炮与马后炮，做到遇险即觉、见缝插针。'
+        elif end_stat['mastered'] < 2:
+            diagnosis = '残局功底稍显生疏，老将控线与高兵破士的细腻算度有待加强，谨防行百里者半九十。'
+        elif mid_stat['mastered'] < 2:
+            diagnosis = '中局战术嗅觉尚可挖掘，注意寻找开门见将与弃子攻心的凶猛突破口，勿贪恋一兵一卒。'
+        else:
+            diagnosis = '各大篇章已得心法三昧！今日宜复习实战心魔错局，一气呵成直取百胜！'
+
         return {
             'store_enabled': True,
             'total_attempted': total,
             'total_solved': solved,
             'mastered': mastered,
             'first_try_accuracy': round((first_try / solved * 100) if solved > 0 else 0.0, 1),
+            'rank_title': rank_title,
+            'diagnosis': diagnosis,
             'by_category': by_cat,
         }
 

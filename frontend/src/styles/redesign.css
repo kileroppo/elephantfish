@@ -1,0 +1,702 @@
+/* ==========================================================================
+   现代东方极简 —— 视觉收敛层
+   --------------------------------------------------------------------------
+   最后加载，覆盖 app.css 里累积下来的材质、光影与装饰。
+   原则：纸、墨、朱砂；用细线分隔而不是阴影；哑光而不是高光；圆角收到 2/4/8。
+   动效体系（时长、缓动、落子滑动）完全沿用 tokens.css，这里只改「长什么样」。
+   ========================================================================== */
+
+@font-face {
+  font-family: 'XQ Serif';
+  src: url('../assets/fonts/xq-serif.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---- 底：一张纸，没有斜纹和光斑 ---- */
+body {
+  background-color: var(--paper-1);
+}
+body::before {
+  display: none;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+/* ---- 顶栏：一条细线 ---- */
+.topbar {
+  --topbar-h: 56px;
+  position: relative;
+  z-index: 80;
+  justify-content: flex-start;
+  gap: 28px;
+  min-height: var(--topbar-h);
+  padding: 0 32px;
+  background: transparent;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--cinnabar);
+  color: #fff8f2;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.brand-text {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.brand-text h1 {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.brand-text p {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+.topbar-setting {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 28px;
+  border-left: 1px solid var(--hairline);
+}
+
+.setting-link {
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.setting-link:hover {
+  color: var(--cinnabar);
+}
+.setting-dot {
+  color: var(--ink-4);
+}
+
+.topbar-actions {
+  margin-left: auto;
+  gap: 2px;
+}
+
+.icon-btn {
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: none;
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.icon-btn:hover {
+  background: none;
+  color: var(--ink-0);
+}
+.icon-btn.is-on {
+  background: none;
+  color: var(--cinnabar);
+  border-bottom-color: var(--cinnabar);
+}
+.icon-btn.warn {
+  color: var(--cinnabar);
+}
+
+.topbar-menu-btn {
+  display: none;
+  margin-left: auto;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-1);
+  cursor: pointer;
+}
+
+/* ---- 面板：不做卡片，用细线 ---- */
+.panel {
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 16px 0 4px;
+}
+.panel-head h2 {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  color: var(--ink-3);
+}
+
+.btn {
+  border-radius: var(--r-sm);
+  box-shadow: none;
+}
+.btn-primary {
+  background: var(--cinnabar);
+  border-color: var(--cinnabar);
+  color: #fff8f2;
+  box-shadow: none;
+}
+
+/* ---- 回合条：一行字加一个小点 ---- */
+.stage-head {
+  justify-content: flex-start;
+}
+.turn-badge {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+}
+.turn-badge.is-engine,
+.turn-badge.is-over {
+  background: none;
+  border: 0;
+}
+.turn-badge.is-engine {
+  color: var(--cinnabar);
+}
+.turn-disc {
+  width: 9px;
+  height: 9px;
+}
+.turn-badge.side-black .turn-disc {
+  background: var(--ink-0);
+}
+.check-flag {
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  letter-spacing: 0.2em;
+  animation: none;
+}
+
+/* ---- 应手区：大号宋体 ---- */
+.engine-hero {
+  min-height: 0;
+  padding: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  justify-content: flex-start;
+}
+.engine-hero.is-thinking {
+  background: none;
+  border-color: var(--cinnabar-edge);
+}
+.hero-think-seal {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+/* ---- 棋盘：宣纸一张，一道细框 ---- */
+.board {
+  border-radius: 4px;
+  box-shadow: none;
+  outline: 1px solid var(--hairline);
+}
+.board::before {
+  display: none;
+}
+.board-surface,
+.board-surface::before,
+.board-surface::after {
+  border-radius: 4px;
+}
+.board-surface::before,
+.board-surface::after {
+  box-shadow: none;
+  background: none;
+}
+.river-text text {
+  font-size: 30px;
+  letter-spacing: 30px;
+  opacity: 0.5;
+}
+
+/* ---- 棋子：哑光石片 ---- */
+.piece::before {
+  display: none;
+}
+.piece::after {
+  left: 8%;
+  right: 8%;
+  top: 8%;
+  bottom: 8%;
+  transform: translate(calc(var(--u) * 1.6px * var(--light-x)), calc(var(--u) * 1.6px));
+  background: rgba(30, 26, 20, 0.16);
+  filter: blur(calc(var(--u) * 1.2px));
+}
+[data-theme='wumu'] .piece::after {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.piece-face {
+  --ring: var(--ink-1);
+  background: var(--disc-face-1);
+  /* 细内圈：外 5 份纸色盖住，露出 5~6 份那一道线 */
+  box-shadow: inset 0 0 0 calc(var(--u) * 5px) var(--disc-face-1),
+    inset 0 0 0 calc(var(--u) * 6.2px) var(--ring);
+}
+.piece-face::before {
+  display: none;
+}
+.piece-face::after {
+  background: var(--ring);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 0 94%, #000 96% 100%);
+  mask: radial-gradient(circle closest-side, transparent 0 94%, #000 96% 100%);
+}
+.piece.red .piece-face {
+  --ring: var(--piece-red);
+}
+.piece.black .piece-face {
+  --ring: var(--piece-black);
+}
+.piece.red .piece-face::after,
+.piece.black .piece-face::after {
+  background: var(--ring);
+}
+.piece-glyph,
+.piece.red .piece-glyph,
+.piece.black .piece-glyph {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-shadow: none;
+}
+
+/* 选中：朱砂细圈，抬起一点点；不再放大、不发光 */
+.piece.is-selected {
+  --lift: calc(var(--u) * 3px);
+}
+.piece.is-selected .piece-face {
+  --ring: var(--cinnabar);
+  transform: none;
+  box-shadow: inset 0 0 0 calc(var(--u) * 5px) var(--disc-face-1),
+    inset 0 0 0 calc(var(--u) * 6.2px) var(--cinnabar), 0 0 0 calc(var(--u) * 2px) var(--cinnabar);
+}
+.piece.is-grabbable:not(.is-selected):not(.dragging):hover .piece-face {
+  transform: none;
+}
+
+/* ---- 左栏：收成抽屉，盖在棋盘之上，不再占一列 ---- */
+.rail-left {
+  position: fixed;
+  top: 56px;
+  bottom: 0;
+  left: 0;
+  z-index: 60;
+  width: 320px;
+  margin: 0;
+  padding: 20px 24px;
+  background: var(--paper-0);
+  border-right: 1px solid var(--hairline);
+  box-shadow: none;
+  transform: translateX(-101%);
+  transition: transform var(--drawer), visibility 0s linear 420ms, content-visibility 0s linear 420ms;
+}
+.rail-left.is-open {
+  transform: none;
+  transition-delay: 0s;
+  box-shadow: var(--shadow-float);
+}
+.rail-left > * {
+  width: auto;
+}
+.rail-tab {
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  box-shadow: none;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+}
+.rail-tab-chev {
+  background: none;
+}
+.rail-tab-left.is-open {
+  transform: translate(calc(320px + 6px), -50%);
+  border: 1px solid var(--hairline);
+}
+
+/* ---- 弹层 ---- */
+.result-card,
+.help-card,
+.toast {
+  border-radius: var(--r-lg);
+}
+
+/* ==========================================================================
+   桌面：摊开的书页
+   左边棋盘居中，右边一栏窄纵列：回合 → 应手 → 棋谱与分析
+   ========================================================================== */
+@media (min-width: 1141px) {
+  .workspace,
+  .workspace.no-left,
+  .workspace.no-right,
+  .workspace.no-left.no-right {
+    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    column-gap: 56px;
+    padding: 28px 48px 32px;
+    transition: none;
+  }
+
+  .stage {
+    display: contents;
+  }
+  .stage > .board-wrap {
+    grid-column: 1;
+    grid-row: 1 / 4;
+    min-height: 0;
+  }
+  .stage-head {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    padding-bottom: 8px;
+  }
+  .stage > .relay-compact,
+  .stage > .setup-panel {
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: 0;
+    min-height: 0;
+  }
+  .rail-right {
+    grid-column: 2;
+    grid-row: 3;
+    margin: 12px 0 0;
+    align-items: stretch;
+    visibility: visible;
+    content-visibility: visible;
+    gap: 0;
+  }
+  .rail-right > * {
+    width: auto;
+    opacity: 1;
+    transform: none;
+  }
+  .rail-tab-right {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   手机：顶栏只剩 方印 · 名称 · ≡
+   ========================================================================== */
+@media (max-width: 720px) {
+  .topbar {
+    gap: 12px;
+    padding: 0 16px;
+    flex-wrap: nowrap;
+  }
+  .brand-text p {
+    display: none;
+  }
+  .topbar-setting {
+    margin-left: auto;
+    padding-left: 0;
+    border-left: 0;
+  }
+  .topbar-menu-btn {
+    display: block;
+    margin-left: 0;
+  }
+  .topbar-actions {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 8px 16px 16px;
+    background: var(--paper-0);
+    border-bottom: 1px solid var(--hairline);
+    box-shadow: var(--shadow-float);
+  }
+  .topbar.is-menu-open .topbar-actions {
+    display: flex;
+  }
+  .topbar-actions .icon-btn {
+    height: 44px;
+    justify-content: flex-start;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 14px;
+  }
+  .workspace {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .stage .board {
+    width: 100%;
+    outline: 0;
+  }
+  .stage-head,
+  .stage > .relay-compact,
+  .rail-right {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* ---- 应手：一行大号宋体 ---- */
+.hero-content {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.hero-label {
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: var(--ink-4);
+}
+.hero-action-card {
+  gap: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  animation: fadeIn 260ms var(--ease-out) both;
+}
+.hero-action-card:hover {
+  border-color: transparent;
+  transform: none;
+  box-shadow: none;
+}
+.hero-action-card.is-copied {
+  background: none;
+}
+.hero-move-cn {
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+}
+.hero-move-iccs {
+  padding: 0;
+  background: none;
+  font-size: 12px;
+  color: var(--ink-4);
+}
+.hero-copy-pill {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+.hero-action-card.is-copied .hero-copy-pill {
+  background: none;
+  color: var(--jade);
+}
+.hero-meta {
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+}
+
+/* ---- 盘面标记：墨点 / 四角括号 / 朱砂细圈 ---- */
+.selected-crescent-ring {
+  display: none;
+}
+.last-from {
+  width: calc(var(--u) * 9px);
+  height: calc(var(--u) * 9px);
+  border: 0;
+  background: var(--ink-3);
+  box-shadow: none;
+}
+.last-from::after {
+  display: none;
+}
+.last-to {
+  --bracket: var(--ink-2);
+  --b: calc(var(--u) * 14px);
+  --w: calc(var(--u) * 2px);
+}
+.last-to-red {
+  --bracket: var(--cinnabar);
+}
+.last-to-capture {
+  --bracket: var(--cinnabar);
+  --w: calc(var(--u) * 3px);
+}
+.last-to-rotator {
+  display: none;
+}
+.last-to::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--u) * 6px);
+  background:
+    linear-gradient(var(--bracket), var(--bracket)) top left / var(--b) var(--w),
+    linear-gradient(var(--bracket), var(--bracket)) top left / var(--w) var(--b),
+    linear-gradient(var(--bracket), var(--bracket)) top right / var(--b) var(--w),
+    linear-gradient(var(--bracket), var(--bracket)) top right / var(--w) var(--b),
+    linear-gradient(var(--bracket), var(--bracket)) bottom left / var(--b) var(--w),
+    linear-gradient(var(--bracket), var(--bracket)) bottom left / var(--w) var(--b),
+    linear-gradient(var(--bracket), var(--bracket)) bottom right / var(--b) var(--w),
+    linear-gradient(var(--bracket), var(--bracket)) bottom right / var(--w) var(--b);
+  background-repeat: no-repeat;
+}
+
+/* ---- toast ---- */
+.toast {
+  padding: 9px 18px;
+  border-radius: var(--r-sm);
+  letter-spacing: 0.06em;
+  box-shadow: none;
+  animation: fadeIn 220ms var(--ease-out) both;
+}
+[data-theme='wumu'] .toast {
+  background: var(--paper-4);
+  color: var(--ink-0);
+}
+
+/* ---- 平板 / 手机：右栏改成通栏，面板不再定宽右对齐 ---- */
+@media (max-width: 1140px) {
+  .rail-right {
+    align-items: stretch;
+    margin: 0;
+  }
+  .rail-right > * {
+    width: auto;
+  }
+  .rail-tab-right {
+    display: none;
+  }
+  .workspace {
+    padding-top: 16px;
+  }
+}
+
+/* ==========================================================================
+   全站各大专业面板收敛：精训营、复盘台、排局补棋、抽屉弹窗
+   ========================================================================== */
+
+/* 1. 复盘台 (ReplayDesk) 与 弹层 (Sheet) */
+.sheet {
+  border-radius: var(--r-md);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper-0);
+}
+
+.replay-desk {
+  border-radius: var(--r-md);
+}
+
+.replay-head h2 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.replay-rail,
+.replay-stage {
+  border-color: var(--hairline);
+}
+
+/* 2. 精训营 (DrillDesk) */
+.drill-desk {
+  border-radius: var(--r-md);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--hairline-strong);
+}
+
+.drill-head {
+  border-bottom: 1px solid var(--hairline);
+  background: var(--paper-0);
+}
+
+.drill-badge {
+  border-radius: var(--r-sm);
+  letter-spacing: 0.12em;
+}
+
+.drill-card,
+.drill-section {
+  border-radius: var(--r-sm);
+  border-color: var(--hairline);
+  box-shadow: none;
+}
+
+.drill-btn {
+  border-radius: var(--r-sm);
+  box-shadow: none;
+}
+
+/* 3. 补棋排局面板 (SetupPanel) */
+.setup-panel {
+  border-radius: var(--r-md);
+  box-shadow: none;
+  border: 1px solid var(--hairline);
+  background: var(--paper-0);
+}
+
+.setup-badge {
+  border-radius: var(--r-sm);
+  letter-spacing: 0.1em;
+}
+
+.piece-tray {
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+  background: var(--paper-1);
+}
+
+.setup-fen-box input {
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+}

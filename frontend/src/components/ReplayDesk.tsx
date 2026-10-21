@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../api'
-import type { ReplayReply } from '../types'
+import type { GameSnapshot, ReplayReply, SandboxReply } from '../types'
 import { buildReplay, describeSource, snapshotAt } from '../lib/replay'
-import { gradeDetail, gradeLabel, relativeTime, scoreText, shortSide, sideName, whySentence } from '../lib/format'
+import { causalBreakdown, gradeDetail, gradeLabel, relativeTime, scoreText, shortSide, sideName, whySentence } from '../lib/format'
 import { Board } from './Board'
 import { useExitPhase } from '../hooks/useExitPhase'
+import { useUIContext } from '../context/UIContext'
 
 /**
  * 复盘台：把**存档里那一局**一手手摆回盘上。
@@ -26,10 +27,10 @@ export interface ReplaySeed {
   focusPly: number | null
 }
 
-interface ReplayDeskProps {
+export interface ReplayDeskProps {
   /** null = 没开。关掉时不能一帧摘掉，退场交给 useExitPhase。 */
-  seed: ReplaySeed | null
-  onClose: () => void
+  seed?: ReplaySeed | null
+  onClose?: () => void
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -45,7 +46,21 @@ function nextGraded(plies: ReplayReply['plies'], from: number, dir: 1 | -1): num
   return from
 }
 
-export function ReplayDesk({ seed, onClose }: ReplayDeskProps) {
+/** 识别本局中的「胜负手 / 关键失误手」（Critical Turning Points） */
+function isTurningPly(p: ReplayReply['plies'][number] | undefined): boolean {
+  if (!p || p.by === 'engine' || !p.review) return false
+  const rv = p.review
+  if (rv.rank === 1 && (rv.loss === 0 || rv.loss_kind === 'mate')) return false
+  if (rv.tactics?.severity === 'critical' || rv.tactics?.severity === 'warn') return true
+  if (rv.status === 'outside' || rv.loss_kind === 'mate') return true
+  if (typeof rv.loss === 'number' && rv.loss >= 90) return true
+  return false
+}
+
+export function ReplayDesk(props?: ReplayDeskProps) {
+  const ui = useUIContext()
+  const seed = props?.seed !== undefined ? props.seed : ui.replay
+  const onClose = props?.onClose ?? ui.closeReplay
   const open = seed !== null
   const [mounted, leaving] = useExitPhase(open)
   const [reply, setReply] = useState<ReplayReply | null>(null)
@@ -100,6 +115,73 @@ export function ReplayDesk({ seed, onClose }: ReplayDeskProps) {
   const current = index > 0 ? plies[index - 1] : null
   const grade = current && current.by !== 'engine' ? gradeLabel(current.review) : null
   const why = current && current.by !== 'engine' ? whySentence(current.review) : null
+  const [pvMode, setPvMode] = useState<'none' | 'best' | 'refute'>('none')
+  const [showClues, setShowClues] = useState(false)
+  const [sandboxSnap, setSandboxSnap] = useState<GameSnapshot | null>(null)
+  const [sandboxBaseFen, setSandboxBaseFen] = useState<string | null>(null)
+  const [sandboxInfo, setSandboxInfo] = useState<SandboxReply | null>(null)
+  const [sandboxBusy, setSandboxBusy] = useState(false)
+  const causal = useMemo(() => (current ? causalBreakdown(current.review) : null), [current])
+  const turningPlies = useMemo(
+    () => plies.filter((p) => isTurningPly(p)).map((p) => p.ply),
+    [plies],
+  )
+
+  useEffect(() => {
+    setPvMode('none')
+    setShowClues(false)
+    setSandboxSnap(null)
+    setSandboxBaseFen(null)
+    setSandboxInfo(null)
+  }, [index, gameId])
+
+  const enterSandbox = useCallback(async () => {
+    if (!replay) return
+    // 若当前停在人走的失误手，从走这手之前的盘面（fen_before）开始试走新分支
+    const targetFen =
+      current && current.by !== 'engine' && current.fen_before
+        ? current.fen_before
+        : (game?.fen ?? replay.head.start_fen)
+    setSandboxBusy(true)
+    try {
+      const res = await api.sandbox(targetFen)
+      setSandboxBaseFen(targetFen)
+      setSandboxSnap(res.game)
+      setSandboxInfo(null)
+    } catch {
+      // ignore
+    } finally {
+      setSandboxBusy(false)
+    }
+  }, [replay, current, game])
+
+  const onSandboxMove = useCallback(
+    async (iccs: string): Promise<boolean> => {
+      if (!sandboxSnap) return false
+      setSandboxBusy(true)
+      try {
+        const res = await api.sandbox(sandboxSnap.fen, iccs)
+        setSandboxSnap(res.game)
+        setSandboxInfo(res)
+        return true
+      } catch {
+        return false
+      } finally {
+        setSandboxBusy(false)
+      }
+    },
+    [sandboxSnap],
+  )
+
+  const pvTrace = useMemo(() => {
+    if (pvMode === 'best' && causal?.bestPv) {
+      return causal.bestPv.map((st) => st.iccs)
+    }
+    if (pvMode === 'refute' && causal?.refutePv) {
+      return causal.refutePv.map((st) => st.iccs)
+    }
+    return []
+  }, [pvMode, causal])
 
   useEffect(() => {
     const el = stripRef.current?.querySelector<HTMLElement>(`[data-ply="${index}"]`)
@@ -188,13 +270,17 @@ export function ReplayDesk({ seed, onClose }: ReplayDeskProps) {
                 {/* 盘只吃这九个数（见 lib/replay.ts 的 snapshotAt）。可走点恒为空、
                     且 readOnly：回放那一局不是再走一局。 */}
                 <Board
-                  game={game}
+                  game={sandboxSnap ?? game}
                   flipped={flipped}
                   flipping={false}
-                  thinking={false}
-                  pv={[]}
-                  readOnly
-                  onMove={async () => false}
+                  thinking={sandboxBusy}
+                  pv={pvTrace}
+                  visualClues={
+                    sandboxInfo?.tactics?.visual_clues ??
+                    (showClues ? current?.review?.tactics?.visual_clues : undefined)
+                  }
+                  readOnly={!sandboxSnap}
+                  onMove={sandboxSnap ? onSandboxMove : async () => false}
                 />
               </div>
               <div className="replay-ctrl" data-replay-ctrl="">
@@ -274,6 +360,169 @@ export function ReplayDesk({ seed, onClose }: ReplayDeskProps) {
                   <span className="replay-start">开局那个局面，还没走</span>
                 )}
               </p>
+              {/* 胜负手巡航 + 棋理归因 + 盘上试走分支（What-If Sandbox） */}
+              <div className="replay-coach-bar">
+                {turningPlies.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      const next = turningPlies.find((p) => p > index) ?? turningPlies[0]
+                      go(next)
+                    }}
+                    title="一键跳转到本局关键失误/胜负手"
+                  >
+                    🔥 胜负手巡航 ({turningPlies.length})
+                  </button>
+                )}
+                {current?.review?.tactics?.visual_clues && !sandboxSnap && (
+                  <button
+                    type="button"
+                    className={`btn btn-ghost btn-sm${showClues ? ' is-on' : ''}`}
+                    onClick={() => setShowClues((v) => !v)}
+                    title="在回放棋盘上高亮标出此手薄弱格与正解主攻路线"
+                  >
+                    {showClues ? '👁️ 收起法眼' : '👁️ 法眼点拨'}
+                  </button>
+                )}
+                {!sandboxSnap ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={sandboxBusy}
+                    onClick={() => void enterSandbox()}
+                    title="在当前回放局面上直接落子试走新分支（只读沙盒，不改动原存档）"
+                  >
+                    🔀 盘上试走分支
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={sandboxBusy || !sandboxBaseFen}
+                      onClick={() => {
+                        if (sandboxBaseFen) {
+                          void api.sandbox(sandboxBaseFen).then((r) => {
+                            setSandboxSnap(r.game)
+                            setSandboxInfo(null)
+                          })
+                        }
+                      }}
+                    >
+                      ↺ 重试此分支
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        setSandboxSnap(null)
+                        setSandboxInfo(null)
+                      }}
+                    >
+                      ✕ 退出试走（回原谱）
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {sandboxSnap && (
+                <div className="replay-sandbox-card" role="status">
+                  <div className="replay-sandbox-head">
+                    <span className="motif-chip is-sandbox">🔀 分支沙盒推演中（不改原谱）</span>
+                    {sandboxInfo?.user_move && (
+                      <span>
+                        试走 <b>{sandboxInfo.user_move.chinese}</b>
+                        {sandboxInfo.engine_reply
+                          ? ` → 引擎应以「${sandboxInfo.engine_reply.chinese}」`
+                          : ''}
+                      </span>
+                    )}
+                  </div>
+                  <p className="replay-sandbox-summary">
+                    {sandboxInfo?.tactics
+                      ? `【#${sandboxInfo.tactics.motif_label}】${sandboxInfo.tactics.coach_summary}`
+                      : '请在左侧棋盘上直接点选或拖拽棋子，测试如果你当时换一种走法会如何演变。'}
+                  </p>
+                </div>
+              )}
+
+              {!sandboxSnap && current?.review?.tactics && (
+                <div className={`replay-tactics-card is-${current.review.tactics.severity}`}>
+                  <span className="motif-chip">
+                    #{current.review.tactics.motif_label}
+                  </span>
+                  <span className="replay-tactics-text">
+                    {current.review.tactics.coach_summary}
+                  </span>
+                </div>
+              )}
+
+              {causal && (causal.bestMove || causal.punishMove) && (
+                <div className="causal-card" style={{
+                  margin: '8px 0 12px 0',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  background: 'var(--panel-sub-bg, rgba(255,255,255,0.04))',
+                  border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                      因果拆解与双轨演播
+                    </span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      {causal.bestPv.length > 0 && (
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${pvMode === 'best' ? 'btn-primary' : 'btn-ghost'}`}
+                          onClick={() => setPvMode((v) => (v === 'best' ? 'none' : 'best'))}
+                          title="在棋盘上高亮演练正解攻杀路线"
+                        >
+                          {pvMode === 'best' ? '收起正解线' : '正解线演示'}
+                        </button>
+                      )}
+                      {causal.refutePv.length > 0 && (
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${pvMode === 'refute' ? 'btn-danger' : 'btn-ghost'}`}
+                          onClick={() => setPvMode((v) => (v === 'refute' ? 'none' : 'refute'))}
+                          title="在棋盘上高亮演练走错后对方反扑反击路线"
+                        >
+                          {pvMode === 'refute' ? '收起受罚线' : '受罚反扑演示'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {causal.explanation && (
+                    <p style={{ margin: 0, fontSize: '12px', lineHeight: 1.5, opacity: 0.9 }}>
+                      {causal.explanation}
+                    </p>
+                  )}
+                  {pvMode === 'best' && causal.bestPv.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', fontSize: '11px', marginTop: '2px' }}>
+                      <span style={{ padding: '1px 5px', borderRadius: '4px', background: '#10b98122', color: '#10b981', fontWeight: 600 }}>正解演进</span>
+                      {causal.bestPv.slice(0, 6).map((st, i) => (
+                        <span key={i} style={{ padding: '1px 4px', borderRadius: '3px', background: 'rgba(255,255,255,0.06)' }}>
+                          {st.chinese || st.iccs}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {pvMode === 'refute' && causal.refutePv.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', fontSize: '11px', marginTop: '2px' }}>
+                      <span style={{ padding: '1px 5px', borderRadius: '4px', background: '#ef444422', color: '#ef4444', fontWeight: 600 }}>受罚反击</span>
+                      {causal.refutePv.slice(0, 6).map((st, i) => (
+                        <span key={i} style={{ padding: '1px 4px', borderRadius: '3px', background: 'rgba(255,255,255,0.06)' }}>
+                          {st.chinese || st.iccs}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {/* 与判分块、错题本共用那一条样式：措辞与长相都只有一个出口 */}
               {why && <p className="learn-why replay-why" data-replay-why="">{why}</p>}
 

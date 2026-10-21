@@ -143,11 +143,12 @@ const RECIPES: Record<Voice, (c: AudioContext) => void> = {
   },
   // 吃子：重击初碰 + 被击子侧弹微延迟双重碰撞（Double-impact）
   capture: (c) => {
-    woodStrike(c, c.currentTime, { gainScale: 1.25, pitchScale: 0.94 })
-    // 20ms 后受力棋子被撞击弹移声
-    woodStrike(c, c.currentTime + 0.02, {
-      gainScale: 0.78,
-      pitchScale: 1.28,
+    // 1. 主击拍：沉重硬木沉力撞击（gain 1.35，微降调凸显厚重材质）
+    woodStrike(c, c.currentTime, { gainScale: 1.35, pitchScale: 0.92 })
+    // 2. 侧向翻滚弹开拍：被击子侧向受力脆裂与滑移高频（22ms 微延迟双重撞击）
+    woodStrike(c, c.currentTime + 0.022, {
+      gainScale: 0.85,
+      pitchScale: 1.26,
       isSecondary: true,
     })
   },

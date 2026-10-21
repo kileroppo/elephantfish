@@ -40,7 +40,7 @@ import urllib.request
 import uuid
 
 from engine import (
-    Game, RED, notation as nt, core,
+    Game, RED, notation as nt, core, tactics,
     SearchRequest,
     PIKAFISH, BUILTIN,
     default_engines,
@@ -57,6 +57,9 @@ DEFAULT_SETTINGS = {
     'auto_reply': True,
     'threads': 2,
     'hash_mb': 64,
+    'play_mode': 'sparring',  # 'sparring' (实战陪练) | 'relay' (信使代打)
+    'sparring_level': 'master',  # 'apprentice' | 'club' | 'master' | 'god'
+    'coach_guard': True,         # 师傅扶手 · 关键手熔断
     # ---- 判分（给人这一步打分的那次搜索）------------------------------- #
     #
     # 与走棋那次分开配置，是因为两者要的正好相反：走棋要**赢**，判分要在
@@ -84,334 +87,26 @@ class Reply:
 
 
 # --------------------------------------------------------------------------- #
-# 一次后台搜索
+# 引入引擎任务协调器与纯函数（解耦多线判分、单线走棋与主变解析）
 # --------------------------------------------------------------------------- #
 
-class SearchTask:
-    """一次后台搜索。前端靠轮询它拿到实时的深度与评分。
-
-    ``kind='engine-move'`` 的那次会落子，``kind='analyze'`` 的那次不落子、只把
-    排名线攒在 ``lines`` 里给人那一步打分。两种共用一个类，是因为它们的生死
-    规则一模一样：换局就作废、局面代数对不上就不许写回。
-    """
-
-    def __init__(self, kind='engine-move'):
-        self.id = uuid.uuid4().hex[:12]
-        self.kind = kind            # engine-move / analyze
-        self.status = 'running'     # running / done / error / skipped
-        self.progress = None        # 最近一层的结果
-        self.result = None          # 最终结果
-        self.error = None
-        self.started = time.time()
-        self.stop_event = threading.Event()
-        self.thread = None
-        self.move = None            # 已经落子的走法（引擎应手）
-        # analyze 专用：同一个局面上排好序的排名线，以及「这局是第几手、
-        # 哪个局面」—— 打分之前要拿它对一下，免得把上一局的排名安到这一局头上。
-        self.lines = []
-        self.subject = None
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'kind': self.kind,
-            'status': self.status,
-            'progress': self.progress,
-            'result': self.result,
-            'error': self.error,
-            'elapsed': time.time() - self.started,
-            'lines': list(self.lines),
-            'subject': dict(self.subject) if self.subject else None,
-        }
-
-
-def _piece_at(board, i):
-    """第 i 格上的棋子字符；空格、越界、棋盘串里的填充格都算「没有子」。
-
-    棋盘是一串定宽字符、其中只有 90 个是真实格子（见 ``core._SQUARES``），
-    所以「取到了一个字符」不等于「取到了一颗棋子」。
-    """
-    if not (0 <= i < len(board)):
-        return None
-    c = board[i]
-    if c == '.' or c.upper() not in core.piece:
-        return None
-    return c
-
-
-def _pv_playable(board, red_to_move, m):
-    """这一手能不能落在 ``board`` 上 —— 只验「起点有该方的子、落点不是自己的子」。
-
-    不做完整合法性判断（``core.legal_moves`` 一次 1.8ms，主变每步都问会把
-    判分那一搜的开销顶起来）：这里拦的是**会崩的**那一类，不是「马走错了方向」。
-    """
-    p = _piece_at(board, m[0])
-    if p is None or (p.isupper() != red_to_move):
-        return False
-    q = _piece_at(board, m[1])
-    return q is None or (q.isupper() != red_to_move)
-
-
-def pv_detail(board, red_to_move, pv_moves):
-    """把主变翻译成前端能直接展示的样子（ICCS + 中文记谱）。
-
-    主变是一串连续的推演，所以要一路把局面推下去才能算对每一步的记谱。
-
-    每一步先验再格式化，不验就停：``to_chinese`` 拿**起点那颗子**定棋子名，
-    起点是空格就当场 ``KeyError``。而内置引擎的主变是从置换表里拼出来的，
-    表被同局面的浅层结果替换过之后，拼出来的一串完全可能第 3 步起就对不上
-    局面。对不上的那一步起就不要了 —— 报一段短主变只是讲得少，
-    报一手棋盘上没有的棋是讲错了。
-    """
-    out = []
-    b, red = board, red_to_move
-    for m in pv_moves:
-        if not _pv_playable(b, red, m):
-            break
-        out.append({'iccs': nt.to_iccs(m), 'chinese': nt.to_chinese(b, m)})
-        b = core.apply_move(b, red, m)
-        red = not red
-    return out
-
-
-def _pv_first_capture(board, red_to_move, pv):
-    """沿一条主变推到「第一次吃到子」为止；窗口里没吃到子就返回 ``None``。
-
-    读的是 ``pv_detail`` 存下来的那批串（``{'iccs','chinese'}``），不是引擎的绝对
-    坐标：这样这里报出去的那一步与面板上显示的那一步**必然是同一个字符串**。
-    自己现算一遍记谱就会有两处各算一遍的机会，那正是「讲解与棋谱写的不是同一步」
-    这种 bug 的产地。代价是把窗口里那几步重放一遍 —— 都是已经在手的字符串，
-    不值得为它多存一份棋盘，更不值得为它多花一秒搜索。
-
-    两处「算了，当没有吃子」的出口各有各的原因：
-
-    * 落到将/帅上的那一手：「吃掉老将」不是一步合法的棋（那是终局，不是吃子），
-      杀棋的说法本来就盖住了这种线，所以整条线报 ``None``，
-      ``captured`` 里永远不许出现 将 或 帅。
-    * 撞上 ``_pv_playable`` 不认的那一步：主变可能是置换表里拼出来的陈旧串
-      （``pv_detail`` 就是因为这个才截断的），对不上的那一步起就不再往下推。
-      吃到子的时候当场就返回了，所以截断只会讲得少，不会讲错。
-    """
-    b, red = board, red_to_move
-    for ply, step in enumerate(pv or (), 1):
-        if not isinstance(step, dict):
-            break
-        iccs, chinese = step.get('iccs') or '', step.get('chinese') or ''
-        # 名字凑不齐的一步不能报：讲不出「吃了哪颗子」的事实就别写这个事实。
-        if not iccs or not chinese:
-            break
-        m = nt.from_iccs(iccs)
-        if m is None or not _pv_playable(b, red, m):
-            break
-        victim = _piece_at(b, m[1])
-        if victim is not None:
-            if victim.upper() == 'K':
-                return None
-            return {'ply': ply, 'iccs': iccs, 'chinese': chinese,
-                    'by': 'red' if red else 'black',
-                    'captured': nt.PIECE_NAME[victim]}
-        b = core.apply_move(b, red, m)
-        red = not red
-    return None
-
-
-def pv_reason(board, red_to_move, best_pv, played_pv):
-    """两条主变各自「第一次吃到子」的那一手。
-
-    交回的是**事实**（第几步、哪一方吃的、吃了什么子），不是一句话。
-    「为什么这一手更差」那句中文只写在 ``frontend/src/lib/format.ts``：
-    服务端这里一编句子，就变成了两处各编一套话。
-
-    两边的 ``None`` 只说一件事 —— 「整个窗口从头到尾没吃到子」。它**不等于**
-    「没有这条线」：人那手压根不在排名线里时，``_attach_review`` 连 ``reason``
-    这个键都不挂，界面把「键不在」念成「没看过」。这两个说法差得很远，
-    所以这里不许用一个 None 去顶替「没看过」。
-    """
-    return {'best': _pv_first_capture(board, red_to_move, best_pv),
-            'played': _pv_first_capture(board, red_to_move, played_pv)}
-
-
-def _progress(info, board, red_to_move):
-    """一层搜索结果 → 前端每 130ms 轮询读的那份进度。
-
-    红方视角（``eval_red``）与侧方视角（``score``）一并给出，是因为这个面板
-    既读实时进度又读棋谱里的落子评估，而 records 存的是红方视角 —— 以前它只能
-    拿侧方视角的 ``score`` 去填，于是黑方思考时「黑方大优」会被显示成
-    「红方大优」。两个视角都给，前端就不用来回猜。
-    """
-    return {
-        'depth': info.depth,
-        'multipv': info.multipv,
-        'bound': info.bound,
-        'score': info.score,
-        'eval_red': info.eval_red,
-        'mate': info.mate,
-        'mate_in': info.mate_in,
-        'book': info.book,
-        'nodes': info.nodes,
-        'time': round(info.time, 3),
-        'nps': info.nps,
-        'pv': list(info.pv_iccs),
-        'pv_detail': pv_detail(board, red_to_move, info.pv),
-    }
-
-
-def _subject_of(game, epoch):
-    """「哪一局的哪一个局面」—— 判分要挂回去的那把键。
-
-    四个字段一个都不能少：``epoch`` 挡住换局，``board`` 挡住走子，
-    ``red_to_move`` 挡住同一条棋盘串被两边共用（象棋里确有这种对称局面），
-    ``ply`` 挡住「悔棋退回同一个局面，但那是另一遍」。
-    """
-    return {
-        'epoch': epoch,
-        'board': game.board,
-        'red_to_move': game.red_to_move,
-        'ply': len(game.records),
-        'fen': nt.to_fen(game.board, game.red_to_move),
-    }
-
-
-def _matches(subject, want):
-    """``want`` 里那几个字段对不对得上（``want`` 可以只带子集）。"""
-    if not subject:
-        return False
-    return all(subject.get(k) == v for k, v in want.items())
+from .engine_coordinator import (
+    SearchTask,
+    EngineCoordinator,
+    grade_move,
+    pv_reason,
+    pv_detail,
+    LOSS_KINDS,
+    REVIEW_PV_PLIES,
+    _subject_of,
+    _matches,
+    _line_record,
+    _progress,
+)
 
 
 def _blank_stats():
     return {'moves': 0, 'nodes': 0, 'think_time': 0.0, 'depth_max': 0}
-
-
-def _line_record(info, board, red_to_move):
-    """一条排名线 → 判分与界面共用的那一份 dict。
-
-    ``score`` 保持**走子方视角**（接缝给的就是这个），``eval_red`` 是红方视角。
-    两份都带上，是因为这两家要的参考系天生不同：判分要在走子方视角上做减法，
-    而棋盘上的评估曲线、棋谱里的分数一律是红方视角。少给一份，前端就得自己
-    翻符号 —— 那是最容易翻错的地方（黑方思考时「黑方大优」念成「红方大优」）。
-    """
-    mv = info.move
-    return {
-        'rank': int(info.multipv or 1),
-        'iccs': nt.to_iccs(mv) if mv else '',
-        'chinese': nt.to_chinese(board, mv) if mv else '',
-        'score': info.score,
-        'eval_red': info.eval_red,
-        'mate': info.mate,
-        'mate_in': info.mate_in,
-        'bound': info.bound,
-        'depth': info.depth,
-        'nodes': info.nodes,
-        'time': round(info.time, 3),
-        'pv': pv_detail(board, red_to_move, info.pv),
-    }
-
-
-# --------------------------------------------------------------------------- #
-# 给人这一步打分
-# --------------------------------------------------------------------------- #
-
-# 差值的可信程度。名字说的是「这个 loss 能不能当真值用」：
-#   exact      两条线都是全窗搜出来的精确值
-#   at_least   真值只会更大（截断来的分数撑不起「只差这么多」）
-#   at_most    真值只会更小
-#   uncertain  两个界的方向互相抵消，什么都证不出来
-#   mate       有一条线是杀棋：centipawn 的减法在这里没有意义
-#   below_top  人这手压根没进前几名，连它的分都不知道
-LOSS_KINDS = ('exact', 'at_least', 'at_most', 'uncertain', 'mate', 'below_top')
-
-# 判分结果里每条线最多带几步主变。存全条主变（一局里能有三四十步）会让
-# 「投影」每手重写几十 KB，而讲解只用得上「正解接下来怎么走下去」的头几步。
-REVIEW_PV_PLIES = 6
-
-
-def _bound_dir(bound):
-    """这个分数能把真值顶到哪一边：'floor' = 真值不低于它，'ceil' = 不高于它。
-
-    ``exact`` 两边都算 —— 已知真值就是它。
-    """
-    if bound == 'lowerbound':
-        return {'floor'}
-    if bound == 'upperbound':
-        return {'ceil'}
-    return {'floor', 'ceil'}
-
-
-def grade_move(move_iccs, lines):
-    """把人走的这一手，对着**同一个局面**的排名线打个分。
-
-    ``lines`` 按 ``rank`` 升序，第 0 条就是引擎当下最好的那手；每条线至少要带
-    ``iccs`` / ``score`` / ``eval_red`` / ``bound``，``mate_in`` 与 ``pv`` 可以没有。
-
-    差值算在**走子方视角**上（``score``），不是红方视角：``eval_red`` 相减会
-    把黑方的失误算成红方的进步 —— 那是符号错误，不是精度问题，界面上念出来
-    就是「这步好棋」和「这步漏着」互换。
-
-    纯函数：不碰引擎、不碰会话、不碰库，给一堆线就还一份判分。所以它可以
-    被 ``tools/verify.py`` 用编出来的排名线逐条问（杀棋、界、掉出前三），
-    不必修引擎、不必等搜索。
-
-    ``lines`` 为空时返回 ``None`` —— 「没判」与「判了但没差值」是两件事，
-    前者不许写进存档，否则以后没法分辨。
-    """
-    if not lines:
-        return None
-    best = lines[0]
-    played = next((l for l in lines if l['iccs'] == move_iccs), None)
-
-    out = {
-        'status': 'ok' if played else 'outside',
-        # 这批线来自哪一层、花了多少算力 —— 「排第 3」这句话的可信程度全在这
-        'depth': max(int(l.get('depth') or 0) for l in lines),
-        'nodes': max(int(l.get('nodes') or 0) for l in lines),
-        'time': max(float(l.get('time') or 0.0) for l in lines),
-        'width': len(lines),
-        'best_iccs': best['iccs'],
-        'best_eval_red': best.get('eval_red'),
-        'best_mate_in': best.get('mate_in'),
-        'best_bound': best.get('bound'),
-        'rank': played['rank'] if played else None,
-        'played_iccs': move_iccs,
-        'played_eval_red': played.get('eval_red') if played else None,
-        'played_mate_in': played.get('mate_in') if played else None,
-        'played_bound': played.get('bound') if played else None,
-        'loss': None,
-        'loss_kind': None,
-        'lines': [dict(l, pv=list(l.get('pv') or [])[:REVIEW_PV_PLIES])
-                  for l in lines],
-    }
-
-    if played is None:
-        # 掉出前三不是「差 0 步」也不是「差很多」，是**不知道差多少**。
-        # 界面只能念「不在引擎前几名里」，不许编一个数。
-        out['loss_kind'] = 'below_top'
-        return out
-
-    if best.get('mate_in') is not None or played.get('mate_in') is not None:
-        # 杀棋分在接缝里被钉在同一个锚点上（``MATE_CP``），减出来的是 0 或
-        # 一个巨大的假数。距离读 mate_in，这里就不给 centipawn 的差值了。
-        out['loss_kind'] = 'mate'
-        return out
-
-    loss = int(best['score']) - int(played['score'])
-    out['loss'] = loss
-    # loss = best − played：best 的下界把差值往上顶，played 的上界也是；反之
-    # best 的上界与 played 的下界把差值往下压。两边都证得出来才是精确值。
-    # 差 0 也走这条路 —— 第 1 名是个下界时，「一样好」只能说成「至少不差」。
-    best_dir = _bound_dir(best.get('bound'))
-    played_dir = _bound_dir(played.get('bound'))
-    lower_ok = 'floor' in best_dir and 'ceil' in played_dir
-    upper_ok = 'ceil' in best_dir and 'floor' in played_dir
-    if lower_ok and upper_ok:
-        out['loss_kind'] = 'exact'
-    elif lower_ok:
-        out['loss_kind'] = 'at_least'
-    elif upper_ok:
-        out['loss_kind'] = 'at_most'
-    else:
-        out['loss_kind'] = 'uncertain'
-    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -450,15 +145,9 @@ class GameSession:
         # 局面代数。换局 / 载入时 +1。worker 落子前必查 —— 这是「搜索期间局面被
         # 整个换掉」唯一的可靠判据（比对棋盘串挡不住新旧局面恰好相同的情形）。
         self._epoch = 0
-        self.task = None
-        # 判分那次搜索单独一个槽：它不推棋、不该被 ``stop_search`` 当成引擎应手
-        # 叫停，也不该在 ``task`` 换人时被顶掉（前端两份读数各有各的来源）。
-        self.analysis_task = None
-        # 一次只许有一条搜索在飞。这不是保险，是**必须**：内置引擎全场共用一个
-        # ``Searcher``（置换表、世代号、节点计数都是它的实例字段），两个线程同时
-        # 搜会互相踩状态；皮卡鱼只有一个进程，两条 ``go`` 会串话。所以走棋那路
-        # 拿锁拿到成功，判分那路拿不到就这一轮不判 —— 借来的算力不许排队。
-        self._engine_io = threading.Lock()
+
+        # 引擎任务协调器：专职管理异步出招搜索与多线判分，收拢互斥锁与管道叫停
+        self.coordinator = EngineCoordinator(self.engines)
 
         self.opponent = {
             'mode': 'manual',       # manual | http
@@ -491,31 +180,41 @@ class GameSession:
         # 否则引擎真坏了会变成死循环。
         self._retried = None
 
+    # ---- 任务属性代理（保持对外契约 100% 兼容）--------------------------- #
+
+    @property
+    def task(self):
+        return self.coordinator.task
+
+    @task.setter
+    def task(self, val):
+        self.coordinator.task = val
+
+    @property
+    def analysis_task(self):
+        return self.coordinator.analysis_task
+
+    @analysis_task.setter
+    def analysis_task(self, val):
+        self.coordinator.analysis_task = val
+
     # ---- 内部：任务与战绩 ---------------------------------------------- #
     #
     # 下面这些一律**要求调用方已持有 self.lock**（RLock，动词方法自己会拿）。
 
     def _task_busy(self):
-        return self.task is not None and self.task.status == 'running'
+        return self.coordinator.task_busy()
 
     def _analysis_busy(self):
-        t = self.analysis_task
-        return t is not None and t.status == 'running'
+        return self.coordinator.analysis_busy()
 
     def _stop_analysis(self):
-        """叫停判分那次搜索。调用方需持有锁。
-
-        两个 adapter 都认 ``stop``：内置在 ``_tick`` 的 1024 节点那一拍收手，
-        皮卡鱼发 UCI 的 ``stop`` 等 ``bestmove``。所以叫停之后那条线程还会跑
-        一小会儿，这正是 ``_engine_io`` 那把锁存在的理由。
-        """
-        if self._analysis_busy():
-            self.analysis_task.stop_event.set()
+        """叫停判分那次搜索。调用方需持有锁。"""
+        self.coordinator.stop_analysis()
 
     def _same_subject(self, task):
         """这个任务分析的还是眼前这个局面吗。"""
-        return _matches(task.subject if task else None,
-                        _subject_of(self.game, self._epoch))
+        return self.coordinator.same_subject(task, self.game, self._epoch)
 
     def _attach_review(self, pre, rec):
         """把人刚走的这一步对着排名线打个分。调用方需持有锁。
@@ -528,7 +227,7 @@ class GameSession:
         引擎的 think_ms 变成 think_ms + analyze_ms，而排名线的钱本来就已经付了。
         """
         task = self.analysis_task
-        if rec['by'] != 'opponent' or not task or not task.lines:
+        if rec['by'] not in ('opponent', 'human') or not task or not task.lines:
             return
         if not _matches(task.subject, pre):
             return
@@ -553,6 +252,10 @@ class GameSession:
                     **pv_reason(pre_board, pre_red,
                                 review['lines'][0]['pv'], played_line['pv']),
                 }
+        if isinstance(pre_board, str) and isinstance(pre_red, bool):
+            review['tactics'] = tactics.diagnose_review(
+                pre_board, pre_red, rec['iccs'], review
+            )
         rec['review'] = review
         if rec['eval'] is None and review['rank'] is not None:
             # 顺手把这一步的评估补上：排名线里有「走完这手之后局面怎样」，
@@ -616,268 +319,111 @@ class GameSession:
             return self.task
         if self.game.is_over():
             return None
-        # 引擎要出招了，判分那次先叫停：一个 Searcher、一个 UCI 进程，
-        # 同一时刻只容得下一条搜索。
-        self._stop_analysis()
 
-        game = self.game
-        task = SearchTask('engine-move')
-        self.task = task
-
-        # 开跑前就把搜索输入固化下来，避免搜索途中局面被动过。
-        # 两个引擎的差异（要棋盘串还是要 Position、要 ICCS 棋谱还是局面串、
-        # 怎么喊停）全在 adapter 里；这里只说一次「要什么」。
-        settings = dict(self.settings)
-        req = SearchRequest(
-            board=game.board,
-            red_to_move=game.red_to_move,
-            game_history=tuple(game.boards),
-            move_history_iccs=tuple(r['iccs'] for r in game.records),
-            start_fen=getattr(game, 'start_fen', None),
-            max_depth=settings['max_depth'],
-            time_limit=settings['think_ms'] / 1000.0,
-            stop=task.stop_event.is_set,
-        )
-        engine = self.engines.choose()
-        start_board = req.board
-        red_to_move = req.red_to_move
         epoch = self._epoch
 
-        def worker():
-            try:
-                last = None
-                # 判分那次可能正在收手（被叫停之后还要一两拍），所以这里**等**锁。
-                # 等的是「引擎该出招了」这件更要紧的事；等待不持 self.lock，
-                # HTTP 线程与前端轮询都不受影响。
-                with self._engine_io:
-                    for info in engine.search(req):
-                        # 落子只认**排名第一**那层：多线搜索每层交回好几条，
-                        # 拿最后那条（往往是 rank 3）去 push 就是替对手走棋。
-                        # 单线时每条都是 rank 1，与今天的行为一模一样。
-                        if info.multipv <= 1:
-                            last = info
-                        task.progress = _progress(info, start_board, red_to_move)
-                        if task.stop_event.is_set():
-                            break
+        def on_apply_move(task, last, start_board, red_to_move):
+            if last is None or last.move is None:
+                task.status = 'done'
+                task.result = {'status': 'no_move', 'message': '无着可走'}
+                return
 
-                if last is None or last.move is None:
+            abs_move = last.move
+
+            # 判定与落子必须在同一次持锁里完成，中间不能松手
+            with self.lock:
+                if self._epoch != epoch:
                     task.status = 'done'
-                    task.result = {'status': 'no_move', 'message': '无着可走'}
+                    task.result = {'status': 'discarded',
+                                   'message': '搜索期间局面已被替换，这一步丢弃'}
+                    return
+                if self.game.is_over():
+                    task.status = 'done'
+                    task.result = {'status': 'discarded',
+                                   'message': '搜索期间对局已结束，这一步丢弃'}
+                    return
+                if (self.game.board != start_board
+                        or self.game.red_to_move != red_to_move):
+                    task.status = 'done'
+                    task.result = {'status': 'discarded',
+                                   'message': '搜索期间局面发生了变化，这一步丢弃'}
+                    return
+                if abs_move not in self.game.legal_moves():
+                    task.status = 'error'
+                    task.error = '引擎给出的走法非法，已放弃'
                     return
 
-                abs_move = last.move
+                # 恶手追击：若前一手是人类落子且未进前几名，用本次搜索所得的对手最优反击线作为惩罚主变
+                if len(self.game.records) >= 1:
+                    prev_rec = self.game.records[-1]
+                    if prev_rec.get('by') in ('opponent', 'human') and prev_rec.get('review'):
+                        prev_rev = prev_rec['review']
+                        if prev_rev.get('status') == 'outside' or prev_rev.get('loss_kind') == 'below_top':
+                            if getattr(last, 'pv_iccs', None):
+                                prev_rev['refute_pv'] = list(last.pv_iccs)
+                                prev_rev['punish_move'] = last.pv_iccs[0]
 
-                # 判定与落子必须在**同一次**持锁里完成，中间不能松手：
-                # 松手的那一瞬间新局/载入就能插进来，后面所有比对都失去意义。
-                with self.lock:
-                    if self._epoch != epoch:
-                        # 这一局已经被整个换掉了（新开一局或载入局面）。
-                        # 比对棋盘串挡不住它 —— 新旧局面可能恰好一样。
-                        task.status = 'done'
-                        task.result = {'status': 'discarded',
-                                       'message': '搜索期间局面已被替换，这一步丢弃'}
-                        return
-                    if self.game.is_over():
-                        # 认输之类不改局面的操作，靠棋盘比对是拦不住的
-                        task.status = 'done'
-                        task.result = {'status': 'discarded',
-                                       'message': '搜索期间对局已结束，这一步丢弃'}
-                        return
-                    if (self.game.board != start_board
-                            or self.game.red_to_move != red_to_move):
-                        task.status = 'error'
-                        task.error = '搜索期间局面发生了变化，已放弃这步棋'
-                        return
-                    if abs_move not in self.game.legal_moves():
-                        task.status = 'error'
-                        task.error = '引擎给出的走法非法，已放弃'
-                        return
-
-                    rec = self.game.push(
-                        abs_move, by='engine',
-                        eval_red=last.eval_red,
-                        depth=last.depth,
-                        think_time=round(last.time, 3),
-                        mate_in=last.mate_in,
-                    )
-                    self.engine_stats['moves'] += 1
-                    self.engine_stats['nodes'] += last.nodes
-                    self.engine_stats['think_time'] += last.time
-                    self.engine_stats['depth_max'] = max(
-                        self.engine_stats['depth_max'], last.depth)
-                    self.game_stats['moves'] += 1
-                    self.game_stats['nodes'] += last.nodes
-                    self.game_stats['think_time'] += last.time
-                    self.game_stats['depth_max'] = max(
-                        self.game_stats['depth_max'], last.depth)
-                    self._settle()
-                    task.move = rec['iccs']
-                    task.result = {
-                        'status': 'ok',
-                        'engine': engine.name,
-                        'move': rec['iccs'],
-                        'chinese': rec['chinese'],
-                        'depth': last.depth,
-                        'score': last.eval_red,
-                        'eval_red': last.eval_red,
-                        'mate': last.mate,
-                        'mate_in': last.mate_in,
-                        'book': last.book,
-                        'nodes': last.nodes,
-                        'time': round(last.time, 3),
-                        'nps': last.nps,
-                        'elapsed': round(time.time() - task.started, 3),
-                        'stopped': task.stop_event.is_set(),
-                    }
-                    task.status = 'done'
-                    # 引擎这一手落定、任务也标成 done 之后才开场判分：判分那路
-                    # 见 ``self._task_busy()`` 为真就不开，早一行的话这一次就白过了。
-                    self._maybe_analyze()
-                    # 引擎这一手是在 worker 线程里落的，不经过任何公开动词 ——
-                    # 少这一条，「引擎想出来的棋」就整局都不在库里，而界面看着
-                    # 一切正常：这正是投影式存档最容易漏掉的一个写入点。
-                    self.store.sync_game(self)
-            except Exception as exc:                      # noqa: BLE001
-                traceback.print_exc()
-                task.status = 'error'
-                task.error = str(exc)
-            finally:
-                # 不论成功、失败还是丢弃，排队的那步都要有个说法。
-                # 只在「成功落子」之后才 flush 的话，引擎这步一出错，
-                # 排队的对方走法就永久挂在那里 —— 盘面上看就是「引擎不走了」。
-                with self.lock:
-                    self._flush_pending()
-                    if task.status == 'error':
-                        self._retry_after_error(epoch)
-
-        task.thread = threading.Thread(target=worker, name='engine-search', daemon=True)
-        task.thread.start()
-        return task
-
-    def _maybe_analyze(self):
-        """轮到人了，就替他把当前局面算一遍。调用方需持有锁。
-
-        只在「引擎不需要算力、而人正需要提示」的那段时间里跑 —— 这是这台机器
-        借给学习的空闲算力，不是第三条搜索线程。所以：引擎该出招时不开、引擎
-        正在算时不开、同一个局面已经有一次（在跑或已跑完）也不重开。
-        """
-        if not self.settings.get('analyze'):
-            return None
-        if self.game.is_over() or self.game.engine_to_move or self._task_busy():
-            return None
-        if self._same_subject(self.analysis_task):
-            return self.analysis_task
-        if self._analysis_busy():
-            self._stop_analysis()
-        return self._start_analysis()
-
-    def _start_analysis(self):
-        """开一次判分搜索。调用方需持有锁。
-
-        与走棋那次的三处不同，各有各的原因：
-
-        * ``use_book=False``：开局库交回的是占位分（20）。拿它当第 1 名去减
-          「你这一手差多少」，减出来的数没有依据。
-        * ``multipv > 1``：要的是前几名的**排名**，不是最好的一手。
-        * 不落子、不记账、不进战绩，而且**不碰 ``self.lock``** —— 它只往自己
-          那个 task 对象上写。写回棋谱是 ``_apply_move_locked`` 的事，那时候
-          局面、代数、第几手三样一起对，对不上就当没判过。
-        """
-        settings = dict(self.settings)
-        game = self.game
-        task = SearchTask('analyze')
-        task.subject = _subject_of(game, self._epoch)
-        self.analysis_task = task
-
-        req = SearchRequest(
-            board=game.board,
-            red_to_move=game.red_to_move,
-            game_history=tuple(game.boards),
-            move_history_iccs=tuple(r['iccs'] for r in game.records),
-            start_fen=getattr(game, 'start_fen', None),
-            max_depth=settings['analyze_depth'],
-            time_limit=settings['analyze_ms'] / 1000.0,
-            multipv=max(1, int(settings['analyze_width'])),
-            use_book=False,
-            stop=task.stop_event.is_set,
-        )
-        engine = self.engines.choose()
-        board, red_to_move = req.board, req.red_to_move
-        width = max(1, int(settings['analyze_width']))
-        # 根着法的合法集，锁内一次算好带进线程：排名线只认这块盘上真存在的棋。
-        legal_root = frozenset(game.legal_moves())
-
-        def worker():
-            # 拿不到锁就这一轮不判。判分用的是借来的算力，它没有排队的资格，
-            # 而且干等在这儿只会把下一次开场一起拖晚。
-            if not self._engine_io.acquire(timeout=0.5):
-                task.status = 'skipped'
-                task.result = {'status': 'busy', 'message': '引擎正忙，这一手先不判'}
-                return
-            try:
-                by_rank = {}
-                dropped = 0             # 引擎交回的非法根着法，见下面那处判断
-                whole_layer = False     # 交出去过**一整层**吗
-
-                def commit(lines, force=False):
-                    """把一层排名线交出去，返回有没有交。
-
-                    不整层不交，也不许用残缺的一层覆盖齐整的一层：「排第 3、比最优
-                    差 1.4 兵」这两个数必须来自同一层。``force`` 只用在从头到尾
-                    都没凑齐一层的时候（例如刚出 rank 1 就被叫停）—— 那时
-                    有几条算几条，而 ``grade_move`` 读的是这批线的实际条数，
-                    「前三之外」会自己变成「头一名之外」，仍然是实话。
-                    """
-                    nonlocal whole_layer
-                    recs = sorted((ln for ln in lines if ln and ln.get('iccs')),
-                                  key=lambda ln: ln['rank'])
-                    if not recs or (len(recs) < width and not force):
-                        return False
-                    task.lines = recs[:width]
-                    if len(recs) >= width:
-                        whole_layer = True
-                    return True
-
-                for info in engine.search(req):
-                    mv = info.move
-                    if mv is None or mv not in legal_root:
-                        # 引擎交回一步在这块盘上并不存在的棋。走棋那一路是当场
-                        # 弃掉这手并报「引擎给出的走法非法」；这里同样不许把这种
-                        # 线存进排名 —— 拿它对人的着法打分，比不打分更糟。
-                        dropped += 1
-                        continue
-                    rank = int(info.multipv or 1)
-                    if rank <= 1:
-                        commit(list(by_rank.values()))
-                        by_rank = {}
-                    by_rank[rank] = _line_record(info, board, red_to_move)
-                    task.progress = _progress(info, board, red_to_move)
-                    if len(by_rank) >= width:
-                        commit(list(by_rank.values()))
-                        by_rank = {}
-                    if task.stop_event.is_set():
-                        break
-                if not whole_layer:
-                    commit(list(by_rank.values()), force=True)
+                rec = self.game.push(
+                    abs_move, by='engine',
+                    eval_red=last.eval_red,
+                    depth=last.depth,
+                    think_time=round(last.time, 3),
+                    mate_in=last.mate_in,
+                )
+                self.engine_stats['moves'] += 1
+                self.engine_stats['nodes'] += last.nodes
+                self.engine_stats['think_time'] += last.time
+                self.engine_stats['depth_max'] = max(
+                    self.engine_stats['depth_max'], last.depth)
+                self.game_stats['moves'] += 1
+                self.game_stats['nodes'] += last.nodes
+                self.game_stats['think_time'] += last.time
+                self.game_stats['depth_max'] = max(
+                    self.game_stats['depth_max'], last.depth)
+                self._settle()
+                task.move = rec['iccs']
                 task.result = {
                     'status': 'ok',
-                    'engine': engine.name,
-                    'width': len(task.lines),
-                    'dropped': dropped,
+                    'engine': self.engines.choose().name,
+                    'move': rec['iccs'],
+                    'chinese': rec['chinese'],
+                    'depth': last.depth,
+                    'score': last.eval_red,
+                    'eval_red': last.eval_red,
+                    'mate': last.mate,
+                    'mate_in': last.mate_in,
+                    'book': last.book,
+                    'nodes': last.nodes,
+                    'time': round(last.time, 3),
+                    'nps': last.nps,
                     'elapsed': round(time.time() - task.started, 3),
                     'stopped': task.stop_event.is_set(),
                 }
                 task.status = 'done'
-            except Exception as exc:                          # noqa: BLE001
-                traceback.print_exc()
-                task.status = 'error'
-                task.error = str(exc)
-            finally:
-                self._engine_io.release()
+                self._maybe_analyze()
+                self.store.sync_game(self)
 
-        task.thread = threading.Thread(target=worker, name='analyze', daemon=True)
-        task.thread.start()
-        return task
+        def on_finally(task):
+            with self.lock:
+                self._flush_pending()
+                if task.status == 'error':
+                    self._retry_after_error(epoch)
+
+        return self.coordinator.start_search(
+            game=self.game,
+            epoch=epoch,
+            settings=self.settings,
+            on_complete=on_apply_move,
+            on_finally=on_finally,
+        )
+
+    def _maybe_analyze(self):
+        """轮到人了，就替他把当前局面算一遍。调用方需持有锁。"""
+        return self.coordinator.maybe_analyze(self.game, self._epoch, self.settings)
+
+    def _start_analysis(self):
+        """开一次判分搜索。调用方需持有锁。"""
+        return self.coordinator.start_analysis(self.game, self._epoch, self.settings)
 
     def _retry_after_error(self, epoch):
         """搜索失败后自动重试一次。
@@ -902,14 +448,7 @@ class GameSession:
 
     def stop_search(self, task_id=None):
         """请求停掉当前搜索。拿不准就返回 False，不抛。调用方需持有锁。"""
-        if self.task is None:
-            return False
-        if task_id and self.task.id != task_id:
-            return False
-        if self.task.status != 'running':
-            return False
-        self.task.stop_event.set()
-        return True
+        return self.coordinator.stop_search(task_id)
 
     # ---- 内部：落子 ----------------------------------------------------- #
 
@@ -938,7 +477,9 @@ class GameSession:
 
         # push 之后 self.game 已经是走完的样子了，所以判分要用的那个键先抄下来。
         pre = _subject_of(self.game, self._epoch)
-        rec = self.game.push(move)
+        play_mode = self.settings.get('play_mode', 'sparring')
+        by = 'external' if play_mode == 'relay' else 'opponent'
+        rec = self.game.push(move, by=by)
         self._attach_review(pre, rec)
         prefix = '（排队中）' if queued else ''
         message = f'{prefix}已录入 {rec["chinese"]}（{rec["iccs"]}）'
@@ -976,7 +517,7 @@ class GameSession:
         'analyze_depth': (2, 50, int),
         'analyze_width': (1, 5, int),
     }
-    _SETTING_FLAGS = ('auto_reply', 'analyze')
+    _SETTING_FLAGS = ('auto_reply', 'analyze', 'coach_guard')
 
     def _apply_settings_locked(self, payload):
         """按白名单把 payload 里的设置落到会话上。调用方需持有锁。"""
@@ -986,6 +527,12 @@ class GameSession:
         for key in self._SETTING_FLAGS:
             if key in payload:
                 self.settings[key] = bool(payload[key])
+        if 'play_mode' in payload:
+            self.settings['play_mode'] = str(payload['play_mode'])
+        if 'sparring_level' in payload:
+            lvl = str(payload['sparring_level'])
+            if lvl in ('apprentice', 'club', 'master', 'god'):
+                self.settings['sparring_level'] = lvl
         if 'engine_type' in payload:
             # 校验规则只有 EngineSet 一份：名字不认就原样不动
             self.engines.set_preference(payload['engine_type'])
@@ -1038,6 +585,30 @@ class GameSession:
         if not text:
             return Reply({'ok': False, 'message': '没有收到走法'}, 400)
 
+        if payload.get('shadow_guess'):
+            with self.lock:
+                move, source = self._parse_move(text)
+                if move is None:
+                    return Reply({'ok': False, 'message': f'看不懂这一步：{text}'}, 400)
+                if move not in self.game.legal_moves():
+                    readable = nt.to_iccs(move) if source == 'iccs' else text
+                    return Reply({'ok': False, 'message': f'非法走法 {readable}'}, 400)
+                iccs = nt.to_iccs(move)
+                chinese = nt.to_chinese(self.game.board, move)
+                review = None
+                task = self.analysis_task
+                if task and task.lines:
+                    review = grade_move(iccs, task.lines)
+                best_move = task.lines[0].get('chinese', '正在推演') if task and task.lines else '推演中'
+                return Reply({
+                    'ok': True,
+                    'shadow_guess': True,
+                    'move': {'iccs': iccs, 'chinese': chinese},
+                    'review': review,
+                    'best_move': best_move,
+                    'message': f'【跟师盲猜】你猜了「{chinese}」，大师首选「{best_move}」',
+                })
+
         with self.lock:
             if self._task_busy():
                 self.pending = {'text': text, 'at': time.time()}
@@ -1065,6 +636,7 @@ class GameSession:
             self.stop_search()
             self._stop_analysis()
             self.task = None
+            self.analysis_task = None
             self.pending = None
             self._unsettle()
             was_over = self.game.is_over()
@@ -1078,9 +650,13 @@ class GameSession:
                 message = '已撤销终局判定，接着下'
             else:
                 message = '没有可回退的棋步'
-            # 退回去的那个局面正是复盘要看的那个：轮到人才重开一次判分。
-            # 排名线不会跟过来（subject 对不上），所以旧的那一批自动作废。
-            self._maybe_analyze()
+            # 退回去之后：若轮到引擎走且开了自动应手，立即开跑搜索；
+            # 若轮到人，则为复盘提示重开判分。旧排名线随 subject 自动作废。
+            if (not self.game.is_over() and self.game.engine_to_move
+                    and self.settings.get('auto_reply', True)):
+                self._start_search()
+            else:
+                self._maybe_analyze()
             body = {'ok': True, 'state': self.snapshot(),
                     'message': message, 'undone': n}
             self.store.sync_game(self)

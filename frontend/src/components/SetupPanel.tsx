@@ -244,7 +244,7 @@ export function SetupPanel({
       <div className="setup-status-strip">
         {selectedTrayPiece ? (
           <div className="status-tip active-tray-tip">
-            <span className="tip-icon">♟</span>
+            
             <span>
               已选中备用子
               <strong>
@@ -263,7 +263,7 @@ export function SetupPanel({
           </div>
         ) : pickedBoardSquare && pickedSpec ? (
           <div className="status-tip active-picked-tip">
-            <span className="tip-icon">📍</span>
+            
             <span>
               已选中盘上
               <strong>
@@ -289,7 +289,7 @@ export function SetupPanel({
           </div>
         ) : (
           <div className="status-tip normal-tip">
-            <span className="tip-icon">💡</span>
+            
             <span>
               <strong>操作指南：</strong>
               从上方点击备用子，再点棋盘空格落盘；盘上已有子可自由拖动或点击挪位；右键或拖出棋盘可将棋子移除。
@@ -308,7 +308,7 @@ export function SetupPanel({
         ) : (
           <div className="validation-banner is-invalid">
             <div className="validation-head">
-              <span className="validation-icon">⚠️</span>
+              <span className="validation-icon">注意：</span>
               <span className="validation-title">
                 盘面存在 {validation.errors.length} 处不合规（暂无法开始对局）：
               </span>
@@ -370,7 +370,7 @@ export function SetupPanel({
           </div>
 
           <div className="setup-scenario-hint">
-            <span className="scenario-bulb">💡</span>
+            
             <span className="scenario-text">
               开局状态：引擎执{engineSide === 'red' ? '红' : '黑'}（朝下），
               {turn === engineSide

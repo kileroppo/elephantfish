@@ -97,6 +97,13 @@ for (const vp of VIEWPORTS) {
     await page.waitForTimeout(500)
     await page.screenshot({ path: `${outDir}/help.png` })
     console.log('✓ help')
+
+    // 乌墨暗色主题
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('t')
+    await page.waitForTimeout(600)
+    await page.screenshot({ path: `${outDir}/wumu.png` })
+    console.log('✓ wumu')
   } catch (e) {
     problems.push('scene: ' + e.message)
   }

@@ -5,55 +5,22 @@ import { AnalysisPanel } from './components/AnalysisPanel'
 import { MoveList } from './components/MoveList'
 import { MistakeBook } from './components/MistakeBook'
 import { GameShelf } from './components/GameShelf'
-import { ReplayDesk, type ReplaySeed } from './components/ReplayDesk'
+import { ReplayDesk } from './components/ReplayDesk'
 import { DrillDesk } from './components/DrillDesk'
 import { ControlRail } from './components/ControlRail'
 import { TopBar } from './components/TopBar'
 import { SetupPanel } from './components/SetupPanel'
 import { HelpOverlay, Toasts } from './components/Overlays'
-import { useGame } from './hooks/useGame'
-import { isSoundEnabled, play, setSoundEnabled, unlockAudio } from './lib/sound'
+import { GameProvider, useGameContext } from './context/GameContext'
+import { UIProvider, useUIContext } from './context/UIContext'
+import { isSoundEnabled, play } from './lib/sound'
 import { sideName } from './lib/format'
 import { useSetupMode } from './hooks/useSetupMode'
 import { useExitPhase } from './hooks/useExitPhase'
 
-const LS_FLIP = 'ef.flipped'
-/** 翻转视角：动画总长，以及「在动画最窄处换视角」的那个时刻。见 App 里的 turnBoard。 */
-const FLIP_TOTAL_MS = 340
-const FLIP_MID_MS = 150
-const LS_SOUND = 'ef.sound'
-const LS_RAIL_L = 'ef.rail-left'
-const LS_RAIL_R = 'ef.rail-right'
-
-export default function App() {
-  const g = useGame()
-  const [flipped, setFlipped] = useState(() => localStorage.getItem(LS_FLIP) === '1')
-  const [soundOn, setSoundOn] = useState(() => localStorage.getItem(LS_SOUND) !== '0')
-  const [help, setHelp] = useState(false)
-  /**
-   * 复盘台开在哪一局、停在哪一手（null = 没开）。
-   *
-   * 它开的永远是**存档里的那一局**，与底下正在走的这一局没有关系：读它的这两个
-   * 接口（/api/games、/api/game）一根手指都不碰会话，也不进 130ms 轮询。
-   */
-  const [replay, setReplay] = useState<ReplaySeed | null>(null)
-  const openReplay = useCallback((gameId: string) => setReplay({ gameId, focusPly: null }), [])
-  const openReplayAt = useCallback(
-    (gameId: string, ply: number | null) => setReplay({ gameId, focusPly: ply }),
-    [],
-  )
-
-  /** 精训营状态（开启状态与直达题目 ID） */
-  const [drillOpen, setDrillOpen] = useState(false)
-  const [drillPuzzleId, setDrillPuzzleId] = useState<string | null>(null)
-  const openDrillAt = useCallback((puzzleId?: string) => {
-    setDrillPuzzleId(puzzleId ?? null)
-    setDrillOpen(true)
-  }, [])
-
-  // 默认专注模式：默认左右两栏全收起，只留棋盘和应手区
-  const [railL, setRailL] = useState(() => localStorage.getItem(LS_RAIL_L) === '1')
-  const [railR, setRailR] = useState(() => localStorage.getItem(LS_RAIL_R) === '1')
+function AppContent() {
+  const g = useGameContext()
+  const ui = useUIContext()
 
   const game = g.state?.game
 
@@ -64,91 +31,17 @@ export default function App() {
     loadPosition: g.loadPosition,
   })
 
-  // 引擎执哪一边，这边的棋就朝下：
-  // 引擎执红 -> 红方在下（flipped = false）
-  // 引擎执黑 -> 黑方在下（flipped = true）
-  const prevEngineSide = useRef<string | null>(null)
-  useEffect(() => {
-    if (!game) return
-    if (prevEngineSide.current !== game.engine_side) {
-      prevEngineSide.current = game.engine_side
-      setFlipped(game.engine_side === 'black')
-    }
-  }, [game?.engine_side])
-
   const handleNewGame = useCallback(
     (side: 'red' | 'black') => {
-      setFlipped(side === 'black')
+      ui.setFlipped(side === 'black')
       void g.newGame(side)
     },
-    [g],
+    [g, ui],
   )
-
-  useEffect(() => {
-    setSoundEnabled(soundOn)
-    localStorage.setItem(LS_SOUND, soundOn ? '1' : '0')
-  }, [soundOn])
-
-  useEffect(() => {
-    localStorage.setItem(LS_FLIP, flipped ? '1' : '0')
-  }, [flipped])
-
-  // 翻转视角：不直接换 state，而是「收窄 → 换 → 展开」三段。
-  // 直接换的话，盘面（连同 32 颗子和所有标记）是「唰」地镜像过去 —— 全站唯一
-  // 一处纯切的硬边。换个视角本来就有方向感（我是想从对面看棋），把它演出来才对。
-  // 时序：0ms 起播收窄，FLIP_MID 落在动画最窄那一段里，那时才真的换视角，
-  // 于是「镜像」这个跳变被藏在盘面几乎看不见宽度的两帧里。
-  const [flipping, setFlipping] = useState(false)
-  const flipMid = useRef<number | null>(null)
-  const flipEnd = useRef<number | null>(null)
-  const flippedRef = useRef(flipped)
-  flippedRef.current = flipped
-
-  useEffect(
-    () => () => {
-      if (flipMid.current !== null) window.clearTimeout(flipMid.current)
-      if (flipEnd.current !== null) window.clearTimeout(flipEnd.current)
-    },
-    [],
-  )
-
-  const turnBoard = useCallback(() => {
-    // 转到一半又按：等这一转演完，不叠第二段（叠起来只会自己打断自己）
-    if (flipMid.current !== null) return
-    setFlipping(true)
-    flipMid.current = window.setTimeout(() => {
-      flipMid.current = null
-      setFlipped(!flippedRef.current)
-    }, FLIP_MID_MS)
-    flipEnd.current = window.setTimeout(() => {
-      flipEnd.current = null
-      setFlipping(false)
-    }, FLIP_TOTAL_MS)
-  }, [])
-
-  useEffect(() => {
-    localStorage.setItem(LS_RAIL_L, railL ? '1' : '0')
-  }, [railL])
-
-  useEffect(() => {
-    localStorage.setItem(LS_RAIL_R, railR ? '1' : '0')
-  }, [railR])
-
-  // 浏览器音频手势解锁
-  useEffect(() => {
-    const unlock = () => unlockAudio()
-    window.addEventListener('pointerdown', unlock, { once: true })
-    window.addEventListener('keydown', unlock, { once: true })
-    return () => {
-      window.removeEventListener('pointerdown', unlock)
-      window.removeEventListener('keydown', unlock)
-    }
-  }, [])
 
   // 终局弹窗延迟 3 秒弹出：给最后一手杀棋、吃子动画和盘面定格留出 3 秒充足时间看清走子
   const [showOverModal, setShowOverModal] = useState(false)
   const [dismissedOver, setDismissedOver] = useState(false)
-  // 终局弹窗的退场：收起时不能一帧摘掉，得让「收」这件事也被看见
   const [overMounted, overLeaving] = useExitPhase(showOverModal && !dismissedOver && !setup.active)
   const isPlaying = game?.status.state === 'playing'
 
@@ -180,10 +73,6 @@ export default function App() {
     }
   }, [game, g])
 
-  /** 落子的唯一出口。走哪一步算一步、合法不合法，都由 Board 自己认完了才报上来 ——
-   *  上层不再算一遍合法性，也就不会有「两处判得不一样」的余地。 */
-  // 回一个「收没收」给 Board：它在本地先替这一步挪了一格，被拒时得知道要退回来。
-  // 'queued' 也算收下（服务端已经记着，等引擎收手自己落子），只有 'error' 是没成。
   const onBoardMove = useCallback(
     async (iccs: string) => (await g.submitMove(iccs)) !== 'error',
     [g],
@@ -196,21 +85,16 @@ export default function App() {
       const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
 
       if (e.key === 'Escape') {
-        setHelp(false)
+        ui.setHelp(false)
         if (setup.active) {
           setup.clearSelection()
         }
-        // 棋盘的选中态归 Board 自己管（它也有自己的 Escape 分支）；
-        // 这里只负责关帮助、把焦点从输入框上收回来。
         if (typing) (target as HTMLInputElement).blur()
         return
       }
       if (typing) return
 
-      // 复盘台开着时键盘归它（←/→/Home/End/Esc 自己处理）。这一层里那些会动
-      // **眼下这一局**的键一律不接：Ctrl+Z 悔棋、Ctrl+N 开新局、F 翻视角、
-      // Space 采用引擎当前最好的一步 —— 人在看历史，手不该碰到现在。
-      if (replay) return
+      if (ui.replay) return
 
       if (setup.active && (e.key === 'Delete' || e.key === 'Backspace')) {
         if (setup.pickedBoardSquare) {
@@ -220,7 +104,6 @@ export default function App() {
         return
       }
 
-      // '/' 由 RelayConsole 自己接管：它能先把折叠的录入框展开再聚焦
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         void g.undoRound()
@@ -231,12 +114,27 @@ export default function App() {
         if (game) handleNewGame(game.engine_side)
         return
       }
+      if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault()
+        ui.toggleZen()
+        return
+      }
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault()
+        ui.cycleTheme()
+        return
+      }
+      if (e.key === 'Escape' && ui.zenMode) {
+        e.preventDefault()
+        ui.setZenMode(false)
+        return
+      }
       if (e.key === 'f' || e.key === 'F') {
-        turnBoard()
+        ui.turnBoard()
         return
       }
       if (e.key === '?' || (e.shiftKey && e.key === '/')) {
-        setHelp(true)
+        ui.setHelp(true)
         return
       }
       if (e.key === ' ') {
@@ -246,13 +144,13 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [g, game, handleNewGame, turnBoard, replay, setup])
+  }, [g, game, handleNewGame, ui, setup])
 
   const onToggleEngineSide = useCallback(() => {
     if (setup.active) {
       const nextSide = setup.engineSide === 'red' ? 'black' : 'red'
       setup.setEngineSide(nextSide)
-      setFlipped(nextSide === 'black')
+      ui.setFlipped(nextSide === 'black')
       g.pushToast(
         `排局设定：引擎执${nextSide === 'red' ? '红' : '黑'}（${nextSide === 'red' ? '红' : '黑'}方朝下）`,
         'info',
@@ -265,7 +163,7 @@ export default function App() {
         'ok',
       )
     }
-  }, [setup.active, setup.engineSide, setup.setEngineSide, game, handleNewGame, g])
+  }, [setup, game, handleNewGame, g, ui])
 
   if (g.booting && !g.state) {
     return (
@@ -300,72 +198,67 @@ export default function App() {
       : game.status.reason || '对局结束'
 
   return (
-    <div className={`app${g.thinking ? ' is-thinking' : ''}`}>
+    <div className={`app${g.thinking ? ' is-thinking' : ''}${ui.zenMode ? ' is-zen-mode' : ''}`}>
       <TopBar
-        game={game}
-        engineInfo={g.state?.engine_info}
-        connected={g.connected}
-        flipped={flipped}
-        soundOn={soundOn}
         setupMode={setup.active}
-        drillMode={drillOpen}
         onToggleSetup={setup.toggle}
-        onToggleDrill={() => {
-          setDrillPuzzleId(null)
-          setDrillOpen((v) => !v)
-        }}
-        onToggleEngine={() => {
-          const current = g.state?.settings.engine_type ?? 'pikafish'
-          const next = current === 'pikafish' ? 'builtin' : 'pikafish'
-          void g.updateSettings({ engine_type: next })
-        }}
         onToggleEngineSide={onToggleEngineSide}
-        onFlip={turnBoard}
-        onToggleSound={() => setSoundOn((v) => !v)}
-        onHelp={() => setHelp(true)}
-        onRefresh={() => void g.refresh()}
       />
 
-      <main className={`workspace${railL ? '' : ' no-left'}${railR ? '' : ' no-right'}`}>
+      {ui.zenMode && (
+        <div className="zen-hud" role="status" aria-live="polite">
+          <div className="zen-hud-pill">
+            <span className="zen-hud-seal" aria-hidden="true">禅</span>
+            <span className="zen-hud-title">静虑深思</span>
+            <span className="zen-hud-turn">{isPlaying ? (game.turn === 'red' ? '红先出招' : '黑方行棋') : '对局终了'}</span>
+            {g.thinking && <span className="zen-hud-thinking">· 引擎推演中…</span>}
+            <button
+              type="button"
+              className="zen-hud-exit"
+              onClick={() => ui.setZenMode(false)}
+              title="退出禅意专注模式 (Esc / Z)"
+            >
+              退出禅境 ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      <main className={`workspace${ui.railL && !ui.zenMode ? '' : ' no-left'}${ui.railR && !ui.zenMode ? '' : ' no-right'}`}>
         {/* 侧栏把手：一边一个，跟着抽屉边缘走 —— 收起时贴屏幕边，展开时贴在栏外沿 */}
         <button
           type="button"
-          className={`rail-tab rail-tab-left${railL ? ' is-open' : ''}`}
-          onClick={() => setRailL((v) => !v)}
-          aria-label={railL ? '收起对局设置' : '展开对局设置'}
-          aria-expanded={railL}
+          className={`rail-tab rail-tab-left${ui.railL ? ' is-open' : ''}`}
+          onClick={ui.toggleRailL}
+          aria-label={ui.railL ? '收起对局设置' : '展开对局设置'}
+          aria-expanded={ui.railL}
         >
           <span className="rail-tab-chev" aria-hidden="true">
             <svg viewBox="0 0 10 10" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M3.5 2 6.5 5 3.5 8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </span>
-          <span className="rail-tab-text">{railL ? '收起' : '设置'}</span>
+          <span className="rail-tab-text">{ui.railL ? '收起' : '设置'}</span>
         </button>
         <button
           type="button"
-          className={`rail-tab rail-tab-right${railR ? ' is-open' : ''}`}
-          onClick={() => setRailR((v) => !v)}
-          aria-label={railR ? '收起分析与棋谱' : '展开分析与棋谱'}
-          aria-expanded={railR}
+          className={`rail-tab rail-tab-right${ui.railR ? ' is-open' : ''}`}
+          onClick={ui.toggleRailR}
+          aria-label={ui.railR ? '收起分析与棋谱' : '展开分析与棋谱'}
+          aria-expanded={ui.railR}
         >
           <span className="rail-tab-chev" aria-hidden="true">
             <svg viewBox="0 0 10 10" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M6.5 2 3.5 5 6.5 8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </span>
-          <span className="rail-tab-text">{railR ? '收起' : '棋谱'}</span>
+          <span className="rail-tab-text">{ui.railR ? '收起' : '棋谱'}</span>
         </button>
 
         <ControlRail
-          open={railL}
-          state={g.state}
           setupMode={setup.active}
           onToggleSetup={setup.toggle}
           onNewGame={handleNewGame}
-          onUndo={() => void g.undoRound()}
-          onResign={() => void g.resign()}
-          onSettings={(patch) => void g.updateSettings(patch)}
         />
 
         <div className="stage">
@@ -380,13 +273,9 @@ export default function App() {
               ]
                 .filter(Boolean)
                 .join(' ')}
-              /* 自检锚点：`audit.mjs` 量「回合条有没有被棋盘垫盖住」靠它。
-                 类名归样式所有，随时可能改，所以断言读这个 data-*。 */
               data-turn-badge=""
             >
-              {/* key=game.turn：每易手一次圆点重挂载，播一次 discPop 脉搏 */}
               <span key={game.turn} className="turn-disc" />
-              {/* key = 文案本身：换一次状态，文字就淡入一次；文案不变时不打扰 */}
               <span key={turnText} className="turn-text">
                 {turnText}
               </span>
@@ -400,11 +289,19 @@ export default function App() {
 
           <div className={`board-wrap ${showOverModal && !setup.active ? 'is-over' : ''}`}>
             <Board
-              game={game}
-              flipped={flipped}
-              flipping={flipping}
+              game={!setup.active && ui.previewGame ? ui.previewGame : game}
+              flipped={ui.flipped}
+              flipping={ui.flipping}
               thinking={g.thinking}
-              pv={g.thinking && !setup.active ? (g.task?.progress?.pv ?? []) : []}
+              pv={
+                !setup.active && ui.previewPv.length > 0
+                  ? ui.previewPv
+                  : g.thinking && !setup.active
+                    ? (g.task?.progress?.pv ?? [])
+                    : []
+              }
+              visualClues={!setup.active ? (ui.liveClues ?? undefined) : undefined}
+              readOnly={!setup.active && ui.previewGame !== null}
               onMove={onBoardMove}
               setupMode={setup.active}
               setupPieces={setup.pieces}
@@ -486,72 +383,51 @@ export default function App() {
               onTurnChange={setup.setTurn}
               onEngineSideChange={(side) => {
                 setup.setEngineSide(side)
-                setFlipped(side === 'black')
+                ui.setFlipped(side === 'black')
               }}
               onImportFen={setup.importFen}
               onStartGame={() => {
-                setFlipped(setup.engineSide === 'black')
+                ui.setFlipped(setup.engineSide === 'black')
                 void setup.startGame()
               }}
               onExitSetup={setup.exit}
               onToast={g.pushToast}
             />
           ) : (
-            <RelayConsole
-              game={game}
-              thinking={g.thinking}
-              queued={g.queued}
-              onSubmit={g.submitMove}
-              onClearQueue={g.clearQueue}
-              onStop={() => void g.stopThinking()}
-              onEngineMove={() => void g.engineMove()}
-            />
+            <RelayConsole />
           )}
         </div>
 
         <aside
-          className={`rail rail-right${railR ? ' is-open' : ''}`}
+          className={`rail rail-right${ui.railR ? ' is-open' : ''}`}
           aria-label="分析与棋谱"
-          aria-hidden={!railR}
-          {...(railR ? {} : { inert: '' })}
+          aria-hidden={!ui.railR}
+          {...(ui.railR ? {} : { inert: '' })}
         >
-          <AnalysisPanel
-            game={game}
-            task={g.task}
-            analysis={g.state.analysis}
-            thinking={g.thinking}
-          />
-          <MoveList game={game} />
-          {/* 错题本读的是存档里那些**历次**对局，与眼下这一局无关：它只在一开始
-              和按「重读」时才发请求，不进 130ms 那条轮询 —— 读它不改任何东西。 */}
-          <MistakeBook onReplay={openReplayAt} onDrill={openDrillAt} />
-          {/* 复盘架同上：一局一行，点一行开复盘台。有判分的那几局才谈得上「值得重看」。 */}
-          <GameShelf onPick={openReplay} />
+          <AnalysisPanel />
+          <MoveList />
+          <MistakeBook />
+          <GameShelf />
         </aside>
       </main>
 
-      {/* 复盘台：常挂，开与关都交给它自己（和 HelpOverlay 同一套），
-          因为退场那 180ms 还要留在 DOM 里播。 */}
-      <ReplayDesk seed={replay} onClose={() => setReplay(null)} />
-
-      {/* 精训营实训台：常挂，开与关交给它自己 */}
-      <DrillDesk
-        open={drillOpen}
-        initialPuzzleId={drillPuzzleId}
-        onClose={() => {
-          setDrillOpen(false)
-          setDrillPuzzleId(null)
-        }}
-        onToast={g.pushToast}
-      />
-
-      <Toasts items={g.toasts} onDismiss={g.dismissToast} />
-      {/* 常挂：开与关都交给它自己（关掉时还要多活 180ms 播退场），
-          见 hooks/useExitPhase */}
-      <HelpOverlay open={help} onClose={() => setHelp(false)} />
-      {!isSoundEnabled() && soundOn && (
+      <ReplayDesk />
+      <DrillDesk />
+      <Toasts />
+      <HelpOverlay />
+      {!isSoundEnabled() && ui.soundOn && (
         <span className="sr-only">音效已启用，等待首次交互解锁</span>
       )}
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <GameProvider>
+      <UIProvider>
+        <AppContent />
+      </UIProvider>
+    </GameProvider>
   )
 }

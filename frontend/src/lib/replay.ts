@@ -1,4 +1,5 @@
 import type {
+  AnimatedStep,
   GameHead,
   GameSnapshot,
   MoveRecord,
@@ -200,3 +201,96 @@ export function describeSource(source: string): string {
   if (source === 'play') return '对局'
   return source
 }
+
+/**
+ * 将基准盘面快照（`baseGame`）与多步推演序列（`steps`）转化为逐帧可平滑滑行动画的 `GameSnapshot[]`。
+ *
+ * 关键原理（契合 `components/Board.tsx` 动画引擎）：
+ * - `frames[0]` 为初始基准局面（第 0 步：落子前）
+ * - `frames[k]` 为走完第 `k` 步后的局面：
+ *   1. 严格沿用 `baseGame.pieces` 的 `id`（被吃子移除，移动子仅更新 `square/file/rank/index`）；
+ *   2. 相邻两帧之间严格只移动 **1 枚棋子**（`moved.length === 1`）且 `ply` 递增 `+1`；
+ *   3. 完整填充 `last_move` 与 `records[].captured_glyph`，从而在 `<Board>` 上触发棋子平滑滑行、墨迹轨迹、落子水波纹与吃子撞飞残影！
+ */
+export function buildAnimatedFrames(
+  baseGame: GameSnapshot,
+  steps: AnimatedStep[],
+): GameSnapshot[] {
+  const frame0: GameSnapshot = {
+    ...baseGame,
+    pieces: baseGame.pieces.map((p) => ({ ...p })),
+    records: [...baseGame.records],
+    legal_moves: [],
+  }
+  const frames: GameSnapshot[] = [frame0]
+
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]
+    const rawIccs = (step.iccs || step.move || '').trim().toLowerCase()
+    if (rawIccs.length < 4) break
+
+    const from = rawIccs.slice(0, 2)
+    const to = rawIccs.slice(2, 4)
+    const prev = frames[frames.length - 1]
+    const mover = prev.pieces.find((p) => p.square === from) ?? null
+    if (!mover) break
+
+    const victim = prev.pieces.find((p) => p.square === to) ?? null
+    const nextPieces: PieceInfo[] = []
+    for (const p of prev.pieces) {
+      if (victim && p.id === victim.id) continue
+      if (p.id === mover.id) {
+        nextPieces.push(at(p, to))
+      } else {
+        nextPieces.push(p)
+      }
+    }
+
+    const nextPly = prev.ply + 1
+    const moveSide: Side = mover.side
+    const nextTurn: Side = other(moveSide)
+    const byWho: 'engine' | 'opponent' = moveSide === baseGame.engine_side ? 'engine' : 'opponent'
+    const rec: MoveRecord = {
+      ply: nextPly,
+      side: moveSide,
+      by: byWho,
+      iccs: rawIccs,
+      chinese: step.chinese || rawIccs,
+      from,
+      to,
+      piece: mover.piece,
+      glyph: mover.glyph,
+      captured: victim?.piece ?? step.captured ?? null,
+      captured_glyph: victim?.glyph ?? null,
+      check: false,
+      mate: false,
+      eval: null,
+      depth: null,
+      time: null,
+      state: 'playing',
+    }
+
+    frames.push({
+      ...prev,
+      pieces: nextPieces,
+      turn: nextTurn,
+      engine_to_move: nextTurn === baseGame.engine_side,
+      opponent_to_move: nextTurn !== baseGame.engine_side,
+      ply: nextPly,
+      in_check: false,
+      legal_moves: [],
+      last_move: {
+        from,
+        to,
+        iccs: rawIccs,
+        by: byWho,
+        captured: victim?.piece ?? step.captured ?? null,
+      },
+      records: [...prev.records, rec],
+      is_start: false,
+    })
+  }
+
+  return frames
+}
+

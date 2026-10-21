@@ -12,13 +12,14 @@ import {
   whySentence,
   CP_PAWN,
 } from '../lib/format'
+import { useGameContext } from '../context/GameContext'
 
-interface Props {
-  game: GameSnapshot
-  task: SearchTask | null
+export interface AnalysisPanelProps {
+  game?: GameSnapshot
+  task?: SearchTask | null
   /** 判分那次（低优先级的后台搜索）。与 task 分开，是两份不相干的读数。 */
-  analysis: AnalysisTask | null
-  thinking: boolean
+  analysis?: AnalysisTask | null
+  thinking?: boolean
 }
 
 /** 一句判定语 + 一个原始分值：转述的人要的是「现在谁占优」，不是一个小数。
@@ -53,7 +54,14 @@ const LADDER = 12
  *  栏宽有限，第 5、6 步在 300px 里只会挤成两行，讲不清反而像坏了。 */
 const PV_SHOW = 4
 
-export function AnalysisPanel({ game, task, analysis, thinking }: Props) {
+export function AnalysisPanel(props: AnalysisPanelProps) {
+  const g = useGameContext()
+  const game = props.game ?? g.state?.game
+  if (!game) return null
+
+  const task = props.task !== undefined ? props.task : g.task
+  const analysis = props.analysis !== undefined ? props.analysis : (g.state?.analysis ?? null)
+  const thinking = props.thinking !== undefined ? props.thinking : g.thinking
   const progress = task?.progress ?? null
 
   const lastEngineRecord = useMemo(() => {
@@ -250,6 +258,12 @@ function LearnBlock({ game, analysis }: { game: GameSnapshot; analysis: Analysis
           {/* 这一句只从 whySentence 出来：它讲得出「主变里第几步吃到什么」，
               讲不出就整个消失 —— 空占一行的「引擎更看那一手」不如没有。 */}
           {why && <p className="learn-why">{why}</p>}
+          {review.tactics && (
+            <p className="learn-tactics">
+              <span className="motif-chip">#{review.tactics.motif_label}</span>{' '}
+              {review.tactics.coach_summary}
+            </p>
+          )}
           <RankList lines={review.lines} playedIccs={review.played_iccs} withPv />
         </div>
       )}

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { GameSnapshot, MoveRecord } from '../types'
 import { gradeDetail, gradeLabel, scoreText } from '../lib/format'
+import { useGameContext } from '../context/GameContext'
 
-interface Props {
-  game: GameSnapshot
+export interface MoveListProps {
+  game?: GameSnapshot
 }
 
 interface Round {
@@ -12,7 +13,10 @@ interface Round {
   black: MoveRecord | null
 }
 
-export function MoveList({ game }: Props) {
+export function MoveList(props: MoveListProps) {
+  const g = useGameContext()
+  const game = props.game ?? g.state?.game
+  if (!game) return null
   const rounds = useMemo<Round[]>(() => {
     const out: Round[] = []
     let red: MoveRecord | null = null

@@ -1,7 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { MistakeEntry, MistakeSummary } from '../types'
 import { api, ApiError } from '../api'
 import { bestLineWord, gradeDetail, gradeLabel, relativeTime, sideName, whySentence } from '../lib/format'
+import { useUIContext } from '../context/UIContext'
+
+const MOTIF_LABELS: Record<string, string> = {
+  missed_mate: '错失必杀',
+  walked_into_mate: '漏防杀棋',
+  greedy_capture: '贪吃失先',
+  fork_or_skewer: '遭抽将捉双',
+  left_hanging: '丢无根子',
+  missed_tactics: '漏看妙手',
+  king_exposed: '九宫受逼',
+  lost_tempo: '缓手失先',
+}
 
 /**
  * 错题本：把**存档里历次对局**的判分按局面聚在一起，一题一个局面。
@@ -14,18 +26,22 @@ import { bestLineWord, gradeDetail, gradeLabel, relativeTime, sideName, whySente
  * `bestLineWord`）：服务端给的是事实（名次、差值、界类型、整份判分），
  * 「这个数能当真到什么程度」由那一个出口决定，这里不另拼一句话。
  */
-interface MistakeBookProps {
+export interface MistakeBookProps {
   /** 「摆到盘上」：把这一题最差那次所在的那一局、那一手交给复盘台。 */
-  onReplay: (gameId: string, ply: number | null) => void
+  onReplay?: (gameId: string, ply: number | null) => void
   /** 「入营重练」：将该失误局面直接作为题目调入精训营进行攻坚实训 */
   onDrill?: (puzzleId: string) => void
 }
 
-export function MistakeBook({ onReplay, onDrill }: MistakeBookProps) {
+export function MistakeBook(props: MistakeBookProps) {
+  const ui = useUIContext()
+  const onReplay = props.onReplay ?? ui.openReplayAt
+  const onDrill = props.onDrill ?? ui.openDrillAt
   const [entries, setEntries] = useState<MistakeEntry[] | null>(null)
   const [summary, setSummary] = useState<MistakeSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [activeMotif, setActiveMotif] = useState<string>('all')
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -47,11 +63,18 @@ export function MistakeBook({ onReplay, onDrill }: MistakeBookProps) {
   }, [reload])
 
   const listed = entries?.length ?? 0
+  const filteredEntries = useMemo(() => {
+    if (!entries) return []
+    if (activeMotif === 'all') return entries
+    return entries.filter((e) => (e.primary_motif || 'lost_tempo') === activeMotif)
+  }, [entries, activeMotif])
+  const motifCounts = summary?.motif_counts ?? {}
+  const motifKeys = Object.keys(motifCounts).filter((k) => motifCounts[k] > 0)
 
   return (
-    <section className="panel mistakes" aria-label="错题本" data-mistakes="">
+    <section className="panel mistakes" aria-label="错题本与病因图谱" data-mistakes="">
       <header className="panel-head">
-        <h2>错题本</h2>
+        <h2>错题本 · 病因图谱</h2>
         <button
           type="button"
           className="mistake-reload"
@@ -70,6 +93,39 @@ export function MistakeBook({ onReplay, onDrill }: MistakeBookProps) {
           : '来源：存档里的历次对局，按局面（不是按手数）把判分聚在一起。'}
       </p>
 
+      {summary?.prescription && (
+        <div className="mistake-prescription" data-mistake-prescription="">
+          <div className="mistake-prescription-head">
+            <span className="motif-chip is-accent">
+              {summary.prescription.icon} 头号心魔：#{summary.prescription.label}（{summary.prescription.count} 次）
+            </span>
+          </div>
+          <p className="mistake-prescription-advice">{summary.prescription.advice}</p>
+        </div>
+      )}
+
+      {motifKeys.length > 0 && (
+        <div className="mistake-motif-bar" role="group" aria-label="按病因筛选错题">
+          <button
+            type="button"
+            className={`btn btn-ghost btn-sm${activeMotif === 'all' ? ' is-on' : ''}`}
+            onClick={() => setActiveMotif('all')}
+          >
+            全部 ({listed})
+          </button>
+          {motifKeys.map((mKey) => (
+            <button
+              key={mKey}
+              type="button"
+              className={`btn btn-ghost btn-sm${activeMotif === mKey ? ' is-on' : ''}`}
+              onClick={() => setActiveMotif(mKey === activeMotif ? 'all' : mKey)}
+            >
+              #{MOTIF_LABELS[mKey] ?? mKey} ({motifCounts[mKey]})
+            </button>
+          ))}
+        </div>
+      )}
+
       {error && <p className="hint mistake-hint">{error}</p>}
 
       {!error && summary && summary.listed === 0 && (
@@ -82,9 +138,9 @@ export function MistakeBook({ onReplay, onDrill }: MistakeBookProps) {
         </p>
       )}
 
-      {entries && entries.length > 0 && (
+      {filteredEntries.length > 0 && (
         <ul className="mistake-list">
-          {entries.map((e) => (
+          {filteredEntries.map((e) => (
             <MistakeRow key={e.fen_before} entry={e} onReplay={onReplay} onDrill={onDrill} />
           ))}
         </ul>
@@ -130,6 +186,11 @@ function MistakeRow({
     <li className={`mistake-row side-${entry.side}`}>
       <div className="mistake-top">
         <span className="mistake-side">{sideName(entry.side)}走</span>
+        {entry.motif_label && (
+          <span className="motif-chip">
+            {entry.motif_icon ? `${entry.motif_icon} ` : ''}#{entry.motif_label}
+          </span>
+        )}
         <span className="mistake-count" title={`这个局面带判分走过 ${entry.graded_plies} 次`}>
           错过 {entry.misses} / {entry.graded_plies} 次
         </span>
@@ -156,6 +217,9 @@ function MistakeRow({
       {/* 错题本挑的是**最差那次**，所以这句「为什么」讲的也是那一次的主变，
           不是眼前这一局 —— 与左边判分块共用同一个出口，两句话不会各说一套。 */}
       {why && <p className="mistake-why">{why}</p>}
+      {entry.coach_summary && (
+        <p className="mistake-coach-note">{entry.coach_summary}</p>
+      )}
 
       <code className="mistake-fen" title="这个局面（FEN）：错题本按它把历次对局归到同一题">
         {entry.fen_before}

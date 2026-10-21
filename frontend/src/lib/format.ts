@@ -1,4 +1,4 @@
-import type { LossKind, MoveReview, PvCapture, ScoreBound, Side } from '../types'
+import type { LossKind, MoveReview, PvCapture, PvStep, ScoreBound, Side } from '../types'
 
 export function compactNumber(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—'
@@ -165,6 +165,47 @@ function sameCapture(a: PvCapture, b: PvCapture): boolean {
  * 杀棋不套这套：`gradeLabel` 那句已经把因果说完了（几步杀、撑几步），再补一刀
  * 「主变里第 3 手吃马」只会稀释它。
  */
+export interface CausalBreakdown {
+  bestPv: PvStep[]
+  refutePv: PvStep[]
+  punishMove?: PvStep
+  bestMove?: PvStep
+  explanation: string
+}
+
+export function causalBreakdown(review: MoveReview | null | undefined): CausalBreakdown | null {
+  if (!review) return null
+  const bestLine = review.lines?.[0]
+  const playedLine = review.lines?.find((l) => l.iccs === review.played_iccs)
+  const bestPv = bestLine?.pv ?? []
+  const rawRefute = (review as any).refute_pv
+  let refutePv: PvStep[] = []
+  if (Array.isArray(rawRefute) && rawRefute.length > 0) {
+    refutePv = rawRefute.map((m: any) => typeof m === 'string' ? { iccs: m, chinese: m } : m)
+  } else if (playedLine?.pv && playedLine.pv.length > 1) {
+    refutePv = playedLine.pv.slice(1)
+  }
+  const bestMove = bestPv[0]
+  const punishMove = refutePv[0]
+
+  let explanation = ''
+  if (review.rank === 1) {
+    explanation = '此招为引擎正着（首选），局势主动。'
+  } else if (punishMove && bestMove) {
+    explanation = `实战错走后，对方当场以「${punishMove.chinese || punishMove.iccs}」强势反扑；正招当走「${bestMove.chinese || bestMove.iccs}」控盘。`
+  } else if (bestMove) {
+    explanation = `引擎最佳正着为「${bestMove.chinese || bestMove.iccs}」，避免失误丢先。`
+  }
+
+  return {
+    bestPv,
+    refutePv,
+    bestMove,
+    punishMove,
+    explanation,
+  }
+}
+
 export function whySentence(review: MoveReview | null | undefined): string | null {
   if (!review || review.loss_kind === 'mate') return null
   const r = review.reason

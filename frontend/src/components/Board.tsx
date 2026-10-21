@@ -101,6 +101,12 @@ interface BoardProps {
    * 最不该发生的形式。
    */
   readOnly?: boolean
+  /** 师门传功三阶视觉点拨：薄弱格高亮、核心主攻子、主变行棋轨迹 */
+  visualClues?: {
+    weakness_squares?: string[]
+    key_pieces?: string[]
+    route?: string[]
+  }
 }
 
 export function Board({
@@ -112,6 +118,7 @@ export function Board({
   flipping = false,
   readOnly = false,
   setupMode = false,
+  visualClues,
   setupPieces,
   selectedTrayPiece = null,
   pickedBoardSquare = null,
@@ -658,6 +665,15 @@ export function Board({
   }
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (surfaceRef.current) {
+      const rect = surfaceRef.current.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) {
+        const px = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
+        const py = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
+        surfaceRef.current.style.setProperty('--mouse-x', `${px.toFixed(1)}%`)
+        surfaceRef.current.style.setProperty('--mouse-y', `${py.toFixed(1)}%`)
+      }
+    }
     const d = dragRef.current
     if (!d || !d.from) return
     if (!d.moved) {
@@ -1028,6 +1044,12 @@ export function Board({
                 <span className="piece-face">
                   <span className="piece-glyph">{shown.glyph}</span>
                 </span>
+                {knock && (
+                  <>
+                    <span className="capture-burst-ring" aria-hidden="true" />
+                    <span className="capture-spark-burst" aria-hidden="true" />
+                  </>
+                )}
               </div>
             )
           })()}
@@ -1082,13 +1104,15 @@ export function Board({
                 effectivePicked === p.square ? 'is-selected' : '',
                 kingInCheck === p.square ? 'is-check' : '',
                 alarmSquare === p.square ? 'is-check-alarm' : '',
+                visualClues?.key_pieces?.includes(effectiveSquare) ? 'is-master-key' : '',
+                visualClues?.weakness_squares?.includes(effectiveSquare) ? 'is-master-weakness' : '',
                 victorKing === p.square ? 'is-victor' : '',
                 isDragging ? 'dragging' : '',
                 canGrab ? 'is-grabbable' : '',
                 doomed ? 'is-doomed' : '',
                 // 正在滑的那一颗要盖过落点上的死子（两者同格，见 .is-doomed 那段）
                 wait > 0 ? 'is-gliding' : '',
-                impactId === p.id ? 'is-impact' : '',
+                impactId === p.id ? (knock ? 'is-impact is-capture-impact' : 'is-impact') : '',
                 enterDelay > 0 || !bootedRef.current ? 'is-entering' : '',
               ]
                 .filter(Boolean)
@@ -1116,6 +1140,22 @@ export function Board({
                 <span className="piece-glyph">{p.glyph}</span>
               </span>
             </div>
+          )
+        })}
+
+        {/* 师门三阶点拨：薄弱命门格朱砂光晕 */}
+        {visualClues?.weakness_squares?.map((sq) => {
+          const { file, rank } = parseSquare(sq)
+          const { x, y } = toPercent(file, rank, flipped)
+          return (
+            <span
+              key={`master-weakness-${sq}`}
+              className="master-weakness-marker"
+              style={{ left: `${x}%`, top: `${y}%` }}
+              aria-label={`命门薄弱格 ${sq}`}
+            >
+              <span className="master-weakness-pulse" />
+            </span>
           )
         })}
 
@@ -1161,136 +1201,18 @@ const BoardArtwork = memo(function BoardArtwork() {
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <defs>
-        {/* 板面底色：左上受光、右下渐深。
-            x2 跟前文那盏灯取同一个角度 —— objectBoundingBox 里的 x2 是「相对板宽的
-            比值」，而板宽 720、板高 800，所以 0.42 要换算成 0.42 × 800 / 720 ≈ 0.467。
-            以前这里是 0.7（斜率 ≈ 0.63），跟板缘那道 boardSheen 不是一个角度。 */}
-        <linearGradient id="boardFace" x1="0" y1="0" x2="0.467" y2="1">
-          <stop offset="0%" stopColor="var(--board-face-1)" />
-          <stop offset="52%" stopColor="var(--board-face-2)" />
-          <stop offset="100%" stopColor="var(--board-face-3)" />
-        </linearGradient>
-        <radialGradient id="boardVignette" cx="50%" cy="42%" r="78%">
-          <stop offset="60%" stopColor="rgba(255,255,255,0)" />
-          <stop offset="100%" stopColor="var(--board-vignette)" />
-        </radialGradient>
-        {/* 上缘受光、下缘落影：让这块板看起来有厚度，不是一张贴纸。
-            方向跟全站那盏灯一致（左上 → 右下），不是纯垂直。objectBoundingBox 里
-            的 x2 是「相对板宽的比值」，而板宽 720、板高 800：要把 --light-x(0.42)
-            换算到这套坐标里，得乘上 800 / 720 ≈ 0.467 —— 换算过来才是同一个角度。 */}
-        <linearGradient id="boardSheen" x1="0" y1="0" x2="0.467" y2="1">
-          <stop offset="0%" stopColor="rgba(255,252,244,0.6)" />
-          <stop offset="13%" stopColor="rgba(255,252,244,0)" />
-          <stop offset="84%" stopColor="rgba(74,52,22,0)" />
-          <stop offset="100%" stopColor="rgba(74,52,22,0.18)" />
-        </linearGradient>
+      {/* 宣纸：纯色一张，不再有木纹、渐变、晕影和倒角。 */}
+      <rect x="0" y="0" width={BOARD_W} height={BOARD_H} rx="4" fill="var(--board-face-1)" />
 
-        {/* 木纹两层：一层宽年轮带，一层细纤维。
-            两条噪声都只在首帧算一次，之后浏览器缓存滤波结果；
-            BoardArtwork 又用 memo 包住，轮询时的重渲染根本不会碰它。 */}
-        <filter id="efWoodBand" x="0%" y="0%" width="100%" height="100%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.0016 0.055" numOctaves="2" seed="7" />
-          <feColorMatrix
-            type="matrix"
-            values="0 0 0 0 0.40
-                    0 0 0 0 0.27
-                    0 0 0 0 0.12
-                    0 0 0 0.55 0"
-          />
-        </filter>
-        <filter id="efWoodFibre" x="0%" y="0%" width="100%" height="100%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.004 0.62" numOctaves="4" seed="23" />
-          <feColorMatrix
-            type="matrix"
-            values="0 0 0 0 0.44
-                    0 0 0 0 0.31
-                    0 0 0 0 0.15
-                    0 0 0 0.9 0"
-          />
-        </filter>
-        {/* 木纹第三层：节疤 / 轮纹同心弧。type=turbulence 的团块被
-            alpha 通道阈值化（0.9*(r+g+b)-0.9），只留下稀疏的暗弧，
-            打破前两层的均匀噪声感。浓度压得很轻，只是「有方向」。 */}
-        <filter id="efWoodKnot" x="0%" y="0%" width="100%" height="100%">
-          <feTurbulence type="turbulence" baseFrequency="0.011 0.042" numOctaves="3" seed="41" />
-          <feColorMatrix
-            type="matrix"
-            values="0 0 0 0 0.36
-                    0 0 0 0 0.24
-                    0 0 0 0 0.10
-                    0.9 0.9 0.9 0 -0.95"
-          />
-        </filter>
-      </defs>
-
-      <rect x="0" y="0" width={BOARD_W} height={BOARD_H} rx="16" fill="url(#boardFace)" />
+      {/* 外框：一道细线，棋盘的全部「装饰」 */}
       <rect
-        x="0"
-        y="0"
-        width={BOARD_W}
-        height={BOARD_H}
-        rx="16"
-        filter="url(#efWoodBand)"
-        style={{ mixBlendMode: 'multiply' }}
-        opacity="0.5"
-      />
-      <rect
-        x="0"
-        y="0"
-        width={BOARD_W}
-        height={BOARD_H}
-        rx="16"
-        filter="url(#efWoodFibre)"
-        style={{ mixBlendMode: 'multiply' }}
-        opacity="0.34"
-      />
-      <rect
-        x="0"
-        y="0"
-        width={BOARD_W}
-        height={BOARD_H}
-        rx="16"
-        filter="url(#efWoodKnot)"
-        style={{ mixBlendMode: 'multiply' }}
-        opacity="0.2"
-      />
-      <rect x="0" y="0" width={BOARD_W} height={BOARD_H} rx="16" fill="url(#boardVignette)" />
-      <rect x="0" y="0" width={BOARD_W} height={BOARD_H} rx="16" fill="url(#boardSheen)" />
-      {/* 板边那道倒角 */}
-      <rect
-        x="1.25"
-        y="1.25"
-        width={BOARD_W - 2.5}
-        height={BOARD_H - 2.5}
-        rx="15"
-        fill="none"
-        stroke="rgba(109,80,40,0.45)"
-        strokeWidth="1.5"
-      />
-
-      {/* 外框 */}
-      <rect
-        x={MARGIN - 22}
-        y={MARGIN - 22}
-        width={BOARD_W - (MARGIN - 22) * 2}
-        height={BOARD_H - (MARGIN - 22) * 2}
-        rx="6"
+        x={MARGIN - 18}
+        y={MARGIN - 18}
+        width={BOARD_W - (MARGIN - 18) * 2}
+        height={BOARD_H - (MARGIN - 18) * 2}
         fill="none"
         stroke="var(--board-line)"
-        strokeWidth="3.5"
-        opacity="0.85"
-      />
-      <rect
-        x={MARGIN - 14}
-        y={MARGIN - 14}
-        width={BOARD_W - (MARGIN - 14) * 2}
-        height={BOARD_H - (MARGIN - 14) * 2}
-        rx="3"
-        fill="none"
-        stroke="var(--board-line)"
-        strokeWidth="1"
-        opacity="0.5"
+        strokeWidth="2.2"
       />
 
       <g stroke="var(--board-line)" strokeWidth="1.4" strokeLinecap="round">

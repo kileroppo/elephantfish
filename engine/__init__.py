@@ -19,6 +19,7 @@ from .search import Searcher          # noqa: F401
 from .opening import GLOBAL_BOOK, OpeningBook  # noqa: F401
 from .pikafish_engine import PikafishEngine, find_pikafish_binary  # noqa: F401
 from . import notation                # noqa: F401
+from . import tactics                 # noqa: F401
 from .game import Game, RED, BLACK    # noqa: F401
 from .engine import (                 # noqa: F401
     Engine, EngineInfo, EngineSet, SearchRequest,

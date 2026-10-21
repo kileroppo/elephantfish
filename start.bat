@@ -4,12 +4,8 @@ setlocal enabledelayedexpansion
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
 rem ==================================================
-rem  xq-coach - 象棋教练实训台  (Windows)
-rem  用法： start.bat [端口] [local]
-rem         默认端口 8010，默认支持局域网访问 (0.0.0.0)，
-rem         同网段其他设备可用 http://本机IP:8010/ 打开
-rem         若仅需本机访问，加 local（例如 start.bat 8010 local）
-rem  停止： 在这个窗口按 Ctrl+C
+rem  xq-coach - Xiangqi Coach Platform (Windows)
+rem  Usage: start.bat [port] [local]
 rem ==================================================
 
 cd /d "%~dp0"
@@ -46,7 +42,7 @@ if /i "!LAN!"=="no" (
 )
 echo.
 
-rem ---------- 找 Python ----------
+rem ---------- Find Python ----------
 set "PY="
 for %%c in (python py python3 pypy) do (
     if not defined PY (
@@ -61,7 +57,7 @@ if not defined PY (
     exit /b 1
 )
 
-rem ---------- 先弄清端口上的情况，免得白等一场构建 ----------
+rem ---------- Check Port ----------
 for /f "delims=" %%I in ('"%PY%" tools\run_server.py identity !PORT! 2^>nul') do set "IDENT=%%I"
 
 if "!IDENT!"=="ours" (
@@ -88,7 +84,7 @@ if "!IDENT!"=="other" (
     echo.
 )
 
-rem ---------- 前端构建检查（未构建或源码有更新时自动构建） ----------
+rem ---------- Frontend Build Check ----------
 set "NEED_BUILD=no"
 if not exist "frontend\dist\index.html" (
     set "NEED_BUILD=yes"
