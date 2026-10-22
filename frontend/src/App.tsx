@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { api } from './api'
 import { Board } from './components/Board'
 import { RelayConsole } from './components/RelayConsole'
-import { AnalysisPanel } from './components/AnalysisPanel'
-import { MoveList } from './components/MoveList'
-import { MistakeBook } from './components/MistakeBook'
-import { GameShelf } from './components/GameShelf'
+import { RightRail } from './components/RightRail'
 import { ReplayDesk } from './components/ReplayDesk'
 import { DrillDesk } from './components/DrillDesk'
 import { ControlRail } from './components/ControlRail'
 import { TopBar } from './components/TopBar'
 import { SetupPanel } from './components/SetupPanel'
 import { HelpOverlay, Toasts } from './components/Overlays'
+import { BootScreen } from './components/app/BootScreen'
+import { ZenHud } from './components/app/ZenHud'
+import { StageHead } from './components/app/StageHead'
+import { ResultModal } from './components/app/ResultModal'
+import { RailTabs } from './components/app/RailTabs'
 import { GameProvider, useGameContext } from './context/GameContext'
 import { UIProvider, useUIContext } from './context/UIContext'
 import { isSoundEnabled, play } from './lib/sound'
@@ -33,13 +36,50 @@ function AppContent() {
 
   const handleNewGame = useCallback(
     (side: 'red' | 'black') => {
-      ui.setFlipped(side === 'black')
+      if (ui.playMode === 'sparring') {
+        ui.setFlipOverride(side === 'red')
+      } else {
+        ui.setFlipped(side === 'black')
+      }
       void g.newGame(side)
     },
     [g, ui],
   )
 
-  // 终局弹窗延迟 3 秒弹出：给最后一手杀棋、吃子动画和盘面定格留出 3 秒充足时间看清走子
+  const handleReplayCurrent = useCallback(async () => {
+    setDismissedOver(true)
+    try {
+      const res = await api.games()
+      const latest = res.games?.[0]
+      if (!latest) {
+        g.pushToast('库中暂无本局存档', 'warn')
+        return
+      }
+      let keyPly: number | null = null
+      if (game?.records) {
+        for (const r of game.records) {
+          if (r.by === 'opponent' && r.review) {
+            const rv = r.review
+            const isCritical =
+              rv.tactics?.severity === 'critical' ||
+              rv.tactics?.severity === 'warn' ||
+              rv.status === 'outside' ||
+              rv.loss_kind === 'mate' ||
+              (typeof rv.loss === 'number' && rv.loss >= 90)
+            if (isCritical) {
+              keyPly = r.ply
+              break
+            }
+          }
+        }
+      }
+      ui.openReplayAt(latest.game_id, keyPly ?? 1)
+    } catch {
+      g.pushToast('打开复盘失败', 'error')
+    }
+  }, [game?.records, g, ui])
+
+  // 终局弹窗延迟 3 秒弹出
   const [showOverModal, setShowOverModal] = useState(false)
   const [dismissedOver, setDismissedOver] = useState(false)
   const [overMounted, overLeaving] = useExitPhase(showOverModal && !dismissedOver && !setup.active)
@@ -129,7 +169,7 @@ function AppContent() {
         ui.setZenMode(false)
         return
       }
-      if (e.key === 'f' || e.key === 'F') {
+      if (e.key === 'f' || e.key === 'F' || e.key === 'x' || e.key === 'X') {
         ui.turnBoard()
         return
       }
@@ -150,7 +190,7 @@ function AppContent() {
     if (setup.active) {
       const nextSide = setup.engineSide === 'red' ? 'black' : 'red'
       setup.setEngineSide(nextSide)
-      ui.setFlipped(nextSide === 'black')
+      ui.setFlipOverride(nextSide === 'black')
       g.pushToast(
         `排局设定：引擎执${nextSide === 'red' ? '红' : '黑'}（${nextSide === 'red' ? '红' : '黑'}方朝下）`,
         'info',
@@ -166,27 +206,11 @@ function AppContent() {
   }, [setup, game, handleNewGame, g, ui])
 
   if (g.booting && !g.state) {
-    return (
-      <div className="boot">
-        <div className="boot-mark">象</div>
-        <p>正在连接引擎…</p>
-      </div>
-    )
+    return <BootScreen booting />
   }
 
   if (!g.state || !game) {
-    return (
-      <div className="boot">
-        <div className="boot-mark dim">象</div>
-        <h2>连不上引擎服务</h2>
-        <p className="hint">
-          先在项目根目录运行：<code>python server/app.py</code>，然后刷新本页。
-        </p>
-        <button type="button" className="btn btn-primary" onClick={() => void g.refresh()}>
-          重试
-        </button>
-      </div>
-    )
+    return <BootScreen onRetry={() => void g.refresh()} />
   }
 
   const turnText = setup.active
@@ -206,54 +230,23 @@ function AppContent() {
       />
 
       {ui.zenMode && (
-        <div className="zen-hud" role="status" aria-live="polite">
-          <div className="zen-hud-pill">
-            <span className="zen-hud-seal" aria-hidden="true">禅</span>
-            <span className="zen-hud-title">静虑深思</span>
-            <span className="zen-hud-turn">{isPlaying ? (game.turn === 'red' ? '红先出招' : '黑方行棋') : '对局终了'}</span>
-            {g.thinking && <span className="zen-hud-thinking">· 引擎推演中…</span>}
-            <button
-              type="button"
-              className="zen-hud-exit"
-              onClick={() => ui.setZenMode(false)}
-              title="退出禅意专注模式 (Esc / Z)"
-            >
-              退出禅境 ✕
-            </button>
-          </div>
-        </div>
+        <ZenHud
+          isPlaying={isPlaying}
+          turn={game.turn}
+          thinking={g.thinking}
+          onExit={() => ui.setZenMode(false)}
+        />
       )}
 
       <main className={`workspace${ui.railL && !ui.zenMode ? '' : ' no-left'}${ui.railR && !ui.zenMode ? '' : ' no-right'}`}>
-        {/* 侧栏把手：一边一个，跟着抽屉边缘走 —— 收起时贴屏幕边，展开时贴在栏外沿 */}
-        <button
-          type="button"
-          className={`rail-tab rail-tab-left${ui.railL ? ' is-open' : ''}`}
-          onClick={ui.toggleRailL}
-          aria-label={ui.railL ? '收起对局设置' : '展开对局设置'}
-          aria-expanded={ui.railL}
-        >
-          <span className="rail-tab-chev" aria-hidden="true">
-            <svg viewBox="0 0 10 10" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <path d="M3.5 2 6.5 5 3.5 8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-          <span className="rail-tab-text">{ui.railL ? '收起' : '设置'}</span>
-        </button>
-        <button
-          type="button"
-          className={`rail-tab rail-tab-right${ui.railR ? ' is-open' : ''}`}
-          onClick={ui.toggleRailR}
-          aria-label={ui.railR ? '收起分析与棋谱' : '展开分析与棋谱'}
-          aria-expanded={ui.railR}
-        >
-          <span className="rail-tab-chev" aria-hidden="true">
-            <svg viewBox="0 0 10 10" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <path d="M6.5 2 3.5 5 6.5 8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-          <span className="rail-tab-text">{ui.railR ? '收起' : '棋谱'}</span>
-        </button>
+        {!ui.zenMode && (
+          <RailTabs
+            railL={ui.railL}
+            railR={ui.railR}
+            onToggleL={ui.toggleRailL}
+            onToggleR={ui.toggleRailR}
+          />
+        )}
 
         <ControlRail
           setupMode={setup.active}
@@ -262,32 +255,17 @@ function AppContent() {
         />
 
         <div className="stage">
-          {/* 单一状态核心 HUD：全屏唯一的局面指示 */}
-          <div className="stage-head">
-            <span
-              className={[
-                'turn-badge',
-                `side-${game.turn}`,
-                isPlaying ? '' : 'is-over',
-                isPlaying && game.turn === game.engine_side ? 'is-engine' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              data-turn-badge=""
-            >
-              <span key={game.turn} className="turn-disc" />
-              <span key={turnText} className="turn-text">
-                {turnText}
-              </span>
-            </span>
-            {game.in_check && isPlaying && !setup.active && (
-              <span key={`chk${game.ply}`} className="check-flag">
-                将军！
-              </span>
-            )}
-          </div>
+          <StageHead
+            turn={game.turn}
+            turnText={turnText}
+            isPlaying={isPlaying}
+            isEngineTurn={isPlaying && game.turn === game.engine_side}
+            inCheck={game.in_check}
+            setupActive={setup.active}
+            ply={game.ply}
+          />
 
-          <div className={`board-wrap ${showOverModal && !setup.active ? 'is-over' : ''}`}>
+          <div className={`board-wrap relative ${showOverModal && !setup.active ? 'is-over' : ''}`}>
             <Board
               game={!setup.active && ui.previewGame ? ui.previewGame : game}
               flipped={ui.flipped}
@@ -312,56 +290,18 @@ function AppContent() {
               onSetupPieceRemove={setup.removePiece}
               onSetupPickBoardSquare={setup.pickSquare}
             />
+
             {overMounted && (
-              <div
-                className={`result-veil winner-${game.status.winner ?? 'none'}${
-                  overLeaving ? ' is-leaving' : ''
-                }`}
-              >
-                <div className="seal" aria-hidden="true">
-                  <span>{game.status.winner === null ? '和' : '胜'}</span>
-                </div>
-                <div className="result-card">
-                  <button
-                    type="button"
-                    className="modal-close-btn"
-                    onClick={() => setDismissedOver(true)}
-                    title="收起弹窗，仔细查看棋盘"
-                  >
-                    ✕
-                  </button>
-                  <span className="result-kicker">
-                    {game.status.winner === null
-                      ? '和棋'
-                      : game.status.winner === game.engine_side
-                        ? '引擎获胜'
-                        : '您获胜了！'}
-                  </span>
-                  <h2>{game.status.reason || '对局结束'}</h2>
-                  <p className="hint">
-                    共 {game.ply} 手 · 引擎应手 {g.state.stats.moves} 次
-                  </p>
-                  <div className="result-actions">
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => handleNewGame(game.engine_side)}
-                    >
-                      再来一局
-                    </button>
-                    <button type="button" className="btn btn-ghost" onClick={() => void g.undoRound()}>
-                      退回一步
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => setDismissedOver(true)}
-                    >
-                      查看残局
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <ResultModal
+                game={game}
+                overLeaving={overLeaving}
+                engineMoves={g.state.stats.moves}
+                onClose={() => setDismissedOver(true)}
+                onNewGame={() => handleNewGame(game.engine_side)}
+                onReplayCurrent={() => void handleReplayCurrent()}
+                onUndoRound={() => void g.undoRound()}
+                onOpenDrillAt={(motif, gameId) => ui.openDrillAt(motif, gameId)}
+              />
             )}
           </div>
 
@@ -383,11 +323,11 @@ function AppContent() {
               onTurnChange={setup.setTurn}
               onEngineSideChange={(side) => {
                 setup.setEngineSide(side)
-                ui.setFlipped(side === 'black')
+                ui.setFlipOverride(ui.playMode === 'sparring' ? side === 'red' : side === 'black')
               }}
               onImportFen={setup.importFen}
               onStartGame={() => {
-                ui.setFlipped(setup.engineSide === 'black')
+                ui.setFlipOverride(ui.playMode === 'sparring' ? setup.engineSide === 'red' : setup.engineSide === 'black')
                 void setup.startGame()
               }}
               onExitSetup={setup.exit}
@@ -398,17 +338,7 @@ function AppContent() {
           )}
         </div>
 
-        <aside
-          className={`rail rail-right${ui.railR ? ' is-open' : ''}`}
-          aria-label="分析与棋谱"
-          aria-hidden={!ui.railR}
-          {...(ui.railR ? {} : { inert: '' })}
-        >
-          <AnalysisPanel />
-          <MoveList />
-          <MistakeBook />
-          <GameShelf />
-        </aside>
+        <RightRail open={ui.railR} />
       </main>
 
       <ReplayDesk />

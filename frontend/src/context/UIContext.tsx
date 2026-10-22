@@ -35,6 +35,9 @@ export interface UIContextType {
   flipping: boolean
   turnBoard: () => void
   setFlipped: (v: boolean) => void
+  setFlipOverride: (v: boolean) => void
+  liveHelper: string | null
+  setLiveHelper: (v: string | null) => void
   railL: boolean
   toggleRailL: () => void
   setRailL: Dispatch<SetStateAction<boolean>>
@@ -43,17 +46,21 @@ export interface UIContextType {
   setRailR: Dispatch<SetStateAction<boolean>>
   playMode: 'sparring' | 'relay'
   togglePlayMode: () => void
+  coachGuard: boolean
+  toggleCoachGuard: () => void
+  setCoachGuard: (v: boolean) => void
   shadowGuess: boolean
   toggleShadowGuess: () => void
   help: boolean
   setHelp: (v: boolean) => void
   replay: ReplaySeed | null
-  openReplay: (gameId: string) => void
+  openReplay: (gameId: string, ply?: number | null) => void
   openReplayAt: (gameId: string, ply: number | null) => void
   closeReplay: () => void
   drillOpen: boolean
   drillPuzzleId: string | null
-  openDrillAt: (puzzleId?: string) => void
+  drillGameId: string | null
+  openDrillAt: (puzzleId?: string, gameId?: string) => void
   closeDrill: () => void
   liveClues: VisualClues | null
   setLiveClues: (clues: VisualClues | null) => void
@@ -85,6 +92,50 @@ export function UIProvider({ children }: { children: ReactNode }) {
     return (localStorage.getItem('ef.play_mode') as 'sparring' | 'relay') || 'sparring'
   })
   const [shadowGuess, setShadowGuess] = useState(() => localStorage.getItem('ef.shadow_guess') === '1')
+  const [liveHelper, setLiveHelper] = useState<string | null>(null)
+
+  // 师傅扶手走错失误点拨：按模式独立记忆（实战默认开启，转述默认静默关闭）
+  const [coachGuardSparring, setCoachGuardSparring] = useState(() => {
+    return localStorage.getItem('ef.coach_guard.sparring') !== '0'
+  })
+  const [coachGuardRelay, setCoachGuardRelay] = useState(() => {
+    return localStorage.getItem('ef.coach_guard.relay') === '1'
+  })
+
+  const coachGuard = playMode === 'sparring' ? coachGuardSparring : coachGuardRelay
+
+  const toggleCoachGuard = useCallback(() => {
+    if (playMode === 'sparring') {
+      setCoachGuardSparring((prev) => {
+        const next = !prev
+        localStorage.setItem('ef.coach_guard.sparring', next ? '1' : '0')
+        void g.updateSettings({ coach_guard: next } as any)
+        g.pushToast(next ? '实战失误点拨已开启' : '实战失误点拨已静默', 'info')
+        return next
+      })
+    } else {
+      setCoachGuardRelay((prev) => {
+        const next = !prev
+        localStorage.setItem('ef.coach_guard.relay', next ? '1' : '0')
+        g.pushToast(next ? '转述失误点拨已开启' : '转述失误点拨已静默（沉浸记录）', 'info')
+        return next
+      })
+    }
+  }, [playMode, g])
+
+  const setCoachGuard = useCallback(
+    (v: boolean) => {
+      if (playMode === 'sparring') {
+        setCoachGuardSparring(v)
+        localStorage.setItem('ef.coach_guard.sparring', v ? '1' : '0')
+        void g.updateSettings({ coach_guard: v } as any)
+      } else {
+        setCoachGuardRelay(v)
+        localStorage.setItem('ef.coach_guard.relay', v ? '1' : '0')
+      }
+    },
+    [playMode, g],
+  )
 
   const togglePlayMode = useCallback(() => {
     setPlayMode((curr) => {
@@ -130,7 +181,10 @@ export function UIProvider({ children }: { children: ReactNode }) {
   }, [g])
 
   const [replay, setReplay] = useState<ReplaySeed | null>(null)
-  const openReplay = useCallback((gameId: string) => setReplay({ gameId, focusPly: null }), [])
+  const openReplay = useCallback(
+    (gameId: string, ply?: number | null) => setReplay({ gameId, focusPly: ply ?? null }),
+    [],
+  )
   const openReplayAt = useCallback(
     (gameId: string, ply: number | null) => setReplay({ gameId, focusPly: ply }),
     [],
@@ -139,13 +193,16 @@ export function UIProvider({ children }: { children: ReactNode }) {
 
   const [drillOpen, setDrillOpen] = useState(false)
   const [drillPuzzleId, setDrillPuzzleId] = useState<string | null>(null)
-  const openDrillAt = useCallback((puzzleId?: string) => {
+  const [drillGameId, setDrillGameId] = useState<string | null>(null)
+  const openDrillAt = useCallback((puzzleId?: string, gameId?: string) => {
     setDrillPuzzleId(puzzleId ?? null)
+    setDrillGameId(gameId ?? null)
     setDrillOpen(true)
   }, [])
   const closeDrill = useCallback(() => {
     setDrillOpen(false)
     setDrillPuzzleId(null)
+    setDrillGameId(null)
   }, [])
 
   const [liveClues, setLiveClues] = useState<VisualClues | null>(null)
@@ -169,7 +226,12 @@ export function UIProvider({ children }: { children: ReactNode }) {
   )
 
   const [railL, setRailL] = useState(() => localStorage.getItem(LS_RAIL_L) === '1')
-  const [railR, setRailR] = useState(() => localStorage.getItem(LS_RAIL_R) !== '0')
+  const [railR, setRailR] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1140) {
+      return false
+    }
+    return localStorage.getItem(LS_RAIL_R) !== '0'
+  })
 
   const toggleRailL = useCallback(() => setRailL((v) => !v), [])
   const toggleRailR = useCallback(() => setRailR((v) => !v), [])
@@ -255,6 +317,9 @@ export function UIProvider({ children }: { children: ReactNode }) {
         flipping,
         turnBoard,
         setFlipped,
+        setFlipOverride: setFlipped,
+        liveHelper,
+        setLiveHelper,
         railL,
         toggleRailL,
         setRailL,
@@ -263,6 +328,9 @@ export function UIProvider({ children }: { children: ReactNode }) {
         setRailR,
         playMode,
         togglePlayMode,
+        coachGuard,
+        toggleCoachGuard,
+        setCoachGuard,
         shadowGuess,
         toggleShadowGuess,
         help,
@@ -273,6 +341,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
         closeReplay,
         drillOpen,
         drillPuzzleId,
+        drillGameId,
         openDrillAt,
         closeDrill,
         liveClues,

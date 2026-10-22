@@ -79,6 +79,7 @@ export interface LastMove {
 }
 
 export interface GameSnapshot {
+  game_id?: string
   board: string
   pieces: PieceInfo[]
   turn: Side
@@ -206,6 +207,7 @@ export interface VisualClues {
   weakness_squares?: string[]
   key_pieces?: string[]
   route?: string[]
+  best_move?: string
 }
 
 export interface MotifTag {
@@ -216,6 +218,7 @@ export interface MotifTag {
 
 export interface MoveTactics {
   primary_motif: string
+  motif?: string
   motif_label: string
   motifs: MotifTag[]
   severity: 'good' | 'minor' | 'warn' | 'critical'
@@ -223,6 +226,8 @@ export interface MoveTactics {
   visual_clues?: VisualClues
   punish_move?: PvStep | null
 }
+
+export type TacticsMotif = MoveTactics
 
 /** 「哪一局的哪一个局面」：判分要挂回去的那把键。 */
 export interface AnalysisSubject {
@@ -255,6 +260,8 @@ export interface SearchProgress {
   pv: string[]
   pv_detail?: PvStep[]
 }
+
+export type ProgressSnapshot = SearchProgress
 
 export interface SearchResult {
   status: string
@@ -589,6 +596,75 @@ export interface PuzzleCategory {
   icon: string
 }
 
+export interface XiangqiXRay {
+  cannon_mounts?: Array<{
+    cannon_square: string
+    mount_square: string
+    target_square: string
+    is_check: boolean
+    mount_piece: string
+    target_piece: string
+    side: Side
+  }>
+  blocked_legs?: Array<{
+    piece_square: string
+    leg_square: string
+    target_square?: string
+    kind: 'knight' | 'elephant'
+    label: string
+  }>
+  hanging_badges?: Array<{
+    square: string
+    piece: string
+    side: Side
+    label: string
+  }>
+}
+
+export interface KeySquareInfo {
+  dest_square: string
+  zone_name: string
+  role_summary: string
+  why_key: string
+  tactical_tags: string[]
+  controlled_targets: string[]
+  protected_targets: string[]
+  blocked_threats: string[]
+}
+
+export interface ChoiceOption {
+  id: string
+  label: 'A' | 'B' | 'C'
+  iccs: string
+  chinese: string
+  is_correct: boolean
+  teaser: string
+  verdict_tag: string
+  steps: AnimatedStep[]
+  key_square_info?: KeySquareInfo | null
+}
+
+export interface RadarMetrics {
+  enemy_king_danger: {
+    wrong_pct: number
+    best_pct: number
+    wrong_text: string
+    best_text: string
+  }
+  material_score: {
+    wrong_pct: number
+    best_pct: number
+    wrong_text: string
+    best_text: string
+  }
+  initiative_score: {
+    wrong_pct: number
+    best_pct: number
+    wrong_text: string
+    best_text: string
+  }
+}
+
 export interface AnimatedStep {
   step: number
   move: string
@@ -599,10 +675,24 @@ export interface AnimatedStep {
   tag?: string
   plain: string
   comment: string
+  short_bubble?: string
   captured?: string | null
   gains?: string[]
   losses?: string[]
   threat_squares?: string[]
+  key_square_info?: KeySquareInfo | null
+}
+
+export interface OpponentThreatInfo {
+  has_threat: boolean
+  is_substantial: boolean
+  headline: string
+  intent_desc: string
+  target_move: string
+  target_chinese: string
+  route: string[]
+  threat_squares: string[]
+  steps: AnimatedStep[]
 }
 
 export interface ProsConsAnalysis {
@@ -619,6 +709,8 @@ export interface ProsConsAnalysis {
   wrong_summary: string
   wrong_losses: string[]
   best_gains: string[]
+  key_square_info?: KeySquareInfo | null
+  radar_metrics?: RadarMetrics
 }
 
 export interface ThinkingGuide {
@@ -635,6 +727,8 @@ export interface TrainingPuzzle {
   id: string
   title: string
   plain_subtitle?: string
+  motif?: string
+  motif_label?: string
   plain_motif_label?: string
   category: string
   difficulty: number
@@ -642,6 +736,12 @@ export interface TrainingPuzzle {
   target: string
   goal_type?: 'checkmate' | 'win_material' | 'win_advantage'
   fen: string
+  game_id?: string
+  ply?: number | null
+  phase_name?: string
+  best_iccs?: string
+  wrong_iccs?: string
+  key_square_info?: KeySquareInfo | null
   master_quote?: string
   demo_line?: Array<{ move: string; chinese: string; comment: string }>
   refute_line?: Array<{ move: string; iccs?: string; chinese: string; comment: string }>
@@ -658,6 +758,45 @@ export interface TrainingPuzzle {
   hints_used: number
   first_try_pass: boolean
   last_cleared_at: number | null
+}
+
+export interface GameBreakdownTurningPoint {
+  ply: number
+  phase: 'opening' | 'midgame' | 'endgame'
+  phase_name: string
+  side: Side
+  played_iccs: string
+  played_chinese: string
+  best_iccs: string
+  best_chinese: string
+  loss: number
+  loss_pawn: number
+  loss_kind?: LossKind
+  rank: number | null
+  motif: string
+  motif_label: string
+  severity: 'critical' | 'warn' | 'minor'
+  coach_summary: string
+  key_square_info?: KeySquareInfo | null
+  fen_before: string
+  puzzle_id: string
+}
+
+export interface GameBreakdownReply extends ApiReply {
+  game_id: string
+  engine_side: Side
+  ply_count: number
+  winner: Side | null
+  outcome: 'wins' | 'losses' | 'draws' | null
+  reason: string
+  phases: {
+    opening: { name: string; graded_count: number; misses_count: number; accuracy: number; verdict: string }
+    midgame: { name: string; graded_count: number; misses_count: number; accuracy: number; verdict: string }
+    endgame: { name: string; graded_count: number; misses_count: number; accuracy: number; verdict: string }
+  }
+  turning_points: GameBreakdownTurningPoint[]
+  critical_turning_point: GameBreakdownTurningPoint | null
+  puzzles: TrainingPuzzle[]
 }
 
 export interface TrainingSummary {
@@ -685,7 +824,7 @@ export interface TrainingStartReply {
   base_game?: GameSnapshot
   hints_used: number
   solved: boolean
-  stage?: 'demo' | 'drill' | 'exam'
+  stage?: 'demo' | 'drill' | 'exam' | 'mirror'
   in_rebuttal?: boolean
   master_quote?: string
   demo_line?: Array<{ move: string; chinese: string; comment: string }>
@@ -698,8 +837,11 @@ export interface TrainingStartReply {
   good_steps?: AnimatedStep[]
   default_bad_steps?: AnimatedStep[]
   opponent_threat_steps?: AnimatedStep[]
+  opponent_threat?: OpponentThreatInfo
   pros_cons?: ProsConsAnalysis
   thinking_guide?: ThinkingGuide
+  choice_options?: ChoiceOption[]
+  xray?: XiangqiXRay
 }
 
 export interface TrainingStepReply {
@@ -718,6 +860,8 @@ export interface TrainingStepReply {
   good_steps?: AnimatedStep[]
   pros_cons?: ProsConsAnalysis
   thinking_guide?: ThinkingGuide
+  choice_options?: ChoiceOption[]
+  xray?: XiangqiXRay
   punish_detail?: {
     comment: string
     wrong_move: string
@@ -727,6 +871,8 @@ export interface TrainingStepReply {
     good_steps?: AnimatedStep[]
     pros_cons?: ProsConsAnalysis
     thinking_guide?: ThinkingGuide
+    choice_options?: ChoiceOption[]
+    xray?: XiangqiXRay
   }
 }
 
@@ -751,8 +897,14 @@ export interface SandboxReply {
   bad_steps?: AnimatedStep[]
   good_steps?: AnimatedStep[]
   opponent_threat_steps?: AnimatedStep[]
+  opponent_threat?: OpponentThreatInfo
   pros_cons?: ProsConsAnalysis
   thinking_guide?: ThinkingGuide
+  choice_options?: ChoiceOption[]
+  xray?: XiangqiXRay
 }
+
+export type DrillPuzzleDetailReply = TrainingStartReply
+export type PreviewReply = SandboxReply
 
 

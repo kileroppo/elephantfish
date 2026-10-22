@@ -207,7 +207,10 @@ GET_ROUTES = {
 QUERY_ROUTES = {
     '/api/games': _games,
     '/api/game': _game,
-    '/api/training/puzzles': lambda q: TRAINING.list_puzzles_reply(category=q.get('category')),
+    '/api/training/puzzles': lambda q: TRAINING.list_puzzles_reply(
+        category=q.get('category'), motif=q.get('motif'), game_id=q.get('game_id')
+    ),
+    '/api/training/game-breakdown': TRAINING.game_breakdown_reply,
     '/api/sandbox': TRAINING.sandbox_reply,
     '/api/preview': TRAINING.preview_reply,
 }

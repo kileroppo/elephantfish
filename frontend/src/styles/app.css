@@ -94,31 +94,29 @@ kbd {
 }
 
 .workspace {
-  /* 侧栏宽度与栏缝。栏缝折进栏轨里（栏自己带 margin），
-     这样收起时栏轨能真正缩到 0，不会在棋盘两边各留一道 16px 的空缝。 */
+  /* 侧栏宽度与栏缝。桌面两栏书页黄金排版，屏幕中央优雅居中 */
   --rail-l: 262px;
-  --rail-r: 336px;
-  --rail-gap: 16px;
-  /* 抽屉曲线：起步快、收尾很长很软，像拉开一只木抽屉 */
-  --drawer: 420ms cubic-bezier(0.32, 0.72, 0, 1);
+  --rail-r: 360px;
+  --rail-gap: 20px;
+  /* 抽屉曲线：利落轻盈的东方极简交互 */
+  --drawer: 320ms cubic-bezier(0.32, 0.72, 0, 1);
   flex: 1;
   min-height: 0;
   display: grid;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
   grid-template-columns:
     calc(var(--rail-l) + var(--rail-gap))
     minmax(0, 1fr)
     calc(var(--rail-r) + var(--rail-gap));
   column-gap: 0;
-  padding: 0 18px 18px;
-  /* 栏轨数目恒为 3，浏览器才能逐轨插值 —— 所以侧栏常驻挂载，只把宽度收到 0。
-     这条过渡动的是布局属性（420ms，每帧重排整块工作区），按老规矩本该换成
-     transform。之所以留着：它是**离散交互**（点一下栏把手），不在落子路径上；
-     而换成 transform 就得改掉「三栏网格」这个布局模型本身（侧栏得变成浮层、
-     棋盘宽度也不再跟着变），改动面远大于收益。这里记一笔，不是漏了。 */
+  padding: 8px 24px 18px;
   transition: grid-template-columns var(--drawer);
 }
 
-/* 专注模式：栏收起时对应栏轨缩到 0。两个类名把特异度抬过 1320px 断点。 */
+/* 核心对弈主态：左侧设置栏收起，棋盘与右侧分析棋谱组成两栏书页黄金视觉 */
 .workspace.no-left {
   grid-template-columns: 0px minmax(0, 1fr) calc(var(--rail-r) + var(--rail-gap));
 }
@@ -129,10 +127,20 @@ kbd {
 
 .workspace.no-left.no-right {
   grid-template-columns: 0px minmax(0, 1fr) 0px;
+  max-width: 960px;
 }
 
 /* 栏把手：收起时贴在屏幕边缘，竖排两个字；展开时跟着抽屉滑到栏缝正中，
    变成一枚完整的小签。它不该有存在感 —— 只有需要它的人找过去时才刚好在那儿。 */
+/* 桌面两栏书页模式下，右侧栏常驻呈现，彻底隐藏悬浮在半空的抽屉耳片，消除对主变列表的遮挡 */
+@media (min-width: 1141px) {
+  .rail-tab,
+  .rail-tab-left,
+  .rail-tab-right {
+    display: none !important;
+  }
+}
+
 .rail-tab {
   position: fixed;
   top: 50%;
@@ -312,10 +320,26 @@ kbd {
 .stage {
   display: flex;
   flex-direction: column;
+  align-items: center;
   /* 净距不能小于棋盘垫的探出量，否则垫子会把回合条下半截盖掉 ——
      原委见 tokens.css 的 --board-clearance。 */
   gap: var(--board-clearance);
   min-height: 0;
+  width: 100%;
+}
+
+/* 棋盘立柱黄金对齐：上方状态、棋盘本体、下方操作 Dock 最大宽度锁定一致 */
+.stage-head,
+.stage > .relay-compact,
+.stage > .setup-panel {
+  width: 100%;
+  max-width: min(calc((100vh - 180px) * 720 / 800), 660px);
+  box-sizing: border-box;
+}
+
+.stage > .board-wrap {
+  width: 100%;
+  max-width: min(calc((100vh - 180px) * 720 / 800), 660px);
 }
 
 /* ==========================================================================
@@ -372,198 +396,122 @@ kbd {
   letter-spacing: 0.08em;
 }
 
+.topbar-setting {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.setting-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.setting-link:hover {
+  color: var(--ink-0);
+  background: var(--paper-2);
+  border-color: var(--hairline);
+}
+
+.setting-dot {
+  color: var(--ink-4);
+  font-size: 12px;
+  user-select: none;
+}
+
 /* ==========================================================================
    精简应手台 (Relay Compact)
    ========================================================================== */
 
 .relay-compact {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.engine-hero {
-  border-radius: var(--r-lg);
-  border: 1px solid var(--hairline);
-  background: linear-gradient(180deg, var(--paper-0), var(--paper-1));
-  box-shadow: var(--shadow-panel);
-  padding: 12px 18px;
-  min-height: 76px;
+  position: relative;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 思考一开，底色与描边要「染」过去，不是「跳」过去 ——
-     状态切换本身是界面在应答，不该是硬切 */
-  transition: background-color var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out);
+  margin: 6px auto 0;
+  width: 100%;
+  max-width: min(100%, 720px);
+  box-sizing: border-box;
 }
 
-/* 应手区三态（等待 / 思考 / 应手）互换时的入场。这条链是
-   「你录了 → 它在算 → 它给了」的应答，入场就是它自己的反馈：
-   200ms 淡入带一点上浮，只播一次、不循环 —— 「思考期间全站停摆」
-   管的是自己会动的东西（呼吸、旋转、数值滑动），不是状态换的那一帧。 */
-.hero-thinking,
-.hero-content,
-.hero-idle {
-  animation: heroSwap 200ms var(--ease-out) both;
+
+
+/* 浮层面板：算路动画 / 失误卡片 / 键盘录入 / 排队（绝对定位，绝不挤压或改变主舞台棋盘高度） */
+.relay-compact .live-helper-drawer {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(92vw, 680px);
+  max-height: min(65vh, 460px);
+  overflow-y: auto;
+  z-index: 50;
+  background: var(--paper-0);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  padding: 12px 16px;
+  margin: 0;
+  animation: floatIn 180ms var(--ease-out) both;
 }
 
-@keyframes heroSwap {
+/* .relay-compact .coach-interrupt-card 已重构为左下角独立悬浮卡片，不再绝对定位于棋盘之上 */
+
+.relay-compact .queued-strip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  white-space: nowrap;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--hairline-strong);
+  animation: floatIn 180ms var(--ease-out) both;
+}
+
+.relay-compact .type-inline-floating {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  background: var(--paper-0);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  padding: 6px 10px;
+  width: min(92vw, 420px);
+  animation: floatIn 180ms var(--ease-out) both;
+}
+
+@keyframes floatIn {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
   }
 }
 
-.engine-hero.is-thinking {
-  border-color: var(--cinnabar-edge);
-  background: var(--cinnabar-wash);
-}
 
-.hero-thinking {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.hero-think-seal {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background: var(--cinnabar);
-  color: #fff8f2;
-  font-family: var(--font-kai);
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: calc(1px * var(--light-x)) 1px 4px rgba(180, 50, 42, 0.4);
-}
-
-.btn-kbd {
-  margin-left: 6px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--paper-2);
-  border: 1px solid var(--hairline-strong);
-  font-size: 10px;
-  color: var(--ink-3);
-}
-
-.hero-thinking .spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid var(--cinnabar);
-  border-top-color: transparent;
-  animation: spin 0.75s linear infinite;
-}
-
-.thinking-title {
-  font-size: 13.5px;
-  color: var(--cinnabar);
-  font-weight: 500;
-}
-
-.hero-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.hero-label {
-  font-size: 12px;
-  color: var(--ink-mute);
-  letter-spacing: 0.05em;
-}
-
-.hero-action-card {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 14px;
-  border-radius: var(--r-md);
-  border: 1.5px solid var(--cinnabar-edge);
-  background: var(--paper-0);
-  cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
-  animation: stampIn 260ms var(--ease-spring) both;
-}
-
-.hero-action-card:hover {
-  border-color: var(--cinnabar);
-  transform: translateY(-1px);
-  box-shadow: calc(4px * var(--light-x)) 4px 14px rgba(180, 50, 42, 0.22);
-}
-
-.hero-action-card.is-copied {
-  border-color: var(--jade);
-  background: var(--jade-wash);
-}
-
-.hero-move-cn {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--cinnabar);
-  letter-spacing: 0.1em;
-  white-space: nowrap;
-  transition: color var(--dur-fast) var(--ease-out);
-}
-
-.hero-action-card.is-copied .hero-move-cn {
-  color: var(--jade);
-}
-
-.hero-move-iccs {
-  font-family: var(--font-num);
-  font-size: 13px;
-  color: var(--ink-mute);
-  background: var(--paper-2);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.hero-copy-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--ink-2);
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--paper-2);
-  transition: background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
-}
-
-.hero-copy-icon {
-  flex-shrink: 0;
-}
-
-.hero-action-card.is-copied .hero-copy-pill {
-  background: var(--jade);
-  color: #fff8f2;
-}
-
-.hero-meta {
-  font-size: 11.5px;
-  color: var(--ink-mute);
-  animation: fadeIn 220ms var(--ease-out) both;
-}
-
-.hero-idle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--ink-mute);
-  font-size: 13px;
-}
 
 .queued-strip {
   display: flex;
@@ -2469,65 +2417,56 @@ kbd {
   }
 }
 
-/* ---- 移动轨迹（墨痕）----
-   棋子走过之后留在棋盘上的一抹气息。
-   起粗终细模拟笔锋，700ms 内像墨迹干透一样淡没。 */
+/* ---- 移动轨迹（行棋直线 · 走完淡隐消失）----
+   走棋时起点到落点之间的直线，仅在起点与落点之间。
+   走子时显示，走完落子后自动淡出消失（650ms），盘面清爽不残留。 */
 
-.move-trail {
+.board-trajectories-layer {
   position: absolute;
-  height: calc(var(--u) * 3.5px);
-  border-radius: calc(var(--u) * 2px);
-  transform-origin: 0% 50%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  z-index: 14;
-
-  /* 笔锋：起浓终淡 */
-  background: linear-gradient(
-    90deg,
-    var(--trail-color) 0%,
-    var(--trail-color-fade) 70%,
-    transparent 100%
-  );
-
-  /* 起粗终细的锥形蒙版 */
-  -webkit-mask-image: linear-gradient(
-    90deg,
-    black 0%,
-    rgba(0, 0, 0, 0.6) 55%,
-    rgba(0, 0, 0, 0.12) 100%
-  );
-  mask-image: linear-gradient(
-    90deg,
-    black 0%,
-    rgba(0, 0, 0, 0.6) 55%,
-    rgba(0, 0, 0, 0.12) 100%
-  );
-
-  animation: trailFade 700ms var(--ease-out) both;
+  z-index: 13;
 }
 
-.move-trail-red {
-  --trail-color: var(--trail-red);
-  --trail-color-fade: var(--trail-red-fade);
+.move-line-group {
+  animation: moveLineFade 650ms var(--ease-out) forwards;
 }
 
-.move-trail-black {
-  --trail-color: var(--trail-black);
-  --trail-color-fade: var(--trail-black-fade);
+.move-line-path {
+  stroke-linecap: round;
 }
 
-@keyframes trailFade {
-  0%   { opacity: 0; }
-  9%   { opacity: 1; }     /* ~60ms: 棋子刚起步，痕迹先行显现 */
-  34%  { opacity: 1; }     /* ~240ms: 维持到棋子落地 */
-  100% { opacity: 0; }     /* 墨迹干透 */
+.pv-arc-group {
+  animation: fadeIn 300ms var(--ease-out) both;
 }
 
-/* 减弱动画偏好：直接不画 */
+@keyframes moveLineFade {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.92;
+  }
+  45% {
+    opacity: 0.92;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* 减弱动画偏好 */
 @media (prefers-reduced-motion: reduce) {
-  .move-trail {
-    animation: none;
-    display: none;
+  .move-arc-group,
+  .move-arc-path,
+  .move-arc-arrow,
+  .move-arc-bead {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+    opacity: 1 !important;
   }
 }
 
@@ -3496,8 +3435,8 @@ kbd {
    ========================================================================== */
 
 .movelist {
-  flex: 1;
-  min-height: 180px;
+  flex: 0 0 auto;
+  max-height: 220px;
   display: flex;
   flex-direction: column;
 }
@@ -3505,6 +3444,7 @@ kbd {
 .move-scroll {
   flex: 1;
   min-height: 0;
+  max-height: 156px;
   overflow-y: auto;
   margin: 0 -6px;
   padding: 0 6px;
@@ -3551,7 +3491,12 @@ kbd {
   padding: 4px 8px;
   border-radius: var(--r-sm);
   font-size: 12.5px;
+  cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out);
+}
+
+.move-cell:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
 }
 
 .move-cell.is-last {
@@ -3998,15 +3943,18 @@ kbd {
 
 .toast-stack {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  right: auto;
+  bottom: auto;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
-  z-index: 200;
+  z-index: 220;
   pointer-events: none;
-  max-width: min(420px, calc(100vw - 40px));
+  max-width: min(460px, calc(100vw - 40px));
 }
 
 .toast {
@@ -4270,6 +4218,7 @@ kbd {
   width: 100%;
   max-height: 100%;
   aspect-ratio: 720 / 800;
+  padding-bottom: 6px;
 }
 
 .replay-ctrl {
@@ -4277,7 +4226,9 @@ kbd {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 20px;
+  position: relative;
+  z-index: 10;
 }
 
 .replay-at {
@@ -4346,6 +4297,93 @@ kbd {
 
 .replay-why {
   flex: 0 0 auto;
+}
+
+/* 全局胜势曲线波形图（Eval Trend Scrubber） */
+.replay-eval-chart {
+  display: flex;
+  align-items: stretch;
+  height: 48px;
+  background: var(--paper-2, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 2px 6px;
+  margin: 6px 0 10px 0;
+  position: relative;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.replay-eval-chart::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--hairline-strong);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.eval-bar-col {
+  flex: 1 1 0;
+  min-width: 8px;
+  max-width: 22px;
+  height: 100%;
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+
+.eval-bar-col:hover {
+  opacity: 0.85;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.eval-bar-track {
+  width: 4px;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.eval-bar-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 1px;
+  z-index: 2;
+}
+
+.eval-bar-fill.is-red {
+  background: var(--piece-red, #b8332a);
+}
+
+.eval-bar-fill.is-black {
+  background: var(--piece-black, #2b231a);
+}
+
+.eval-bar-col.is-blunder .eval-bar-fill {
+  background: #f59e0b;
+  box-shadow: 0 0 3px #f59e0b;
+}
+
+.eval-bar-col.is-selected .eval-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--cinnabar);
+  z-index: 3;
 }
 
 /* 棋谱条：一行一手，整行可点。它自己滚，但**不霸占**右栏剩下的空间 ——
@@ -4508,7 +4546,13 @@ kbd {
 
 @media (max-width: 1320px) {
   .workspace {
-    grid-template-columns: 236px minmax(0, 1fr) 300px;
+    --rail-l: 236px;
+    --rail-r: 320px;
+    --rail-gap: 16px;
+    padding: 8px 16px 16px;
+  }
+  .workspace.no-left {
+    grid-template-columns: 0px minmax(0, 1fr) calc(var(--rail-r) + var(--rail-gap));
   }
 }
 
@@ -4529,7 +4573,7 @@ kbd {
   .workspace.no-right,
   .workspace.no-left.no-right {
     grid-template-columns: minmax(0, 1fr);
-    padding-bottom: 32px;
+    padding-bottom: 64px;
   }
 
   /* 顶栏在窄屏不需要换布局：.topbar 是 flex，写 grid-template-columns
@@ -4592,46 +4636,72 @@ kbd {
     order: 5;
   }
 
+  /* 窄屏下侧栏全宽拉伸，面板自适应容器宽度，消灭卡片定宽334px靠右与留白 */
+  .rail-right,
+  .rail-left {
+    align-items: stretch !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .rail-right > *,
+  .rail-left > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex-shrink: 1 !important;
+    transform: none !important;
+  }
+
   .stage .board {
     height: auto;
     width: min(100%, 520px);
     margin: 0 auto;
   }
 
-
-
-
+  /* 窄屏下侧边拉手彻底隐藏，由底栏设置/棋谱按键统一接管，绝不在半空打乱排版 */
+  .rail-tab,
+  .rail-tab-left,
+  .rail-tab-right {
+    display: none !important;
+  }
 }
 
 @media (max-width: 720px) {
   .workspace {
     padding-left: 10px;
     padding-right: 10px;
-    padding-bottom: 56px;
+    padding-bottom: 72px;
   }
 
-  /* 顶栏紧凑双行布局：高度从 100px+ 压缩至 64px 左右，为棋盘腾出宝贵首屏空间 */
+  .app-shell {
+    padding-bottom: 72px;
+  }
+
+  /* 顶栏紧凑单行自适应：高度压缩至 48px，为手机棋盘腾出宝贵首屏纵向空间 */
   .topbar {
-    padding: 8px 12px 6px;
-    flex-wrap: wrap;
-    row-gap: 6px;
+    padding: 6px 12px;
+    min-height: 48px;
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: center;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .topbar::-webkit-scrollbar {
+    display: none;
   }
 
   .brand {
-    flex: 1 1 100%;
+    flex: none;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 4px;
-  }
-
-  .brand-mark svg {
-    width: 24px;
-    height: 24px;
+    gap: 6px;
   }
 
   .brand-text h1 {
-    font-size: 15px;
+    font-size: 14.5px;
     letter-spacing: 0.05em;
     line-height: 1;
     margin: 0;
@@ -4641,32 +4711,48 @@ kbd {
     display: none;
   }
 
-  .engine-badge,
-  .engine-side-badge {
-    min-height: 32px;
-    height: 32px;
-    padding: 2px 8px;
-    font-size: 11.5px;
-    gap: 4px;
-    margin-left: 0;
+  .topbar-setting {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 4px;
+    border-left: 1px solid var(--hairline);
+    font-size: 11px;
+  }
+
+  .setting-link {
+    min-height: 28px;
+    height: 28px;
+    padding: 0 4px;
+    font-size: 11px;
     flex-shrink: 0;
   }
 
-  .engine-side-disc {
-    width: 16px;
-    height: 16px;
-    font-size: 10px;
-  }
-
-  /* 第二行功能操作条：整齐居中分布，图标+文字精致呈现 */
   .topbar-actions {
-    flex: 1 1 100%;
+    flex: none;
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 4px;
-    padding-top: 4px;
-    border-top: 1px solid rgba(43, 35, 26, 0.06);
+    padding-top: 0;
+    border-top: 0;
+    margin-left: auto;
+  }
+
+  .mode-segmented button {
+    height: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .tools-group {
+    padding-left: 4px;
+  }
+
+  .tools-group button {
+    height: 26px;
+    padding: 0 6px;
+    font-size: 11px;
   }
 
   .icon-btn {
@@ -4702,7 +4788,7 @@ kbd {
 
   /* 棋盘：自适应宽度 + 屏幕高度保护，确保首屏完整看全棋盘与底线落子 */
   .stage .board {
-    width: min(100%, calc((100dvh - 210px) * 720 / 800), 480px);
+    width: min(100%, calc((100dvh - 230px) * 720 / 800), 480px);
     height: auto;
     margin: 0 auto;
   }
@@ -4713,98 +4799,22 @@ kbd {
     border-radius: 20px;
   }
 
-  /* 核心应手区重构：彻底解决「马四进六」竖向挤压折行与多列混乱的难看排版 */
-  .engine-hero {
-    padding: 8px 12px;
-    min-height: 60px;
-    border-radius: var(--r-md);
+  /* 胶囊条在移动端自适应双行工具栏高度 */
+  .stage > .relay-compact,
+  .relay-compact {
+    height: auto;
+    min-height: 38px;
+    max-height: none;
+    margin: 8px auto 0;
+    position: relative;
+    z-index: 30;
   }
 
-  .hero-content {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto;
-    align-items: center;
-    gap: 6px 10px;
-    width: 100%;
-  }
 
-  .hero-label {
-    grid-column: 1 / 2;
-    grid-row: 1 / 2;
-    justify-self: start;
-    font-size: 11.5px;
-    color: var(--ink-mute);
-    line-height: 1.2;
-  }
 
-  .hero-meta {
-    grid-column: 2 / 3;
-    grid-row: 1 / 2;
-    justify-self: end;
-    text-align: right;
-    font-size: 11px;
-    color: var(--ink-3);
-    line-height: 1.2;
-    white-space: nowrap;
-  }
 
-  .hero-action-card {
-    grid-column: 1 / 3;
-    grid-row: 2 / 3;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    padding: 6px 14px;
-    min-height: 40px;
-    gap: 10px;
-    border-radius: var(--r-md);
-    box-sizing: border-box;
-  }
 
-  .hero-move-cn {
-    font-size: 21px;
-    line-height: 1;
-    letter-spacing: 0.12em;
-    white-space: nowrap;
-  }
 
-  .hero-move-iccs {
-    font-size: 12px;
-    padding: 2px 6px;
-    white-space: nowrap;
-  }
-
-  .hero-copy-pill {
-    font-size: 11px;
-    padding: 2px 8px;
-    height: 22px;
-    white-space: nowrap;
-  }
-
-  .hero-thinking {
-    flex-wrap: wrap;
-    justify-content: center;
-    text-align: center;
-    gap: 8px 10px;
-  }
-
-  .hero-thinking .btn-kbd {
-    display: none; /* 移动触屏隐藏物理 Space 键 */
-  }
-
-  .thinking-title {
-    font-size: 12.5px;
-  }
-
-  .hero-idle {
-    justify-content: center;
-    text-align: center;
-    font-size: 12px;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
 
   /* 文本录入栏紧凑化 */
   .type-toggle-btn {
@@ -4831,37 +4841,9 @@ kbd {
     font-size: 12px;
   }
 
-  /* 侧栏把手耳片：半透明药丸胶囊，贴底安全区，不遮挡棋盘落子 */
+  /* 侧栏把手耳片：半透明药丸胶囊，贴底安全区，不遮挡棋盘落子与标题 */
   .rail-tab {
-    top: auto;
-    bottom: max(10px, env(safe-area-inset-bottom));
-    transform: none;
-    writing-mode: horizontal-tb;
-    letter-spacing: 0.15em;
-    height: 32px;
-    padding: 0 10px;
-    font-size: 11.5px;
-    background: rgba(253, 250, 244, 0.94);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: var(--shadow-float);
-    border: 1px solid var(--hairline-strong);
-    z-index: 60;
-  }
-
-  .rail-tab-left {
-    left: 10px;
-    border-radius: 999px;
-  }
-
-  .rail-tab-right {
-    right: 10px;
-    border-radius: 999px;
-  }
-
-  .rail-tab-left.is-open,
-  .rail-tab-right.is-open {
-    transform: none;
+    display: none !important;
   }
 
   .shortcuts {
@@ -5349,561 +5331,9 @@ kbd {
 }
 
 /* ==========================================================================
-   精训营（Drill Lab）专属样式
+   精训营（Drill Lab）专属样式 —— 已全面迁移至 Tailwind CSS 与 src/components/drill/
    ========================================================================== */
 
-.drill-veil {
-  background: rgba(22, 19, 15, 0.65);
-  backdrop-filter: blur(4px);
-  z-index: 300;
-  padding: 16px;
-}
-
-.drill-desk {
-  width: min(1140px, 96vw);
-  height: min(88vh, 840px);
-  max-height: calc(100vh - 32px);
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--paper-0, #fcfbf9);
-  border-radius: var(--radius-lg, 12px);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
-  border: 1px solid var(--hairline, rgba(0, 0, 0, 0.1));
-}
-
-.drill-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--hairline);
-  background: var(--paper-1, #f5f3ef);
-  flex-shrink: 0;
-}
-
-.drill-head-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.drill-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  background: var(--cinnabar, #c23531);
-  color: #fff;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-
-.drill-head-brand h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--ink-0, #222);
-}
-
-.drill-stats-pill {
-  font-size: 12px;
-  color: var(--ink-2, #666);
-  background: rgba(0, 0, 0, 0.04);
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--hairline);
-}
-
-.drill-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* 分类 Tab */
-.drill-categories-tab {
-  display: flex;
-  gap: 8px;
-  padding: 8px 20px;
-  background: var(--paper-2, #eeece6);
-  border-bottom: 1px solid var(--hairline);
-  overflow-x: auto;
-  flex-shrink: 0;
-}
-
-.drill-tab-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-  white-space: nowrap;
-}
-
-.drill-tab-item:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--ink-0);
-}
-
-.drill-tab-item.is-active {
-  background: var(--paper-0, #fff);
-  color: var(--cinnabar, #c23531);
-  font-weight: 700;
-  border-color: var(--hairline);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.drill-tab-count {
-  font-size: 11px;
-  opacity: 0.75;
-}
-
-/* 主体栅格 */
-.drill-body {
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1.22fr) minmax(340px, 1fr);
-  min-height: 0;
-  overflow: hidden;
-}
-
-.drill-board-column {
-  display: flex;
-  flex-direction: column;
-  padding: 12px 14px;
-  border-right: 1px solid var(--hairline);
-  background: var(--paper-0);
-  align-items: center;
-  justify-content: space-between;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.drill-board-wrap {
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  max-height: calc(100% - 44px);
-}
-
-.drill-loading-placeholder {
-  color: var(--ink-3);
-  font-size: 14px;
-}
-
-.drill-ctrl-bar {
-  display: flex;
-  gap: 8px;
-  padding-top: 8px;
-  width: 100%;
-  justify-content: center;
-}
-
-/* 右侧解题面板列 */
-.drill-panel-column {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  overflow-y: auto;
-  background: var(--paper-1);
-}
-
-.drill-puzzle-card {
-  padding: 12px 14px;
-  background: var(--paper-0);
-  border-radius: 8px;
-  border: 1px solid var(--hairline);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.drill-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.drill-puzzle-tag {
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  background: #2b5c8f;
-  padding: 2px 7px;
-  border-radius: 4px;
-}
-
-.drill-status-chip {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-weight: 600;
-}
-
-.drill-status-chip.status-mastered {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-
-.drill-status-chip.status-solved_with_hints {
-  background: #e3f2fd;
-  color: #1565c0;
-}
-
-.drill-status-chip.status-in_progress {
-  background: #fff3e0;
-  color: #e65100;
-}
-
-.drill-status-chip.status-unattempted {
-  background: #f5f5f5;
-  color: #757575;
-}
-
-.drill-puzzle-title {
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink-0);
-}
-
-.drill-puzzle-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 11.5px;
-  color: var(--ink-3);
-}
-
-/* 反馈战报条 */
-.drill-feedback-box {
-  padding: 12px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-  border: 1px solid transparent;
-}
-
-.drill-feedback-box.tone-info {
-  background: #eef5fc;
-  color: #1e4a77;
-  border-color: #c7def5;
-}
-
-.drill-feedback-box.tone-success {
-  background: #edf7ee;
-  color: #1e5c26;
-  border-color: #c0e5c5;
-}
-
-.drill-feedback-box.tone-warn {
-  background: #fdf5e6;
-  color: #8c5700;
-  border-color: #f7e0b5;
-}
-
-.drill-feedback-box.tone-error {
-  background: #fdeeee;
-  color: #8a1f1f;
-  border-color: #f5c2c2;
-}
-
-.drill-explanation-card {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(0, 0, 0, 0.12);
-}
-
-.drill-explanation-card h4 {
-  margin: 0 0 4px;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
-.drill-explanation-card p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-/* 提示卡片 */
-.drill-hints-card {
-  padding: 12px 14px;
-  background: var(--paper-0);
-  border-radius: 8px;
-  border: 1px solid var(--hairline);
-}
-
-.drill-hints-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.drill-hints-header h4 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-0);
-}
-
-.drill-hints-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.drill-hint-bubble {
-  background: #fff9e6;
-  border: 1px solid #f2e2a8;
-  padding: 8px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  color: #594200;
-  display: flex;
-  gap: 8px;
-  line-height: 1.45;
-}
-
-.drill-hint-badge {
-  font-weight: 700;
-  font-size: 10.5px;
-  background: #f7d879;
-  padding: 1px 5px;
-  border-radius: 3px;
-  flex-shrink: 0;
-  height: fit-content;
-}
-
-.drill-no-hint {
-  font-size: 12px;
-  color: var(--ink-3);
-  margin: 0;
-}
-
-/* 题目抽屉列表 */
-.drill-puzzles-drawer {
-  background: var(--paper-0);
-  border-radius: 8px;
-  border: 1px solid var(--hairline);
-  padding: 10px 12px;
-  flex: 1;
-  min-height: 140px;
-  display: flex;
-  flex-direction: column;
-}
-
-.drill-drawer-head h4 {
-  margin: 0 0 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-1);
-}
-
-.drill-drawer-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow-y: auto;
-  max-height: 200px;
-}
-
-.drill-drawer-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--paper-1);
-  border: 1px solid transparent;
-  font-size: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
-}
-
-.drill-drawer-item:hover {
-  background: #e9e5de;
-}
-
-.drill-drawer-item.is-selected {
-  background: #f5ebe6;
-  border-color: var(--cinnabar);
-  font-weight: 600;
-  color: var(--cinnabar);
-}
-
-.drill-item-num {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  opacity: 0.6;
-  margin-right: 6px;
-}
-
-.drill-item-title {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.drill-item-status {
-  margin-left: 6px;
-  font-size: 12px;
-}
-
-@media (max-width: 900px) {
-  .drill-desk {
-    height: auto;
-    max-height: 94vh;
-  }
-  .drill-body {
-    grid-template-columns: 1fr;
-    overflow-y: auto;
-  }
-  .drill-board-column {
-    border-right: none;
-    border-bottom: 1px solid var(--hairline);
-  }
-}
-
-
-
-/* -------------------------------------------------------------------------- */
-/* 国手名师 · 传功修行体系增强样式                                          */
-/* -------------------------------------------------------------------------- */
-
-/* 今日宗师诊脉横幅 */
-.drill-master-diagnosis {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 18px;
-  background: linear-gradient(90deg, rgba(184, 51, 42, 0.08), rgba(212, 175, 55, 0.08));
-  border-bottom: 1px solid var(--hairline);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.drill-diagnosis-icon {
-  font-weight: 700;
-  color: var(--cinnabar);
-  white-space: nowrap;
-}
-
-.drill-diagnosis-text {
-  color: var(--ink-1);
-  font-style: italic;
-}
-
-/* 三段式修学切换卡条 */
-.drill-stages-bar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  width: 100%;
-}
-
-.drill-stage-btn {
-  flex: 1;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 6px;
-  border: 1px solid var(--hairline);
-  background: var(--paper-1);
-  color: var(--ink-2);
-  cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
-  white-space: nowrap;
-  text-align: center;
-}
-
-.drill-stage-btn:hover:not(:disabled) {
-  background: var(--paper-0);
-  color: var(--ink-0);
-  border-color: var(--hairline-strong);
-}
-
-.drill-stage-btn.is-active {
-  background: var(--cinnabar);
-  color: #fff;
-  border-color: var(--cinnabar);
-  box-shadow: 0 2px 6px rgba(184, 51, 42, 0.25);
-}
-
-/* 师傅当场反击惩罚态（Rebuttal Veil & Card） */
-.drill-rebuttal-veil {
-  position: absolute;
-  inset: 0;
-  background: rgba(184, 51, 42, 0.22);
-    z-index: 60;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  animation: fadeIn 0.2s ease forwards;
-}
-
-.drill-rebuttal-card {
-  max-width: 380px;
-  background: var(--paper-0);
-  border: 2px solid var(--cinnabar);
-  border-radius: 12px;
-  padding: 16px 20px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
-  text-align: center;
-  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.rebuttal-head {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.rebuttal-badge {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 6px;
-  background: var(--cinnabar);
-  color: #fff;
-  border-radius: 4px;
-}
-
-.rebuttal-head h4 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--cinnabar);
-}
-
-.rebuttal-desc {
-  margin: 0 0 16px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--ink-1);
-}
-
-.rebuttal-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-}
 
 /* 盘面三阶法眼视觉点拨高光 */
 .master-weakness-marker {
@@ -6479,26 +5909,6 @@ kbd {
    直观优劣势分步动画推演器 · 优劣势对比卡 · 第一性原理逆向三问算路助手
    ========================================================================== */
 
-.drill-puzzle-subtitle {
-  margin: 4px 0 8px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--ink-2);
-}
-
-.drill-side-indicator {
-  font-weight: 700;
-  color: var(--cinnabar);
-}
-
-.drill-rebuttal-inline-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.drill-anim-quickbar,
 .live-helper-strip {
   display: flex;
   flex-wrap: wrap;
@@ -6515,7 +5925,7 @@ kbd {
 .drill-anim-tab {
   border-radius: 999px;
   font-weight: 600;
-  transition: all 0.16s ease;
+  transition: color 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .drill-anim-tab.is-bad {
@@ -6574,6 +5984,44 @@ kbd {
   background: linear-gradient(180deg, rgba(245, 158, 11, 0.06), var(--paper-1));
 }
 
+.drill-theater-card.is-calm {
+  padding: 8px 12px;
+  gap: 0;
+  border-color: rgba(180, 83, 9, 0.25);
+  background: var(--paper-1);
+}
+
+.drill-calm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.drill-calm-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 2px 7px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+
+.drill-calm-text {
+  font-size: 12.5px;
+  color: var(--ink-0);
+  font-weight: 500;
+  flex: 1;
+  min-width: 180px;
+}
+
+.drill-calm-route-hint {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
 .drill-theater-head {
   display: flex;
   align-items: center;
@@ -6609,7 +6057,7 @@ kbd {
   background: var(--paper-0);
   border: 1px solid var(--hairline);
   cursor: pointer;
-  transition: all 0.16s ease;
+  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .drill-step-item:hover {
@@ -6634,6 +6082,34 @@ kbd {
   font-size: 11.5px;
   font-weight: 700;
   color: var(--ink-1);
+}
+
+.drill-step-badge.has-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1.5px 6px;
+  border-radius: var(--r-sm);
+  background: var(--paper-2);
+  color: var(--ink-0);
+  border: 1px solid var(--hairline);
+}
+
+.drill-step-badge.tag-opp {
+  background: rgba(185, 43, 39, 0.1);
+  color: var(--cinnabar);
+  border-color: rgba(185, 43, 39, 0.2);
+}
+
+.drill-step-badge.tag-our {
+  background: rgba(16, 124, 92, 0.1);
+  color: var(--jade);
+  border-color: rgba(16, 124, 92, 0.2);
+}
+
+.drill-step-badge.tag-follow {
+  background: rgba(100, 116, 139, 0.1);
+  color: var(--ink-1);
+  border-color: rgba(100, 116, 139, 0.2);
 }
 
 .drill-step-move {
@@ -6884,4 +6360,331 @@ kbd {
   border-top: 1px dashed var(--hairline);
   font-size: 12px;
   color: var(--ink-1);
+}
+
+/* ==========================================================================
+   精训营 Phase 1~4 全面升级样式
+   ========================================================================== */
+
+/* 1. 棋盘顶部动态 HUD 战况字幕条 (Phase 1) */
+.board-hud-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 6px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  line-height: 1.4;
+  font-weight: 500;
+  animation: hudSlideDown 240ms var(--ease-out) both;
+}
+
+@keyframes hudSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.board-hud-caption .hud-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.board-hud-caption.is-bad {
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  color: #b91c1c;
+}
+.board-hud-caption.is-bad .hud-badge {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.board-hud-caption.is-good {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #047857;
+}
+.board-hud-caption.is-good .hud-badge {
+  background: #059669;
+  color: #ffffff;
+}
+
+.board-hud-caption.is-threat {
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #b45309;
+}
+.board-hud-caption.is-threat .hud-badge {
+  background: #d97706;
+  color: #ffffff;
+}
+
+.board-hud-caption.is-info {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #1d4ed8;
+}
+.board-hud-caption.is-info .hud-badge {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+/* 2. 战术落点漫画对白气泡 (Phase 1) */
+.board-move-bubble {
+  position: absolute;
+  transform: translate(-50%, -128%);
+  z-index: 38;
+  pointer-events: none;
+  animation: bubblePop 220ms cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes bubblePop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -90%) scale(0.65);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -128%) scale(1);
+  }
+}
+
+.board-move-bubble .bubble-body {
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+
+.board-move-bubble .bubble-tail {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+}
+
+.board-move-bubble.is-bad .bubble-body {
+  background: #dc2626;
+  color: #ffffff;
+}
+.board-move-bubble.is-bad .bubble-tail {
+  border-top: 6px solid #dc2626;
+}
+
+.board-move-bubble.is-good .bubble-body {
+  background: #059669;
+  color: #ffffff;
+}
+.board-move-bubble.is-good .bubble-tail {
+  border-top: 6px solid #059669;
+}
+
+.board-move-bubble.is-threat .bubble-body {
+  background: #d97706;
+  color: #ffffff;
+}
+.board-move-bubble.is-threat .bubble-tail {
+  border-top: 6px solid #d97706;
+}
+
+.board-move-bubble.is-info .bubble-body {
+  background: #2563eb;
+  color: #ffffff;
+}
+.board-move-bubble.is-info .bubble-tail {
+  border-top: 6px solid #2563eb;
+}
+
+/* 3. 空间暗线透视（炮架金环、别马腿锁、无根大子） (Phase 1) */
+.xray-cannon-mount {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: calc(var(--u) * 44px);
+  height: calc(var(--u) * 44px);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 22;
+  border: 2.2px dashed #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.65), inset 0 0 8px rgba(245, 158, 11, 0.35);
+  animation: xrayPulse 1800ms infinite ease-in-out;
+}
+
+.xray-cannon-mount.is-check-mount {
+  border-color: #ef4444;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.75), inset 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes xrayPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 1;
+  }
+}
+
+.xray-blocked-leg {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  pointer-events: none;
+}
+
+.blocked-lock-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  animation: lockShake 1200ms infinite ease-in-out;
+}
+
+@keyframes lockShake {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.xray-hanging-badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 26;
+  pointer-events: none;
+}
+
+.hanging-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f97316;
+  color: #fff;
+  font-size: 11px;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.45);
+  animation: badgeBlink 1400ms infinite;
+}
+
+@keyframes badgeBlink {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.18); }
+}
+
+/* 4. 战区聚光灯：非核心子力降噪半透明 (Phase 1) */
+.piece.is-spotlight-dimmed {
+  opacity: 0.22 !important;
+  filter: grayscale(0.7) !important;
+  transition: opacity 300ms ease, filter 300ms ease;
+}
+
+/* 5. What-If 试探残影与反扑轨迹 (Phase 2) */
+.piece-ghost {
+  opacity: 0.65;
+  pointer-events: none;
+  z-index: 28;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+  animation: ghostHover 1400ms infinite alternate ease-in-out;
+}
+
+@keyframes ghostHover {
+  from { transform: translateY(0); }
+  to { transform: translateY(-3px); }
+}
+
+.piece-ghost .piece-face {
+  border-style: dashed !important;
+}
+
+.ghost-move-trace {
+  position: absolute;
+  height: calc(var(--u) * 3.2px);
+  border-radius: 2px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.9), rgba(59, 130, 246, 0.1));
+  pointer-events: none;
+  z-index: 12;
+}
+
+.ghost-counter-trace {
+  position: absolute;
+  height: calc(var(--u) * 3.5px);
+  border-radius: 2px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, rgba(220, 38, 38, 0.95), rgba(239, 68, 68, 0.15));
+  pointer-events: none;
+  z-index: 13;
+  animation: counterPulse 800ms infinite alternate;
+}
+
+@keyframes counterPulse {
+  from { opacity: 0.6; }
+  to { opacity: 1; }
+}
+
+
+
+/* 微字紧凑状态条：严格单行、紧凑字号，绝不折行 */
+.stat-compact-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+  gap: 4px;
+  padding: 5px 8px;
+  margin: 6px 0 8px;
+  background: var(--paper-2, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--hairline, rgba(0, 0, 0, 0.07));
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.stat-compact-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.stat-compact-item .num {
+  font-weight: 600;
+  color: var(--ink-1);
+  font-feature-settings: 'tnum';
+}
+
+.stat-compact-item small {
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.stat-compact-sep {
+  color: var(--ink-4);
+  font-size: 10px;
+  user-select: none;
 }

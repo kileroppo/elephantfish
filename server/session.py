@@ -198,6 +198,10 @@ class GameSession:
     def analysis_task(self, val):
         self.coordinator.analysis_task = val
 
+    @property
+    def _engine_io(self):
+        return self.coordinator._engine_io
+
     # ---- 内部：任务与战绩 ---------------------------------------------- #
     #
     # 下面这些一律**要求调用方已持有 self.lock**（RLock，动词方法自己会拿）。

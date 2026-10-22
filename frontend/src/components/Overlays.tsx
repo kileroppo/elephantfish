@@ -14,7 +14,7 @@ export function Toasts(props?: {
 
   return (
     <div className="toast-stack" role="status" aria-live="polite">
-      {items.map((t) => (
+      {items.slice(-1).map((t) => (
         <button
           key={t.id}
           type="button"
@@ -37,7 +37,7 @@ const SHORTCUTS: { keys: string; what: string }[] = [
   { keys: 'Ctrl + Z', what: '悔一步' },
   { keys: 'Ctrl + N', what: '开新局（保持当前执子方）' },
   { keys: 'Z', what: '开启 / 退出 禅意极简专注对弈模式' },
-  { keys: 'T', what: '循环切换东方四大美学材质（宣纸·乌木·汝窑·朱漆）' },
+  { keys: 'T', what: '切换东方美学材质（宣纸 · 乌墨）' },
   { keys: 'F', what: '翻转棋盘视角' },
   { keys: 'Space', what: '引擎思考时，立即采用当前最好的一步' },
   { keys: '/', what: '聚焦到录入框' },
@@ -77,23 +77,16 @@ export function HelpOverlay(props?: { open?: boolean; onClose?: () => void }) {
 
         <ol className="howto">
           <li>
-            <strong>选边。</strong>在左栏选引擎执红还是执黑——那是「我方」。
+            <strong>🎯 实战陪练学棋。</strong>在左栏选择适合你的陪练段位（启蒙/棋摊/名手/宗师）执子下棋。当走出严重失先缓手时，「师傅扶手」会立即暂停并弹出棋理点拨与破绽显影，助你听劝重走、知其所以然。
           </li>
           <li>
-            <strong>看对方。</strong>在你和那台大模型下棋的界面里，看它走了什么。
+            <strong>🏟️ 精训营闯关。</strong>点击顶栏「精训营」进入系统化杀法、功法与残局试炼。支持三选一演练试探、空间暗线透视（炮架/马腿/无根子）与镜像变式大考，直至真正精通掌握。
           </li>
           <li>
-            <strong>录进来。</strong>最快的办法是<b>在棋盘上点那颗子、再点落点</b>，或者按住它
-            拖过去 —— 轮到的子会有抓手光标，可以走的点会亮起来。也可以敲坐标{' '}
-            <code>h2e2</code> 或中文记谱 <code>炮二平五</code>。搞错了就按悔棋。
+            <strong>📡 信使代打转述。</strong>在与外部大模型下棋时，可切换为「信使代打」模式：直接在盘上录入对手走法（或敲击键盘 <code>/</code> 录入），一键复制引擎最佳应手反馈给对方模型。
           </li>
           <li>
-            <strong>取应手。</strong>引擎会立刻算，②里给出它的一步棋。点一下复制，
-            再把这步棋喂回给对方模型。
-          </li>
-          <li>
-            <strong>循环到赢。</strong>右栏能实时看到引擎的深度、评分和它算到的后续，
-            心里有底。
+            <strong>🔍 动态胜负手复盘。</strong>每一局结束均可点击「复盘本局」或右栏错题本，系统自动直达关键胜负手，看清每一步胜势起伏与因果得失。
           </li>
         </ol>
 

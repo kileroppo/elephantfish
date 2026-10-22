@@ -3,16 +3,23 @@ import { api } from '../api'
 import type {
   AnimatedStep,
   GameSnapshot,
+  OpponentThreatInfo,
   ProsConsAnalysis,
   ThinkingGuide,
   VisualClues,
 } from '../types'
 import { buildAnimatedFrames } from '../lib/replay'
-import { scoreText, seconds } from '../lib/format'
 import { play } from '../lib/sound'
 import type { SubmitOutcome } from '../hooks/useGame'
 import { useGameContext } from '../context/GameContext'
 import { useUIContext } from '../context/UIContext'
+import {
+  CoachInterruptCard,
+  EngineHero,
+  LiveHelperDrawer,
+  QueuedStrip,
+  TypeInlineFloating,
+} from './relay'
 
 export interface RelayConsoleProps {
   game?: GameSnapshot
@@ -51,10 +58,10 @@ export function RelayConsole(props: RelayConsoleProps) {
   const onEngineMove = props.onEngineMove ?? (() => void g.engineMove())
   const playMode = props.playMode ?? ui.playMode
   const shadowGuess = props.shadowGuess ?? ui.shadowGuess
-  const coachGuard = props.coachGuard ?? (g.state?.settings.coach_guard !== false)
+  const coachGuard = props.coachGuard ?? ui.coachGuard
+  const onToggleCoachGuard = ui.toggleCoachGuard
   const cluesActive = props.cluesActive ?? (ui.liveClues !== null)
   const onToggleClues = props.onToggleClues ?? ui.setLiveClues
-  const onOpenDrill = props.onOpenDrill ?? (() => ui.openDrillAt())
   const onUndo = props.onUndo ?? (() => void g.undoRound())
   const onPreviewBoard = props.onPreviewBoard ?? ui.handlePreviewBoard
   const [text, setText] = useState('')
@@ -68,6 +75,7 @@ export function RelayConsole(props: RelayConsoleProps) {
   const [helperOpen, setHelperOpen] = useState(false)
   const [helperLoading, setHelperLoading] = useState(false)
   const [helperMode, setHelperMode] = useState<'threat' | 'good' | 'bad' | 'guide'>('threat')
+  const [opponentThreat, setOpponentThreat] = useState<OpponentThreatInfo | null>(null)
   const [threatSteps, setThreatSteps] = useState<AnimatedStep[]>([])
   const [goodSteps, setGoodSteps] = useState<AnimatedStep[]>([])
   const [badSteps, setBadSteps] = useState<AnimatedStep[]>([])
@@ -90,6 +98,7 @@ export function RelayConsole(props: RelayConsoleProps) {
     setAnimPlaying(false)
     setAnimStep(0)
     setHelperOpen(false)
+    setOpponentThreat(null)
     onPreviewBoard?.(null, [], null)
   }, [clearAnimTimer, onPreviewBoard])
 
@@ -138,7 +147,14 @@ export function RelayConsole(props: RelayConsoleProps) {
 
   // 同步当前动画帧到主棋盘
   useEffect(() => {
-    if (!helperOpen || helperMode === 'guide' || animFrames.length === 0) {
+    if (!helperOpen || helperMode === 'guide') {
+      onPreviewBoard?.(null, [], null)
+      return
+    }
+    if (helperMode === 'threat' && opponentThreat && !opponentThreat.is_substantial) {
+      return
+    }
+    if (animFrames.length === 0) {
       onPreviewBoard?.(null, [], null)
       return
     }
@@ -150,13 +166,17 @@ export function RelayConsole(props: RelayConsoleProps) {
         ? { weakness_squares: curStep.threat_squares }
         : null
     onPreviewBoard?.(frame, pv, clues)
-  }, [helperOpen, helperMode, animStep, animFrames, activeSteps, onPreviewBoard])
+  }, [helperOpen, helperMode, opponentThreat, animStep, animFrames, activeSteps, onPreviewBoard])
 
-  // 触发实战预演与对手企图分析
+  // 触发实战预演与对手企图分析（支持再次点击相同模式按钮切换关闭）
   const openLiveHelper = async (
     targetMode: 'threat' | 'good' | 'bad' | 'guide',
     candidateMove?: string,
   ) => {
+    if (helperOpen && helperMode === targetMode) {
+      closeHelper()
+      return
+    }
     clearAnimTimer()
     setHelperOpen(true)
     setHelperLoading(true)
@@ -166,13 +186,28 @@ export function RelayConsole(props: RelayConsoleProps) {
     try {
       const res = await api.preview(game.fen, candidateMove)
       setBaseSnap(res.base_game || game)
-      setThreatSteps(res.opponent_threat_steps || [])
+      setOpponentThreat(res.opponent_threat || null)
+      setThreatSteps(res.opponent_threat?.steps || res.opponent_threat_steps || [])
       setGoodSteps(res.good_steps || [])
       setBadSteps(res.bad_steps || [])
       if (res.pros_cons) setProsCons(res.pros_cons)
       if (res.thinking_guide) setThinkingGuide(res.thinking_guide)
 
-      if (targetMode !== 'guide') {
+      if (targetMode === 'threat') {
+        if (res.opponent_threat && !res.opponent_threat.is_substantial) {
+          setAnimPlaying(false)
+          setAnimStep(0)
+          if (res.opponent_threat.target_move) {
+            onPreviewBoard?.(res.base_game || game, [res.opponent_threat.target_move], {
+              weakness_squares: res.opponent_threat.threat_squares || [],
+              route: res.opponent_threat.route || [],
+            })
+          }
+        } else {
+          setAnimStep(0)
+          setAnimPlaying(true)
+        }
+      } else if (targetMode !== 'guide') {
         setAnimStep(0)
         setAnimPlaying(true)
       }
@@ -200,12 +235,18 @@ export function RelayConsole(props: RelayConsoleProps) {
   const humanTactics = lastHumanMove?.review?.tactics ?? null
   const showCoachInterrupt =
     coachGuard &&
-    playMode === 'sparring' &&
     lastHumanMove &&
     dismissedPly !== lastHumanMove.ply &&
     humanTactics &&
     (humanTactics.severity === 'critical' || humanTactics.severity === 'warn') &&
     lastHumanMove.review?.rank !== 1
+
+  // 自动化破绽显影：当实战触发严重失误点拨时，自动显影盘面破绽弱点，无需手动再点一次
+  useEffect(() => {
+    if (showCoachInterrupt && humanTactics?.visual_clues) {
+      onToggleClues?.(humanTactics.visual_clues)
+    }
+  }, [showCoachInterrupt, humanTactics?.visual_clues, onToggleClues])
 
   const playing = game.status.state === 'playing'
 
@@ -254,389 +295,118 @@ export function RelayConsole(props: RelayConsoleProps) {
   }
 
   return (
-    <section className="relay-compact" aria-label="应手与控制" data-relay="">
-      {/* 核心应手展示区 */}
-      <div className={`engine-hero ${thinking ? 'is-thinking' : ''}`}>
-        {thinking ? (
-          <div className="hero-thinking">
-            {/* 静态的「算」字印：思考期间全站停摆，这里也不转圈 */}
-            <span className="hero-think-seal" aria-hidden="true">
-              算
-            </span>
-            <span className="thinking-title">引擎正在深度计算应手…</span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onStop}>
-              采用当前最优步
-              <kbd className="btn-kbd">Space</kbd>
-            </button>
-          </div>
-        ) : lastEngineMove ? (
-          <div className="hero-content">
-            <div className="hero-label">
-              {playMode === 'sparring' ? '对手最近走棋' : '引擎下一步应手'}
-            </div>
-            {playMode === 'sparring' ? (
-              <div key={lastEngineMove.ply} className="hero-action-card is-sparring" style={{ cursor: 'default' }}>
-                <span className="hero-move-cn">{lastEngineMove.chinese}</span>
-                <span className="hero-move-iccs">{lastEngineMove.iccs}</span>
-                {onUndo && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={onUndo}
-                    style={{ fontSize: '12px', marginLeft: 'auto' }}
-                    title="撤回上一步 (Ctrl+Z)"
-                  >
-                    悔棋 ↺
-                  </button>
-                )}
-              </div>
-            ) : (
-              <button
-                key={lastEngineMove.ply}
-                type="button"
-                className={`hero-action-card${copied ? ' is-copied' : ''}`}
-                onClick={() => void copyMove(lastEngineMove.iccs, lastEngineMove.chinese)}
-                title="点击复制走法给对手"
-              >
-                <span className="hero-move-cn">{lastEngineMove.chinese}</span>
-                <span className="hero-move-iccs">{lastEngineMove.iccs}</span>
-                <span className="hero-copy-pill">
-                  <svg
-                    className="hero-copy-icon"
-                    viewBox="0 0 12 12"
-                    width="10"
-                    height="10"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    aria-hidden="true"
-                  >
-                    {copied ? (
-                      <path d="M2.5 6.4 5 8.8 9.6 3.4" strokeLinecap="round" strokeLinejoin="round" />
-                    ) : (
-                      <>
-                        <rect x="3.8" y="3.8" width="6" height="6" rx="1.2" />
-                        <path d="M8.2 2.2H3.4c-.7 0-1.2.5-1.2 1.2v4.8" strokeLinecap="round" />
-                      </>
-                    )}
-                  </svg>
-                  {copied ? '已复制' : '复制'}
-                </span>
-              </button>
-            )}
-            <div key={`m${lastEngineMove.ply}`} className="hero-meta">
-              深度 {lastEngineMove.depth} · 耗时 {seconds(lastEngineMove.time)}
-              {lastEngineMove.eval !== null
-                && ` · ${scoreText(lastEngineMove.eval, lastEngineMove.mate_in ?? null)}`}
-              {playMode === 'relay' && shadowGuess && (
-                <span style={{ color: '#10b981', marginLeft: '6px' }}>· 盲猜已就绪</span>
-              )}
-              {humanTactics?.severity === 'good' && (
-                <span className="coach-good-pill" title={humanTactics.coach_summary}>
-                  · ✓ 上手「{lastHumanMove?.chinese}」好棋控盘
-                </span>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="hero-idle">
-            <span>对局已就绪，请直接在棋盘上走子</span>
-            {game.engine_to_move && playing && (
-              <button type="button" className="btn btn-primary btn-sm" onClick={onEngineMove}>
-                让引擎先出招
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* 实战算路与意图透视工具栏：解决“看不懂对手这步想干嘛”与“自己脑子想不明白接下来走向” */}
-      {playing && !thinking && (
-        <div className="live-helper-strip" aria-label="实战算路与意图透视">
-          <button
-            type="button"
-            className={`btn btn-xs drill-anim-tab is-threat${helperOpen && helperMode === 'threat' ? ' is-active' : ''}`}
-            onClick={() => void openLiveHelper('threat')}
-            title="看不懂对手刚才那步棋？用动画演示如果我不设防，对手接下来 2~3 步怎么杀我"
-          >
-            👁️ 看不懂对手这步？(动画看他企图)
-          </button>
-          <button
-            type="button"
-            className={`btn btn-xs drill-anim-tab is-good${helperOpen && helperMode === 'good' ? ' is-active' : ''}`}
-            onClick={() => void openLiveHelper('good')}
-            title="不知道现在走哪步最好？用动画演示最佳走法接下来 3 步怎么占优"
-          >
-            ✅ 看最佳走法动画
-          </button>
-          <button
-            type="button"
-            className={`btn btn-xs btn-ghost${helperOpen && helperMode === 'guide' ? ' is-active' : ''}`}
-            onClick={() => void openLiveHelper('guide')}
-            title="用第一性原理、逆向思维和对抗三问帮你理清头绪"
-          >
-            🧠 脑子想不明白？(逆向三问)
-          </button>
-          {helperOpen && (
-            <button
-              type="button"
-              className="btn btn-xs btn-ghost"
-              onClick={closeHelper}
-            >
-              ✕ 收起演示继续下棋
-            </button>
-          )}
-        </div>
-      )}
+    <section
+      className="relay-compact relative shrink-0 flex flex-col md:flex-row items-center justify-center mt-2.5 mx-auto w-full md:w-fit md:h-10 md:min-h-10 md:max-h-10 max-w-[min(100%,720px)] box-border"
+      aria-label="应手与控制"
+      data-relay=""
+    >
+      {/* 核心应手展示区 / 对弈Dock（移动端双行等宽对齐，桌面端单行超紧凑胶囊） */}
+      <EngineHero
+        thinking={thinking}
+        lastEngineMove={lastEngineMove}
+        playMode={playMode}
+        shadowGuess={shadowGuess}
+        copied={copied}
+        playing={playing}
+        gameEngineToMove={!!game.engine_to_move}
+        helperOpen={helperOpen}
+        helperMode={helperMode}
+        showTypeInput={showTypeInput}
+        onStop={onStop}
+        onUndo={playMode === 'sparring' ? onUndo : undefined}
+        onEngineMove={onEngineMove}
+        onCopyMove={copyMove}
+        onOpenHelper={(mode) => void openLiveHelper(mode)}
+        onToggleTypeInput={() => setShowTypeInput((v) => !v)}
+        coachGuard={coachGuard}
+        onToggleCoachGuard={onToggleCoachGuard}
+        railL={ui.railL}
+        railR={ui.railR}
+        onToggleRailL={ui.toggleRailL}
+        onToggleRailR={ui.toggleRailR}
+      />
 
       {/* 实战分步动画与逆向算路抽屉 */}
-      {helperOpen && (
-        <div className="live-helper-drawer" role="region" aria-label="实战分步动画推演">
-          {helperLoading ? (
-            <div className="live-helper-loading">正在为你推演接下来 3~4 步的棋局走向…</div>
-          ) : helperMode === 'guide' && thinkingGuide ? (
-            <div className="drill-thinking-card is-compact">
-              <div className="thinking-card-head">
-                <h4>🧠 当前局面算路助手（第一性原理 · 逆向思维 · 对抗三问）</h4>
-                <button type="button" className="btn btn-ghost btn-xs" onClick={closeHelper}>
-                  收起
-                </button>
-              </div>
-              <div className="thinking-section">
-                <div className="thinking-badge is-fp">① 第一性原理（只看这 3 件事）</div>
-                <ul className="thinking-fp-list">
-                  {thinkingGuide.first_principles.map((fp, idx) => (
-                    <li key={idx}>{fp}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="thinking-section">
-                <div className="thinking-badge is-inv">② 逆向思维（从 3 步后倒推现在）</div>
-                <p className="thinking-inv-text">{thinkingGuide.inversion_tip}</p>
-              </div>
-              <div className="thinking-section">
-                <div className="thinking-badge is-adv">③ 落子前对抗三问</div>
-                <div className="thinking-qa-list">
-                  {thinkingGuide.adversarial_qa.map((item, idx) => (
-                    <div key={idx} className="thinking-qa-item">
-                      <div className="qa-question">{item.q}</div>
-                      <div className="qa-answer">👉 {item.a}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : activeSteps.length > 0 ? (
-            <div className={`drill-theater-card mode-${helperMode}`}>
-              <div className="drill-theater-head">
-                <div className="drill-theater-title">
-                  {helperMode === 'threat'
-                    ? '👁️ 对手企图动画：如果不设防，他接下来会这样进攻你'
-                    : helperMode === 'good'
-                      ? '✅ 最佳走法动画：接下来 3~4 步怎么走最占优'
-                      : '❌ 走错后果动画：为什么那步棋几步后会吃亏'}
-                </div>
-                <div className="drill-theater-controls">
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs"
-                    onClick={() => {
-                      clearAnimTimer()
-                      setAnimPlaying(false)
-                      setAnimStep((s) => Math.max(0, s - 1))
-                    }}
-                    disabled={animStep <= 0}
-                  >
-                    ◀ 上一步
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-xs"
-                    onClick={() => {
-                      if (animPlaying) {
-                        clearAnimTimer()
-                        setAnimPlaying(false)
-                      } else {
-                        if (animStep >= activeSteps.length) setAnimStep(0)
-                        setAnimPlaying(true)
-                      }
-                    }}
-                  >
-                    {animPlaying ? '⏸ 暂停' : '▶ 自动连播'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs"
-                    onClick={() => {
-                      clearAnimTimer()
-                      setAnimPlaying(false)
-                      setAnimStep((s) => Math.min(activeSteps.length, s + 1))
-                    }}
-                    disabled={animStep >= activeSteps.length}
-                  >
-                    下一步 ▶
-                  </button>
-                  <button type="button" className="btn btn-ghost btn-xs" onClick={closeHelper}>
-                    返回实战
-                  </button>
-                </div>
-              </div>
-              <div className="drill-theater-steps">
-                {activeSteps.map((st, idx) => {
-                  const stepIdx = idx + 1
-                  const isCurrent = animStep === stepIdx
-                  return (
-                    <button
-                      key={st.step}
-                      type="button"
-                      className={`drill-step-item${isCurrent ? ' is-current' : ''}`}
-                      onClick={() => {
-                        clearAnimTimer()
-                        setAnimPlaying(false)
-                        setAnimStep(stepIdx)
-                      }}
-                    >
-                      <div className="drill-step-top">
-                        <span className="drill-step-badge">{st.tag || `第 ${st.step} 步`}</span>
-                        <span className="drill-step-move">{st.chinese}</span>
-                      </div>
-                      <div className="drill-step-plain">{st.plain || st.comment}</div>
-                    </button>
-                  )
-                })}
-              </div>
-              {prosCons && helperMode === 'bad' && (
-                <div className="live-pros-cons-mini">
-                  <strong>📊 优劣对比：</strong>
-                  <span>{prosCons.verdict_headline}</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="live-helper-loading">当前局面平稳，暂无明显强制杀招。</div>
-          )}
-        </div>
-      )}
+      <LiveHelperDrawer
+        helperOpen={helperOpen}
+        helperLoading={helperLoading}
+        helperMode={helperMode}
+        opponentThreat={opponentThreat}
+        thinkingGuide={thinkingGuide}
+        activeSteps={activeSteps}
+        animStep={animStep}
+        animPlaying={animPlaying}
+        prosCons={prosCons}
+        onStepClick={(stepIdx) => {
+          clearAnimTimer()
+          setAnimPlaying(false)
+          setAnimStep(stepIdx)
+        }}
+        onPrevStep={() => {
+          clearAnimTimer()
+          setAnimPlaying(false)
+          setAnimStep((s) => Math.max(0, s - 1))
+        }}
+        onNextStep={() => {
+          clearAnimTimer()
+          setAnimPlaying(false)
+          setAnimStep((s) => Math.min(activeSteps.length, s + 1))
+        }}
+        onTogglePlay={() => {
+          if (animPlaying) {
+            clearAnimTimer()
+            setAnimPlaying(false)
+          } else {
+            if (animStep >= activeSteps.length) setAnimStep(0)
+            setAnimPlaying(true)
+          }
+        }}
+        onClose={closeHelper}
+      />
 
       {/* 走错失误提醒 · 大白话解释 + 一键看为什么亏动画 */}
-      {showCoachInterrupt && humanTactics && lastHumanMove && (
-        <div
-          className={`coach-interrupt-card is-${humanTactics.severity}`}
-          role="region"
-          aria-label="师傅扶手关键手点拨"
-          data-coach-interrupt=""
-        >
-          <div className="coach-interrupt-head">
-            <span className="coach-interrupt-badge">
-              ⚠️ 走错失先 · #{humanTactics.motif_label}
-            </span>
-            <span className="coach-interrupt-ply">
-              第 {lastHumanMove.ply} 手「{lastHumanMove.chinese}」
-              {lastHumanMove.review?.loss ? `（约亏 ${(lastHumanMove.review.loss / 100).toFixed(1)} 个兵）` : ''}
-            </span>
-          </div>
-          <p className="coach-interrupt-summary">{humanTactics.coach_summary}</p>
-          <div className="coach-interrupt-actions">
-            {onUndo && (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => {
-                  onToggleClues?.(null)
-                  closeHelper()
-                  onUndo()
-                }}
-              >
-                ↺ 悔棋重走这步
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => void openLiveHelper('threat')}
-            >
-              🎬 动画看接下来怎么吃亏
-            </button>
-            {onToggleClues && humanTactics.visual_clues && (
-              <button
-                type="button"
-                className={`btn btn-ghost btn-sm${cluesActive ? ' is-on' : ''}`}
-                onClick={() =>
-                  onToggleClues(cluesActive ? null : (humanTactics.visual_clues ?? null))
-                }
-              >
-                {cluesActive ? '👁️ 收起标记' : '👁️ 标出破绽位置'}
-              </button>
-            )}
-            {onOpenDrill && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={onOpenDrill}
-              >
-                🎯 去训练营练同类题
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => setDismissedPly(lastHumanMove.ply)}
-            >
-              忽略继续下
-            </button>
-          </div>
-        </div>
-      )}
+      <CoachInterruptCard
+        show={!!showCoachInterrupt}
+        lastHumanMove={lastHumanMove}
+        tactics={humanTactics}
+        cluesActive={cluesActive}
+        onUndo={() => {
+          closeHelper()
+          onUndo()
+        }}
+        onToggleClues={onToggleClues}
+        onOpenDrill={() => {
+          if (props.onOpenDrill) {
+            props.onOpenDrill()
+          } else {
+            const motif = humanTactics?.primary_motif || humanTactics?.motif
+            ui.openDrillAt(motif)
+          }
+        }}
+        onOpenThreatHelper={() => void openLiveHelper('threat')}
+        onDismiss={() => {
+          if (lastHumanMove) setDismissedPly(lastHumanMove.ply)
+        }}
+        onMuteThisGame={() => {
+          ui.setCoachGuard(false)
+          if (lastHumanMove) setDismissedPly(lastHumanMove.ply)
+        }}
+        onPreviewBoard={onPreviewBoard}
+      />
 
       {/* 排队步提醒 */}
-      {queued && (
-        <div className="queued-strip" data-relay-queued={queued}>
-          <span>已排队录入对方走法：<strong>{queued}</strong>（等待计算结束）</span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClearQueue}>
-            撤销
-          </button>
-        </div>
-      )}
+      <QueuedStrip queued={queued} onClearQueue={onClearQueue} />
 
-      {/* 极轻量录入栏（默认折叠，支持快捷键 / 触发） */}
-      <div className="type-toggle-bar">
-        {!showTypeInput ? (
-          <button
-            type="button"
-            className="type-toggle-btn"
-            data-relay-toggle=""
-            onClick={() => setShowTypeInput(true)}
-          >
-            <span>键盘文本录入</span>
-            <kbd>/</kbd>
-          </button>
-        ) : (
-          <div key={`box${rejected}`} className={`type-inline-box${rejected ? ' is-rejected' : ''}`}>
-            <input
-              autoFocus
-              value={text}
-              placeholder="输入记谱 (如 炮二平五 或 h2e2)"
-              data-relay-input=""
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void submit()
-                if (e.key === 'Escape') setShowTypeInput(false)
-              }}
-            />
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={!text.trim()}
-              onClick={() => void submit()}
-            >
-              提交
-            </button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowTypeInput(false)}>
-              收起
-            </button>
-          </div>
-        )}
-      </div>
+      {/* 极轻量键盘录入浮层（展开时浮动展示，不挤占棋盘高度） */}
+      <TypeInlineFloating
+        show={showTypeInput}
+        text={text}
+        rejected={rejected}
+        onChange={setText}
+        onSubmit={() => void submit()}
+        onClose={() => setShowTypeInput(false)}
+      />
     </section>
   )
 }
+export default RelayConsole

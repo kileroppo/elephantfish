@@ -128,3 +128,61 @@ export const MARK_POINTS: { file: number; rank: number }[] = [
 
 /** 楚河汉界的四个字，横向均分在河界带里。 */
 export const RIVER_LABELS = ['楚', '河', '汉', '界']
+
+export interface MoveLineTrajectory {
+  pathD: string
+  startPt: Pt
+  endPt: Pt
+  arrowPoints: string
+  dist: number
+}
+
+export type CurveTrajectory = MoveLineTrajectory
+
+/** 计算起点到落点之间的直线轨迹（起止分明，仅在起点与落点之间，不弯不偏） */
+export function calculateMoveLine(p1: Pt, p2: Pt): MoveLineTrajectory | null {
+  const dx = p2.x - p1.x
+  const dy = p2.y - p1.y
+  const dist = Math.hypot(dx, dy)
+  if (dist < 4) return null
+
+  const ux = dx / dist
+  const uy = dy / dist
+
+  // 起点与终点内缩：只在起点与落点之间
+  const offsetStart = Math.min(14, dist * 0.15)
+  const offsetEnd = Math.min(14, dist * 0.15)
+
+  const startPt: Pt = {
+    x: p1.x + ux * offsetStart,
+    y: p1.y + uy * offsetStart,
+  }
+  const endPt: Pt = {
+    x: p2.x - ux * offsetEnd,
+    y: p2.y - uy * offsetEnd,
+  }
+
+  // 终点方向箭头坐标
+  const arrowLen = 7.5
+  const arrowWidth = 3.8
+  const perpX = -uy
+  const perpY = ux
+
+  const leftX = endPt.x - ux * arrowLen + perpX * arrowWidth
+  const leftY = endPt.y - uy * arrowLen + perpY * arrowWidth
+  const rightX = endPt.x - ux * arrowLen - perpX * arrowWidth
+  const rightY = endPt.y - uy * arrowLen - perpY * arrowWidth
+
+  const arrowPoints = `${endPt.x.toFixed(1)},${endPt.y.toFixed(1)} ${leftX.toFixed(1)},${leftY.toFixed(1)} ${rightX.toFixed(1)},${rightY.toFixed(1)}`
+  const pathD = `M ${startPt.x.toFixed(1)} ${startPt.y.toFixed(1)} L ${endPt.x.toFixed(1)} ${endPt.y.toFixed(1)}`
+
+  return {
+    pathD,
+    startPt,
+    endPt,
+    arrowPoints,
+    dist,
+  }
+}
+
+export const calculateMoveArc = calculateMoveLine

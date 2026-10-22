@@ -416,6 +416,228 @@ def _is_playable_move(board: str, red_to_move: bool, mv: Optional[Tuple[int, int
 
 
 # --------------------------------------------------------------------------- #
+# 1.5 关键位置几何与棋理特征解释器（Key Square Geometric Explainer）
+# --------------------------------------------------------------------------- #
+
+def explain_key_square(
+    board_before: str,
+    red_to_move: bool,
+    move_or_iccs: Any,
+    board_after: Optional[str] = None,
+) -> Dict[str, Any]:
+    """从第一性原理分析落点位置的几何棋理属性，回答「这为什么是关键位置」。
+
+    返回：
+    - dest_square: 'd4', 'c8' 等落点坐标
+    - zone_name: 几何空间区域名（如 '四路肋道咽喉'、'卧槽绝杀要穴'、'河头巡河要道' 等）
+    - role_summary: 简洁精辟的战术核心作用（用于卡片和字幕）
+    - why_key: 详细的棋理解释（控制了谁、封锁了谁、解除了什么隐患）
+    - tactical_tags: ['占肋控中', '别马腿', '联防生根'] 等标签
+    - controlled_targets: 这一步新增瞄准或控制的目标坐标与子力名称
+    - protected_targets: 这一步直接生根护住的友军坐标与子力名称
+    - blocked_threats: 这一步阻断的对方走法或别马腿目标
+    """
+    if isinstance(move_or_iccs, tuple) and len(move_or_iccs) == 2:
+        mv = move_or_iccs
+        move_iccs = nt.to_iccs(mv)
+    else:
+        move_iccs = str(move_or_iccs or '').strip()
+        mv = nt.from_iccs(move_iccs) if move_iccs else None
+
+    if not mv or not _is_playable_move(board_before, red_to_move, mv):
+        return {
+            'dest_square': move_iccs[2:4] if len(move_iccs) >= 4 else '',
+            'zone_name': '盘面要点',
+            'role_summary': '抢占行棋主动权',
+            'why_key': '占据盘面要点推进局势，压制对手活动空间。',
+            'tactical_tags': ['争夺先手'],
+            'controlled_targets': [],
+            'protected_targets': [],
+            'blocked_threats': [],
+        }
+
+    dest_sq = move_iccs[2:4]
+    p_char = board_before[mv[0]]
+    piece_name = core.PIECE_NAME.get(p_char, '子力')
+    is_red = red_to_move
+    mover_side = 'red' if is_red else 'black'
+    enemy_side = 'black' if is_red else 'red'
+    opp_name = '黑方' if is_red else '红方'
+
+    if board_after is None:
+        board_after = core.apply_move(board_before, red_to_move, mv)
+
+    file_ch = dest_sq[0]
+    rank_num = int(dest_sq[1])
+
+    # 1. 区域与空间几何命名
+    zone_name = '盘面要点'
+    tactical_tags: List[str] = []
+
+    # 绝对九宫坐标判断
+    in_enemy_palace = _in_palace(mv[1], not is_red)
+    in_my_palace = _in_palace(mv[1], is_red)
+
+    # 典型几何阵位判断
+    # 卧槽马点：黑宫 (c8, g8) / 红宫 (c1, g1)
+    is_wocao = (p_char.upper() == 'N') and (
+        (is_red and dest_sq in ('c8', 'g8')) or
+        ((not is_red) and dest_sq in ('c1', 'g1'))
+    )
+    # 挂角马点：黑宫 (d7, f7) / 红宫 (d2, f2)
+    is_guajiao = (p_char.upper() == 'N') and (
+        (is_red and dest_sq in ('d7', 'f7')) or
+        ((not is_red) and dest_sq in ('d2', 'f2'))
+    )
+    # 钓鱼马点：黑宫 (c7, g7) / 红宫 (c2, g2)
+    is_diaoyu = (p_char.upper() == 'N') and (
+        (is_red and dest_sq in ('c7', 'g7')) or
+        ((not is_red) and dest_sq in ('c2', 'g2'))
+    )
+
+    if is_wocao:
+        zone_name = '卧槽绝杀要穴'
+        tactical_tags.append('卧槽马势')
+    elif is_guajiao:
+        zone_name = '挂角锁喉要津'
+        tactical_tags.append('挂角逼宫')
+    elif is_diaoyu:
+        zone_name = '钓鱼马黄金支点'
+        tactical_tags.append('钓鱼马控将')
+    elif file_ch == 'e':
+        if (is_red and rank_num >= 7) or ((not is_red) and rank_num <= 2):
+            zone_name = '中宫心脏地带'
+            tactical_tags.append('直捣黄龙')
+        else:
+            zone_name = '五路中线主干道'
+            tactical_tags.append('中路控盘')
+    elif file_ch in ('d', 'f'):
+        if (is_red and rank_num >= 7) or ((not is_red) and rank_num <= 2):
+            zone_name = '九宫肋道命门'
+            tactical_tags.append('肋道破防')
+        else:
+            zone_name = f'{"四" if file_ch == "d" else "六"}路肋道要津'
+            tactical_tags.append('肋道争先')
+    elif (is_red and rank_num == 9) or ((not is_red) and rank_num == 0):
+        zone_name = '敌方九宫底线'
+        tactical_tags.append('沉底铁锁')
+    elif (is_red and rank_num == 8) or ((not is_red) and rank_num == 1):
+        zone_name = '敌方九宫二楼'
+        tactical_tags.append('平腰锁将')
+    elif (is_red and rank_num == 4) or ((not is_red) and rank_num == 5):
+        zone_name = '己方河口巡河线'
+        tactical_tags.append('巡河控局')
+    elif (is_red and rank_num == 5) or ((not is_red) and rank_num == 4):
+        zone_name = '敌方河沿骑河线'
+        tactical_tags.append('骑河压制')
+    elif (is_red and rank_num == 6) or ((not is_red) and rank_num == 3):
+        zone_name = '敌方卒林枢纽线'
+        tactical_tags.append('卒林横扫')
+
+    # 2. 攻防图差分：这一步究竟新控制了谁、保护了谁、解除了什么威胁
+    graph_before = analyze_board_graph(board_before)
+    graph_after = analyze_board_graph(board_after)
+
+    # A. 保护友军（生根）
+    before_my_unprot = {u['square']: u for u in graph_before['unprotected'][mover_side]}
+    after_my_unprot = {u['square']: u for u in graph_after['unprotected'][mover_side]}
+    newly_rooted = [
+        before_my_unprot[sq] for sq in before_my_unprot
+        if sq not in after_my_unprot and sq != move_iccs[:2]
+    ]
+
+    # B. 控制/瞄准敌方大子或要穴
+    before_enemy_hanging = {h['square'] for h in graph_before['hanging'][enemy_side]}
+    new_threats = [
+        h for h in graph_after['hanging'][enemy_side]
+        if h['square'] not in before_enemy_hanging
+    ]
+
+    # C. 别马腿/塞象眼
+    xray_after = extract_xiangqi_xray(board_after, red_to_move)
+    blocked_by_me = [
+        b for b in xray_after['blocked_legs']
+        if b['leg_square'] == dest_sq
+    ]
+
+    # D. 炮架
+    cannon_mount_roles = [
+        m for m in xray_after['cannon_mounts']
+        if m['mount_square'] == dest_sq and m['side'] == mover_side
+    ]
+
+    # E. 封锁老将逃生格
+    ks_before = king_safety_report(board_before, not is_red, graph_before)
+    ks_after = king_safety_report(board_after, not is_red, graph_after)
+    escapes_cut = ks_before['escape_squares'] - ks_after['escape_squares']
+
+    why_reasons: List[str] = []
+    controlled_targets: List[str] = []
+    protected_targets: List[str] = []
+    blocked_threats: List[str] = []
+
+    if is_wocao:
+        why_reasons.append(f'进占{zone_name}，直接锁死{opp_name}将门中枢，并阻断其老将回中路径')
+    elif is_guajiao:
+        why_reasons.append(f'跃入{zone_name}，一子兼顾控制九宫两翼逃生格，逼其老将移位')
+    elif is_diaoyu:
+        why_reasons.append(f'抢占{zone_name}，同时封死老将平移与登楼两条退路')
+
+    if escapes_cut > 0:
+        why_reasons.append(f'封锁{opp_name}老将 {escapes_cut} 个逃生格（只剩 {ks_after["escape_squares"]} 格可走）')
+        tactical_tags.append('封锁将门')
+
+    if newly_rooted:
+        for r_item in newly_rooted[:2]:
+            protected_targets.append(f'{r_item["piece"]}({r_item["square"]})')
+        p_desc = '与'.join(protected_targets)
+        why_reasons.append(f'联防生根：为原本无保护的己方 {p_desc} 提供稳固根护')
+        tactical_tags.append('联防生根')
+
+    if new_threats:
+        for t_item in new_threats[:2]:
+            controlled_targets.append(f'{t_item["piece"]}({t_item["square"]})')
+        t_desc = '与'.join(controlled_targets)
+        why_reasons.append(f'前出控盘：直接瞄准捉击{opp_name}无保护的 {t_desc}')
+        tactical_tags.append('牵制捉子')
+
+    if blocked_by_me:
+        for b_item in blocked_by_me[:2]:
+            blocked_threats.append(f'{b_item["label"]}({b_item["piece_square"]})')
+        b_desc = '、'.join(blocked_threats)
+        why_reasons.append(f'卡位反制：正好占据敌方 {b_desc}，瘫痪其进攻路线')
+        tactical_tags.append('精准卡位')
+
+    if cannon_mount_roles:
+        m0 = cannon_mount_roles[0]
+        why_reasons.append(f'架炮生威：为己方红炮架起瞄准{m0["target_piece"]}({m0["target_square"]})的重型炮架')
+        tactical_tags.append('充当铁炮架')
+
+    if not why_reasons:
+        if file_ch in ('d', 'e', 'f'):
+            why_reasons.append(f'牢牢控制{zone_name}，扼守攻防必经咽喉，压制{opp_name}主力出动')
+        elif '河' in zone_name or '卒林' in zone_name:
+            why_reasons.append(f'进占{zone_name}，封死横向通道，阻止{opp_name}子力过河渗透')
+        else:
+            why_reasons.append(f'出动{piece_name}抢占{zone_name}，开拓火力视野并压制局部阵型')
+
+    role_summary = f'抢占{zone_name}（{dest_sq}）'
+    why_key = '；'.join(why_reasons) + '。'
+
+    return {
+        'dest_square': dest_sq,
+        'zone_name': zone_name,
+        'role_summary': role_summary,
+        'why_key': why_key,
+        'tactical_tags': list(dict.fromkeys(tactical_tags))[:3],
+        'controlled_targets': controlled_targets,
+        'protected_targets': protected_targets,
+        'blocked_threats': blocked_threats,
+    }
+
+
+
+# --------------------------------------------------------------------------- #
 # 2. 走前 / 走后 / 正解 三态差分诊断（Diagnose Review）
 # --------------------------------------------------------------------------- #
 
@@ -593,13 +815,21 @@ def diagnose_review(
     # 6. 兜底：缓手失先
     if not motifs:
         motifs.append({'id': 'lost_tempo', 'label': '缓手失先', 'severity': 'warn'})
+        # 计算最佳正着落点的关键位置几何棋理
+        key_sq_info = explain_key_square(board_before, red_to_move, mv_best, board_after_best) if mv_best else None
+        why_dest = key_sq_info.get('why_key', '') if key_sq_info else ''
+        role_sum = key_sq_info.get('role_summary', '') if key_sq_info else ''
+
         if punish_step:
+            punish_iccs = punish_step.get('iccs') or ''
+            opp_key = explain_key_square(board_after_played, not red_to_move, punish_iccs) if punish_iccs else None
+            opp_why = f"（{opp_key['why_key']}）" if (opp_key and opp_key.get('why_key')) else ""
             explanations.append(
-                f'缓手失先：实战「{played_chinese or played_iccs}」效率不足，遭{opp_name}「{punish_step.get("chinese") or punish_step.get("iccs")}」抢先反制；正着应走「{best_chinese or best_iccs}」。'
+                f'缓手失先：实战「{played_chinese or played_iccs}」未能针对敌方命门，遭{opp_name}抢先走「{punish_step.get("chinese") or punish_step.get("iccs")}」反击{opp_why}；正着当走「{best_chinese or best_iccs}」{role_sum}：{why_dest}'
             )
         elif best_chinese or best_iccs:
             explanations.append(
-                f'此手「{played_chinese or played_iccs}」稍显缓迫，正着宜走「{best_chinese or best_iccs}」抢占盘面要点。'
+                f'此手「{played_chinese or played_iccs}」行棋效率不足；正着宜走「{best_chinese or best_iccs}」{role_sum}：{why_dest}'
             )
 
     # 补充对方反击提示
@@ -739,13 +969,83 @@ def explain_step_plain(
         role_label = f'第 {step_num} 步 · 你的失误手'
         if not losses and not gives_check and not captured_name and not newly_threatened:
             losses.append('既没将军也没捉大子，白白把出手机会让给对手')
+    elif mode == 'threat':
+        if step_num == 1:
+            role_label = '第 1 步 · 对手出招'
+        elif is_user_side:
+            role_label = f'第 {step_num} 步 · 我方应对'
+        else:
+            role_label = f'第 {step_num} 步 · 后续变化'
     elif is_user_side:
         role_label = f'第 {step_num} 步 · {"我方正着" if step_num == 1 else "我方后续"}'
     else:
         role_label = f'第 {step_num} 步 · 对手反击' if step_num in (2, 4) else f'第 {step_num} 步 · 对手应招'
 
-    # 生成大白话解释
-    if custom_comment and not custom_comment.endswith('乘虚反扑，夺走局部主动权！') and custom_comment != f'{actor_name}乘虚反扑':
+    key_sq_info = explain_key_square(board_before, red_to_move, mv, board_after) if mv else None
+
+    # 生成大白话解释与落点漫画气泡
+    short_bubble = ''
+    if mode == 'threat':
+        if is_mate:
+            short_bubble = '叫杀'
+        elif gives_check:
+            short_bubble = '叫将' if not captured_name else f'吃{captured_name}将'
+        elif captured_name:
+            short_bubble = f'吃{captured_name}'
+        elif newly_threatened:
+            short_bubble = '捉子'
+        elif key_sq_info and key_sq_info.get('tactical_tags'):
+            short_bubble = key_sq_info['tactical_tags'][0]
+        else:
+            short_bubble = '应对' if is_user_side else '出招'
+    elif is_mate:
+        short_bubble = '一击绝杀！'
+    elif gives_check:
+        short_bubble = '叫将逼应！' if not captured_name else f'带将吃{captured_name}！'
+    elif captured_name:
+        short_bubble = f'吃掉{captured_name}！'
+    elif is_wrong_first_step:
+        short_bubble = '露出破绽！'
+    elif newly_threatened:
+        short_bubble = '抢先捉子！'
+    elif not is_user_side and step_num in (2, 4):
+        short_bubble = '乘虚反击！'
+    elif key_sq_info and key_sq_info.get('tactical_tags'):
+        short_bubble = key_sq_info['tactical_tags'][0]
+    else:
+        short_bubble = '抢占要道' if is_user_side else '被迫应付'
+
+    if mode == 'threat':
+        # 就事论事、客观平实的实战大白话解说，拒绝夸张戏剧化词汇
+        if is_mate:
+            comment = f'{actor_name}走「{chinese}」直接叫将绝杀。' if not is_user_side else f'我方走「{chinese}」化解杀招。'
+        elif gives_check:
+            if captured_name:
+                comment = f'{actor_name}走「{chinese}」吃{captured_name}同时叫将。'
+            elif newly_threatened:
+                t0 = newly_threatened[0]
+                target_p = f'我方{t0["piece"]}' if not is_user_side else f'{opp_name}{t0["piece"]}'
+                comment = f'{actor_name}走「{chinese}」叫将，顺带抽打{target_p}。'
+            else:
+                comment = f'{actor_name}走「{chinese}」叫将逼应。' if not is_user_side else f'我方走「{chinese}」叫将。'
+        elif captured_name:
+            comment = f'{actor_name}走「{chinese}」吃掉{opp_name}{captured_name}。'
+        elif newly_threatened:
+            if len(newly_threatened) >= 2:
+                t0, t1 = newly_threatened[0], newly_threatened[1]
+                p0 = f'我方{t0["piece"]}' if not is_user_side else f'{opp_name}{t0["piece"]}'
+                p1 = f'我方{t1["piece"]}' if not is_user_side else f'{opp_name}{t1["piece"]}'
+                comment = f'{actor_name}走「{chinese}」双捉{p0}和{p1}。'
+            else:
+                t0 = newly_threatened[0]
+                target_p = f'我方{t0["piece"]}' if not is_user_side else f'{opp_name}{t0["piece"]}'
+                comment = f'{actor_name}走「{chinese}」瞄准捉{target_p}({t0["square"]})。'
+        else:
+            if is_user_side:
+                comment = f'我方走「{chinese}」防守应对。'
+            else:
+                comment = f'{actor_name}走「{chinese}」展开攻势。' if step_num == 1 else f'{actor_name}走「{chinese}」跟进。'
+    elif custom_comment and not custom_comment.endswith('乘虚反扑，夺走局部主动权！') and custom_comment != f'{actor_name}乘虚反扑':
         comment = custom_comment
     elif is_mate:
         if is_user_side:
@@ -780,17 +1080,25 @@ def explain_step_plain(
         else:
             comment = f'【走棋太慢】你走「{chinese}」没有威胁到对手要害，等于白送给对手一步免费抢攻的机会！'
     else:
+        why_key_text = key_sq_info.get('why_key', '') if key_sq_info else ''
+        role_label_text = key_sq_info.get('role_summary', '抢占要道') if key_sq_info else '抢占要道'
         if is_user_side:
-            comment = (
-                f'【被动招架】面对对手紧逼，你只能走「{chinese}」勉强防守，彻底失去主动权。'
-                if step_num >= 3 else f'【抢占要道】你走「{chinese}」卡住关键位置，牢牢掌握主动。'
-            )
+            if step_num >= 3:
+                comment = f'【被动招架】面对对手紧逼，你只能走「{chinese}」勉强防守，彻底失去主动权。'
+            elif why_key_text:
+                comment = f'【{role_label_text}】你走「{chinese}」：{why_key_text}'
+            else:
+                comment = f'【抢占要道】你走「{chinese}」卡住关键位置，牢牢掌握主动。'
         else:
-            comment = (
-                f'【趁虚抢攻】因为你上一手太慢，{actor_name}立刻走「{chinese}」抢占要害，反客为主压制你的阵型！'
-                if step_num in (2, 4) else f'【被迫应付】{actor_name}只能走「{chinese}」被动招架，完全抢不到先手。'
-            )
+            if step_num in (2, 4):
+                if why_key_text:
+                    comment = f'【趁虚抢攻】因为你上一手太慢，{actor_name}立刻走「{chinese}」{role_label_text}：{why_key_text}'
+                else:
+                    comment = f'【趁虚抢攻】因为你上一手太慢，{actor_name}立刻走「{chinese}」抢占要害，反客为主压制你的阵型！'
+            else:
+                comment = f'【被迫应付】{actor_name}只能走「{chinese}」被动招架，完全抢不到先手。'
 
+    # 将几何关键位置分析结果一并写入 step 结构体中
     return {
         'step': step_num,
         'move': move_iccs,
@@ -801,6 +1109,7 @@ def explain_step_plain(
         'role_label': role_label,
         'plain': comment,
         'comment': comment,
+        'short_bubble': short_bubble,
         'captured': captured_name,
         'gives_check': gives_check,
         'is_mate': is_mate,
@@ -808,6 +1117,7 @@ def explain_step_plain(
         'gains': gains,
         'losses': losses,
         'board_after': board_after,
+        'key_square_info': key_sq_info,
     }
 
 
@@ -907,6 +1217,255 @@ def build_thinking_guide(
         'inversion_tip': inversion_tip,
         'adversarial_qa': adversarial_qa,
     }
+
+
+def extract_xiangqi_xray(board: str, red_to_move: bool, last_move_iccs: str = '') -> Dict[str, Any]:
+    """提取中国象棋专属空间几何透视特征：
+    1. cannon_mounts: 活跃炮架坐标列表（借哪颗子为架瞄准敌子或将门）
+    2. blocked_legs: 别马腿/塞象眼受阻坐标（哪些子受阻影响攻防）
+    3. hanging_badges: 无根且受攻的大子（车马炮）列表
+    """
+    if isinstance(board, str) and ('/' in board or ' ' in board):
+        try:
+            board, _, _, _ = nt.from_fen(board)
+        except Exception:
+            pass
+
+    cannon_mounts: List[Dict[str, Any]] = []
+    blocked_legs: List[Dict[str, Any]] = []
+    hanging_badges: List[Dict[str, Any]] = []
+
+    graph = analyze_board_graph(board)
+
+    # 1. 扫描盘上所有炮，找出它们的炮架
+    for idx in core._SQUARES:
+        ch = board[idx]
+        if ch not in ('C', 'c'):
+            continue
+        is_red = ch.isupper()
+        enemy_is_red = not is_red
+        c_sq = core.SQUARE_NAME.get(idx, '')
+        for d in (-16, 1, 16, -1):
+            mount_idx = -1
+            target_idx = -1
+            sp = idx + d
+            while 0 <= sp < len(board) and board[sp] >= '.':
+                q = board[sp]
+                if q != '.':
+                    if mount_idx < 0:
+                        mount_idx = sp
+                    else:
+                        target_idx = sp
+                        break
+                sp += d
+            if mount_idx >= 0 and target_idx >= 0:
+                t_ch = board[target_idx]
+                if t_ch != '.' and (t_ch.isupper() == enemy_is_red):
+                    m_sq = core.SQUARE_NAME.get(mount_idx, '')
+                    t_sq = core.SQUARE_NAME.get(target_idx, '')
+                    is_king = t_ch.upper() == 'K'
+                    cannon_mounts.append({
+                        'cannon_square': c_sq,
+                        'mount_square': m_sq,
+                        'target_square': t_sq,
+                        'is_check': is_king,
+                        'mount_piece': core.PIECE_NAME.get(board[mount_idx], ''),
+                        'target_piece': core.PIECE_NAME.get(t_ch, ''),
+                        'side': 'red' if is_red else 'black',
+                    })
+
+    # 2. 扫描被别马腿的马 / 塞象眼的象
+    knight_steps = (
+        (-16, -33), (-16, -31),
+        (1, -14), (1, 18),
+        (16, 33), (16, 31),
+        (-1, 14), (-1, -18),
+    )
+    for idx in core._SQUARES:
+        ch = board[idx]
+        if ch in ('N', 'n'):
+            n_sq = core.SQUARE_NAME.get(idx, '')
+            for leg_d, jump_d in knight_steps:
+                leg_idx = idx + leg_d
+                dest_idx = idx + jump_d
+                if not (0 <= leg_idx < len(board) and 0 <= dest_idx < len(board)):
+                    continue
+                if board[leg_idx] != '.' and board[dest_idx] >= '.':
+                    dest_ch = board[dest_idx]
+                    # 如果跳跃目标格有敌子或者九宫要穴，而马腿被挡住
+                    if dest_ch != '.' and (dest_ch.isupper() != ch.isupper()):
+                        l_sq = core.SQUARE_NAME.get(leg_idx, '')
+                        d_sq = core.SQUARE_NAME.get(dest_idx, '')
+                        if not any(b['leg_square'] == l_sq and b['piece_square'] == n_sq for b in blocked_legs):
+                            blocked_legs.append({
+                                'piece_square': n_sq,
+                                'leg_square': l_sq,
+                                'target_square': d_sq,
+                                'kind': 'knight',
+                                'label': '别马腿',
+                            })
+        elif ch in ('B', 'b'):
+            b_sq = core.SQUARE_NAME.get(idx, '')
+            for d in (-34, -30, 30, 34):
+                eye_idx = idx + d // 2
+                dest_idx = idx + d
+                if not (0 <= eye_idx < len(board) and 0 <= dest_idx < len(board)):
+                    continue
+                if board[eye_idx] != '.' and board[dest_idx] >= '.':
+                    e_sq = core.SQUARE_NAME.get(eye_idx, '')
+                    if not any(b['leg_square'] == e_sq and b['piece_square'] == b_sq for b in blocked_legs):
+                        blocked_legs.append({
+                            'piece_square': b_sq,
+                            'leg_square': e_sq,
+                            'target_square': core.SQUARE_NAME.get(dest_idx, ''),
+                            'kind': 'elephant',
+                            'label': '塞象眼',
+                        })
+
+    # 3. 双方无根且受攻的大子
+    for side in ('red', 'black'):
+        for h in graph['hanging'][side]:
+            if h['value'] >= 450:
+                hanging_badges.append({
+                    'square': h['square'],
+                    'piece': h['piece'],
+                    'side': side,
+                    'label': '无根受攻',
+                })
+
+    return {
+        'cannon_mounts': cannon_mounts[:4],
+        'blocked_legs': blocked_legs[:4],
+        'hanging_badges': hanging_badges[:4],
+    }
+
+
+def mirror_file_char(ch: str) -> str:
+    """中国象棋横向坐标字符对称变换 (a<->i, b<->h, c<->g, d<->f, e<->e)。"""
+    mapping = {'a': 'i', 'b': 'h', 'c': 'g', 'd': 'f', 'e': 'e',
+               'f': 'd', 'g': 'c', 'h': 'b', 'i': 'a'}
+    return mapping.get(ch, ch)
+
+
+def mirror_iccs_horizontal(iccs: str) -> str:
+    """将四位 ICCS 走法坐标水平镜像对称翻转。"""
+    if len(iccs) != 4:
+        return iccs
+    f1, r1, f2, r2 = iccs[0], iccs[1], iccs[2], iccs[3]
+    return f"{mirror_file_char(f1)}{r1}{mirror_file_char(f2)}{r2}"
+
+
+def mirror_fen_horizontal(fen: str) -> str:
+    """将 FEN 棋盘左右水平镜像翻转（棋理100%等价，视觉空间镜像秒测）。"""
+    parts = fen.strip().split()
+    if not parts:
+        return fen
+    ranks = parts[0].split('/')
+    mirrored_ranks: List[str] = []
+    for r in ranks:
+        # 将空位数字展开为点
+        expanded = []
+        for ch in r:
+            if ch.isdigit():
+                expanded.extend(['.'] * int(ch))
+            else:
+                expanded.append(ch)
+        # 左右反转
+        expanded.reverse()
+        # 重新压缩连续空位
+        compressed = []
+        empty = 0
+        for ch in expanded:
+            if ch == '.':
+                empty += 1
+            else:
+                if empty > 0:
+                    compressed.append(str(empty))
+                    empty = 0
+                compressed.append(ch)
+        if empty > 0:
+            compressed.append(str(empty))
+        mirrored_ranks.append(''.join(compressed))
+
+    mirrored_board = '/'.join(mirrored_ranks)
+    rest = ' '.join(parts[1:])
+    return f"{mirrored_board} {rest}"
+
+
+def mirror_puzzle(puzzle: Dict[str, Any]) -> Dict[str, Any]:
+    """为指定题目生成左右水平对称的镜像变式题（用于举一反三快速检验）。"""
+    pz = dict(puzzle)
+    pz['is_mirror'] = True
+    title = pz.get('title', '')
+    pz['title'] = f"{title} (左右镜像变式)" if title else '左右镜像变式'
+    if pz.get('fen'):
+        pz['fen'] = mirror_fen_horizontal(pz['fen'])
+    if pz.get('exam_fen'):
+        pz['exam_fen'] = mirror_fen_horizontal(pz['exam_fen'])
+    if pz.get('best_iccs'):
+        pz['best_iccs'] = mirror_iccs_horizontal(pz['best_iccs'])
+    if pz.get('wrong_iccs'):
+        pz['wrong_iccs'] = mirror_iccs_horizontal(pz['wrong_iccs'])
+
+    # 镜像 demo_line
+    if pz.get('demo_line'):
+        new_demo = []
+        for d in pz['demo_line']:
+            m_move = mirror_iccs_horizontal(d.get('move') or '')
+            new_demo.append({
+                'move': m_move,
+                'iccs': m_move,
+                'chinese': d.get('chinese') or '',
+                'comment': d.get('comment') or '',
+            })
+        pz['demo_line'] = new_demo
+
+    # 镜像 solution_tree
+    def _mirror_tree(node: Any) -> Any:
+        if not isinstance(node, dict):
+            return node
+        res: Dict[str, Any] = {}
+        for k, v in node.items():
+            mk = mirror_iccs_horizontal(k)
+            new_v = dict(v) if isinstance(v, dict) else v
+            if isinstance(new_v, dict):
+                if new_v.get('reply'):
+                    new_v['reply'] = mirror_iccs_horizontal(new_v['reply'])
+                if new_v.get('children'):
+                    new_v['children'] = _mirror_tree(new_v['children'])
+            res[mk] = new_v
+        return res
+
+    if pz.get('solution_tree'):
+        pz['solution_tree'] = _mirror_tree(pz['solution_tree'])
+
+    # 镜像 traps
+    if pz.get('traps'):
+        new_traps: Dict[str, Any] = {}
+        for k, v in pz['traps'].items():
+            mk = mirror_iccs_horizontal(k)
+            tv = dict(v) if isinstance(v, dict) else v
+            if isinstance(tv, dict):
+                if tv.get('punish_move'):
+                    tv['punish_move'] = mirror_iccs_horizontal(tv['punish_move'])
+                if tv.get('refute_line'):
+                    tv['refute_line'] = [
+                        {**rf, 'move': mirror_iccs_horizontal(rf.get('move') or '')}
+                        for rf in tv['refute_line']
+                    ]
+            new_traps[mk] = tv
+        pz['traps'] = new_traps
+
+    # 镜像 visual_clues
+    if pz.get('visual_clues'):
+        vc = pz['visual_clues']
+        pz['visual_clues'] = {
+            'weakness_squares': [mirror_iccs_horizontal(sq + sq)[:2] for sq in (vc.get('weakness_squares') or [])],
+            'key_pieces': [mirror_iccs_horizontal(sq + sq)[:2] for sq in (vc.get('key_pieces') or [])],
+            'route': [mirror_iccs_horizontal(sq + sq)[:2] for sq in (vc.get('route') or [])],
+        }
+
+    return pz
 
 
 # --------------------------------------------------------------------------- #
@@ -1102,6 +1661,14 @@ def compile_mistake_to_puzzle(item: Dict[str, Any], idx: int = 0) -> Optional[Di
     exam_fen = build_exam_variant_fen(fen)
     thinking_guide = build_thinking_guide(board, red_to_move, best_iccs=best_iccs, wrong_iccs=worst_iccs)
 
+    # 提取正着关键位置几何属性
+    mv_best_pz = nt.from_iccs(best_iccs) if best_iccs else None
+    key_sq_data = explain_key_square(board, red_to_move, mv_best_pz) if mv_best_pz else None
+
+    # 将所属对局信息原样注入，方便单局拆解特训
+    game_id_val = item.get('worst_game_id') or item.get('game_id') or ''
+    ply_val = item.get('worst_ply') or item.get('ply')
+
     return {
         'id': pz_id,
         'title': f'实战纠错 #{idx + 1} · 别走「{worst_chinese}」（{plain_info["plain_label"]}）',
@@ -1116,6 +1683,11 @@ def compile_mistake_to_puzzle(item: Dict[str, Any], idx: int = 0) -> Optional[Di
         'plain_motif_label': plain_info['plain_label'],
         'fen': fen,
         'exam_fen': exam_fen,
+        'game_id': game_id_val,
+        'ply': ply_val,
+        'best_iccs': best_iccs,
+        'wrong_iccs': worst_iccs,
+        'key_square_info': key_sq_data,
         'master_quote': f'【通俗点拨】{plain_info["plain_why"]} {coach_summary}',
         'demo_line': demo_line,
         'solution_tree': solution_tree,
@@ -1129,3 +1701,237 @@ def compile_mistake_to_puzzle(item: Dict[str, Any], idx: int = 0) -> Optional[Di
         ],
         'explanation': f'【为什么之前走错了】{plain_info["plain_why"]} {coach_summary}（你当时走了：{worst_chinese}，{loss_text}；最佳走法：{best_chinese}）。',
     }
+
+
+# --------------------------------------------------------------------------- #
+# 4. 特定对局全盘拆解引擎（Specific Game Breakdown Engine）
+# --------------------------------------------------------------------------- #
+
+def breakdown_specific_game(game_replay_data: Dict[str, Any]) -> Dict[str, Any]:
+    """对单局对局进行开/中/残三阶段深度拆解，提取关键转折点并编译为闯关题单。
+
+    输入 game_replay_data: Store.game_replay(game_id) 返回的 dict
+    输出包含：
+    - game_id, engine_side, ply_count, winner, outcome, reason
+    - phases: {
+        'opening': {'plies': [1..16], 'accuracy': 90, 'mistakes_count': 0, 'summary': '开局平稳'},
+        'midgame': {'plies': [17..40], 'accuracy': 65, 'mistakes_count': 2, 'summary': '中盘遭抢攻失先'},
+        'endgame': {'plies': [41..], 'accuracy': 40, 'mistakes_count': 1, 'summary': '残局漏防崩溃'}
+      }
+    - turning_points: [
+        {
+          'ply': 14,
+          'side': 'red',
+          'played_iccs': 'b2b5',
+          'played_chinese': '车八进三',
+          'best_iccs': 'b2b6',
+          'best_chinese': '车八进四',
+          'loss': 180,
+          'loss_pawn': 1.8,
+          'phase': 'midgame',
+          'motif': 'lost_tempo',
+          'motif_label': '缓手失先',
+          'severity': 'critical',
+          'key_square_info': {...},
+          'summary': '未能抢先占肋封锁，遭对方反击',
+          'puzzle_id': 'game_xxxx_ply_14'
+        }
+      ]
+    - puzzles: List[Dict] (可直接供精训营加载闯关的教案列表)
+    """
+    if not game_replay_data or not game_replay_data.get('found'):
+        return {
+            'ok': False,
+            'message': '未找到该对局数据',
+            'game_id': (game_replay_data or {}).get('game_id', ''),
+            'turning_points': [],
+            'puzzles': [],
+            'phases': {},
+        }
+
+    head = game_replay_data.get('game', {})
+    plies = game_replay_data.get('plies', [])
+    game_id = head.get('game_id', '')
+
+    turning_points: List[Dict[str, Any]] = []
+    puzzles: List[Dict[str, Any]] = []
+
+    opening_graded = 0
+    opening_misses = 0
+    midgame_graded = 0
+    midgame_misses = 0
+    endgame_graded = 0
+    endgame_misses = 0
+
+    puzzle_counter = 0
+
+    for p in plies:
+        ply_num = p.get('ply', 1)
+        by = p.get('by')
+        review = p.get('review')
+        fen_before = p.get('fen_before')
+        played_iccs = p.get('iccs', '')
+        played_chinese = p.get('chinese', '')
+
+        # 划分阶段
+        if ply_num <= 16:
+            curr_phase = 'opening'
+            curr_phase_name = '开局争先阶段'
+        elif ply_num <= 40:
+            curr_phase = 'midgame'
+            curr_phase_name = '中局搏杀阶段'
+        else:
+            curr_phase = 'endgame'
+            curr_phase_name = '残局攻守阶段'
+
+        if by == 'engine' or not review or not isinstance(review, dict):
+            continue
+
+        rank = review.get('rank')
+        loss = review.get('loss')
+        loss_kind = review.get('loss_kind')
+        status = review.get('status')
+
+        # 统计阶段判分
+        if curr_phase == 'opening':
+            opening_graded += 1
+        elif curr_phase == 'midgame':
+            midgame_graded += 1
+        else:
+            endgame_graded += 1
+
+        is_miss = (
+            (rank is not None and rank > 1 and ((isinstance(loss, int) and loss >= 80) or loss_kind == 'mate' or status == 'outside'))
+        )
+
+        if is_miss:
+            if curr_phase == 'opening':
+                opening_misses += 1
+            elif curr_phase == 'midgame':
+                midgame_misses += 1
+            else:
+                endgame_misses += 1
+
+            # 诊断棋理
+            try:
+                b_fen, r_fen, _h, _m = nt.from_fen(fen_before)
+                diag = review.get('tactics')
+                if not isinstance(diag, dict):
+                    diag = diagnose_review(b_fen, r_fen, played_iccs, review)
+            except Exception:
+                diag = {}
+
+            best_line = (review.get('lines') or [{}])[0]
+            best_iccs = best_line.get('iccs') or review.get('best_iccs') or review.get('best') or ''
+            best_chinese = best_line.get('chinese') or review.get('best_chinese') or ''
+            if not best_chinese and best_iccs:
+                try:
+                    mv = nt.from_iccs(best_iccs)
+                    best_chinese = nt.to_chinese(b_fen, r_fen, mv)
+                except Exception:
+                    best_chinese = best_iccs
+
+            mv_best = nt.from_iccs(best_iccs) if best_iccs else None
+            key_sq_data = explain_key_square(b_fen, r_fen, mv_best) if (mv_best and 'b_fen' in locals()) else None
+
+            loss_val = loss if isinstance(loss, int) else (300 if loss_kind == 'mate' else 120)
+            pawn_val = round(abs(loss_val) / 100.0, 1)
+
+            turning_point = {
+                'ply': ply_num,
+                'phase': curr_phase,
+                'phase_name': curr_phase_name,
+                'side': p.get('side', 'red'),
+                'played_iccs': played_iccs,
+                'played_chinese': played_chinese,
+                'best_iccs': best_iccs,
+                'best_chinese': best_chinese,
+                'loss': loss_val,
+                'loss_pawn': pawn_val,
+                'loss_kind': loss_kind,
+                'rank': rank,
+                'motif': diag.get('primary_motif', 'lost_tempo'),
+                'motif_label': diag.get('motif_label', '缓手失先'),
+                'severity': diag.get('severity', 'warn'),
+                'coach_summary': diag.get('coach_summary', ''),
+                'key_square_info': key_sq_data,
+                'fen_before': fen_before,
+                'puzzle_id': f'mistake_{game_id}_{ply_num}',
+            }
+            turning_points.append(turning_point)
+
+            # 编译为单局专属实训题目
+            mistake_item = {
+                'fen_before': fen_before,
+                'side': p.get('side', 'red'),
+                'best_iccs': best_iccs,
+                'best_chinese': best_chinese,
+                'worst_chinese': played_chinese,
+                'worst_iccs': played_iccs,
+                'worst_review': review,
+                'worst_loss': loss_val,
+                'worst_game_id': game_id,
+                'worst_ply': ply_num,
+            }
+            pz = compile_mistake_to_puzzle(mistake_item, idx=puzzle_counter)
+            if pz:
+                puzzle_counter += 1
+                pz['category'] = 'game_breakdown'
+                pz['game_id'] = game_id
+                pz['ply'] = ply_num
+                pz['phase_name'] = curr_phase_name
+                pz['title'] = f'第 {ply_num} 手（{curr_phase_name}）· 别走「{played_chinese}」'
+                puzzles.append(pz)
+
+    # 阶段总结
+    def calc_phase_acc(graded, misses):
+        if graded == 0:
+            return 100
+        return max(0, int(round((1.0 - misses / graded) * 100)))
+
+    phases = {
+        'opening': {
+            'name': '开局阶段 (1~16手)',
+            'graded_count': opening_graded,
+            'misses_count': opening_misses,
+            'accuracy': calc_phase_acc(opening_graded, opening_misses),
+            'verdict': '出子迅速抢占先手' if opening_misses == 0 else f'出现 {opening_misses} 处失先缓着',
+        },
+        'midgame': {
+            'name': '中局阶段 (17~40手)',
+            'graded_count': midgame_graded,
+            'misses_count': midgame_misses,
+            'accuracy': calc_phase_acc(midgame_graded, midgame_misses),
+            'verdict': '攻防协调战术敏锐' if midgame_misses == 0 else f'出现 {midgame_misses} 处战术漏洞',
+        },
+        'endgame': {
+            'name': '残局阶段 (41手+)',
+            'graded_count': endgame_graded,
+            'misses_count': endgame_misses,
+            'accuracy': calc_phase_acc(endgame_graded, endgame_misses),
+            'verdict': '算路严密稳操胜券' if endgame_misses == 0 else f'出现 {endgame_misses} 处防守失误',
+        },
+    }
+
+    # 提炼本局最核心的溃败转折点
+    critical_turning_point = None
+    if turning_points:
+        critical_turning_point = max(
+            turning_points,
+            key=lambda tp: (1 if tp['severity'] == 'critical' else 0, tp['loss'])
+        )
+
+    return {
+        'ok': True,
+        'game_id': game_id,
+        'engine_side': head.get('engine_side'),
+        'ply_count': head.get('ply_count', len(plies)),
+        'winner': head.get('winner'),
+        'outcome': head.get('outcome'),
+        'reason': head.get('reason', ''),
+        'phases': phases,
+        'turning_points': turning_points,
+        'critical_turning_point': critical_turning_point,
+        'puzzles': puzzles,
+    }
+

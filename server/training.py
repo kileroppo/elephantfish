@@ -23,6 +23,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from engine import core
 from engine import notation as nt
 from engine import tactics
 from engine.engine import EngineSet, SearchRequest
@@ -37,13 +38,17 @@ class MasterDrillSession:
     """单个题目的名师带教实训会话。"""
 
     def __init__(self, puzzle: Dict[str, Any], stage: str = 'drill'):
-        self.puzzle = dict(puzzle)
-        self.puzzle_id = puzzle['id']
-        self.stage = stage  # 'demo' | 'drill' | 'exam'
-        start_fen = puzzle.get('exam_fen') if stage == 'exam' and puzzle.get('exam_fen') else puzzle['fen']
+        self.raw_puzzle = dict(puzzle)
+        self.stage = stage  # 'demo' | 'drill' | 'exam' | 'mirror'
+        if self.stage == 'mirror':
+            self.puzzle = tactics.mirror_puzzle(self.raw_puzzle)
+        else:
+            self.puzzle = dict(puzzle)
+        self.puzzle_id = self.puzzle['id']
+        start_fen = self.puzzle.get('exam_fen') if stage == 'exam' and self.puzzle.get('exam_fen') else self.puzzle['fen']
         self.start_fen = start_fen
         fen_side = 'red' if ' w ' in (start_fen or '') else 'black'
-        self.user_side = puzzle.get('side', fen_side)
+        self.user_side = self.puzzle.get('side', fen_side)
         self.engine_side = 'black' if self.user_side == 'red' else 'red'
         self.game = Game(engine_side=self.engine_side, start_fen=start_fen)
         self.hints_used = 0
@@ -53,7 +58,7 @@ class MasterDrillSession:
         self.sandbox = False
 
         # 当前在定式树中的游标节点
-        self.tree_cursor: Optional[Dict[str, Any]] = puzzle.get('solution_tree')
+        self.tree_cursor: Optional[Dict[str, Any]] = self.puzzle.get('solution_tree')
 
         # 反击惩罚态（Rebuttal State）
         self.in_rebuttal = False
@@ -69,6 +74,10 @@ class MasterDrillSession:
         """重置回初始局面或切换阶段。"""
         if stage:
             self.stage = stage
+        if self.stage == 'mirror':
+            self.puzzle = tactics.mirror_puzzle(self.raw_puzzle)
+        else:
+            self.puzzle = dict(self.raw_puzzle)
         start_fen = self.puzzle.get('exam_fen') if self.stage == 'exam' and self.puzzle.get('exam_fen') else self.puzzle['fen']
         self.start_fen = start_fen
         fen_side = 'red' if ' w ' in (start_fen or '') else 'black'
@@ -128,8 +137,8 @@ class TrainingController:
     # 题目列表与师门档案概况
     # ------------------------------------------------------------------ #
 
-    def list_puzzles_reply(self, category: Optional[str] = None) -> Reply:
-        all_puzzles = ep.list_puzzles(category=category, store=self.store)
+    def list_puzzles_reply(self, category: Optional[str] = None, motif: Optional[str] = None, game_id: Optional[str] = None) -> Reply:
+        all_puzzles = ep.list_puzzles(category=category, store=self.store, motif=motif, game_id=game_id)
         progress_map = self.store.get_training_progress() if self.store else {}
         summary = self.store.get_training_summary() if self.store else {}
 
@@ -156,7 +165,34 @@ class TrainingController:
             'categories': ep.list_categories(),
             'puzzles': merged_puzzles,
             'summary': summary,
+            'current_game_id': game_id or '',
         })
+
+    def game_breakdown_reply(self, query: Dict[str, Any]) -> Reply:
+        """特定对局开/中/残三阶段拆解与胜负手特训接口（GET /api/training/game-breakdown?game_id=...）"""
+        game_id = str(query.get('game_id') or '').strip()
+        if not self.store:
+            return Reply({'ok': False, 'message': '存档未启用'}, 503)
+
+        if not game_id:
+            # 默认取最近一局有判分的对局
+            recent = self.store.recent_games(limit=5)
+            graded = [g for g in recent.get('games', []) if g.get('graded_plies', 0) > 0]
+            if graded:
+                game_id = graded[0].get('game_id')
+            elif recent.get('games'):
+                game_id = recent.get('games')[0].get('game_id')
+
+        if not game_id:
+            return Reply({'ok': False, 'message': '暂无对局记录可供拆解'}, 404)
+
+        replay_data = self.store.game_replay(game_id)
+        if not replay_data.get('found'):
+            return Reply({'ok': False, 'message': f'未找到对局：{game_id}'}, 404)
+
+        breakdown = tactics.breakdown_specific_game(replay_data)
+        breakdown['ok'] = True
+        return Reply(breakdown)
 
     # ------------------------------------------------------------------ #
     # 进入实训 / 加载局面
@@ -195,7 +231,8 @@ class TrainingController:
 
         base_snap = sess.game.snapshot()
         good_steps = self._build_good_steps(sess.start_fen, sess.user_side, pz_data)
-        opp_threat_steps = self._build_opponent_threat_steps(sess.start_fen, sess.user_side)
+        opp_threat_data = self._analyze_opponent_threat(sess.start_fen, sess.user_side)
+        opp_threat_steps = opp_threat_data['steps']
 
         # 如果题目自带典型错着（如实战心魔题的 wrong_iccs 或定式题的第一个 trap），预生成错着分步动画与优劣对比
         default_wrong_iccs = pz_data.get('wrong_iccs') or ''
@@ -240,6 +277,17 @@ class TrainingController:
             loss_override=pz_data.get('loss'),
             trap_comment=default_trap_comment,
         )
+        xray = tactics.extract_xiangqi_xray(sess.game.board, sess.game.red_to_move)
+        choice_options = self._build_choice_options(
+            sess.start_fen,
+            sess.user_side,
+            best_iccs=best_iccs,
+            wrong_iccs=default_wrong_iccs or None,
+            trap_comment=default_trap_comment,
+            preset_refute=default_preset_refute,
+            good_steps=good_steps,
+            bad_steps=default_bad_steps,
+        )
 
         return Reply({
             'ok': True,
@@ -256,9 +304,12 @@ class TrainingController:
             'sandbox': sess.sandbox,
             'good_steps': good_steps,
             'default_bad_steps': default_bad_steps,
-            'opponent_threat_steps': opp_threat_steps,
+            'opponent_threat_steps': opp_threat_data['steps'],
+            'opponent_threat': opp_threat_data,
             'pros_cons': pros_cons,
             'thinking_guide': thinking_guide,
+            'xray': xray,
+            'choice_options': choice_options,
         })
 
     # ------------------------------------------------------------------ #
@@ -379,6 +430,17 @@ class TrainingController:
                 for s in bad_steps[1:]
             ]
 
+            xray = tactics.extract_xiangqi_xray(game.board, game.red_to_move)
+            choice_options = self._build_choice_options(
+                fen_before,
+                sess.user_side,
+                best_iccs=best_tree_iccs,
+                wrong_iccs=user_iccs,
+                trap_comment=trap_comment,
+                good_steps=good_steps,
+                bad_steps=bad_steps,
+            )
+
             return Reply({
                 'ok': True,
                 'outcome': 'bad_move',
@@ -393,6 +455,8 @@ class TrainingController:
                 'good_steps': good_steps,
                 'pros_cons': pros_cons,
                 'thinking_guide': thinking_guide,
+                'xray': xray,
+                'choice_options': choice_options,
                 'punish_detail': {
                     'comment': sess.last_punish_comment,
                     'wrong_move': user_iccs,
@@ -402,6 +466,8 @@ class TrainingController:
                     'good_steps': good_steps,
                     'pros_cons': pros_cons,
                     'thinking_guide': thinking_guide,
+                    'xray': xray,
+                    'choice_options': choice_options,
                 }
             })
 
@@ -552,6 +618,16 @@ class TrainingController:
                     {'move': punish_iccs, 'iccs': punish_iccs, 'chinese': punish_chinese, 'comment': f'{opp_name}乘虚反扑，夺走局部主动权！'}
                 ]
 
+                xray = tactics.extract_xiangqi_xray(game.board, game.red_to_move)
+                choice_options = self._build_choice_options(
+                    fen_before,
+                    sess.user_side,
+                    best_iccs=best_tree_iccs,
+                    wrong_iccs=user_iccs,
+                    good_steps=good_steps,
+                    bad_steps=bad_steps,
+                )
+
                 return Reply({
                     'ok': True,
                     'outcome': 'bad_move',
@@ -566,6 +642,8 @@ class TrainingController:
                     'good_steps': good_steps,
                     'pros_cons': pros_cons,
                     'thinking_guide': thinking_guide,
+                    'xray': xray,
+                    'choice_options': choice_options,
                     'punish_detail': {
                         'comment': sess.last_punish_comment,
                         'wrong_move': user_iccs,
@@ -575,6 +653,8 @@ class TrainingController:
                         'good_steps': good_steps,
                         'pros_cons': pros_cons,
                         'thinking_guide': thinking_guide,
+                        'xray': xray,
+                        'choice_options': choice_options,
                     }
                 })
 
@@ -901,66 +981,212 @@ class TrainingController:
 
         return steps
 
-    def _build_opponent_threat_steps(
+    def _analyze_opponent_threat(
         self,
         fen_now: str,
         user_side: str,
-    ) -> List[Dict[str, Any]]:
-        """生成『👁️ 对手想干嘛』分步动画：假设我方不设防（空过一手），演示对手接下来 2~3 步的杀招企图。"""
+    ) -> Dict[str, Any]:
+        """判定对手是否存在实质威胁并生成客观预警数据。"""
+        empty_res: Dict[str, Any] = {
+            'has_threat': False,
+            'is_substantial': False,
+            'headline': '局面平稳',
+            'intent_desc': '对手暂无直接杀招。',
+            'target_move': '',
+            'target_chinese': '',
+            'route': [],
+            'threat_squares': [],
+            'steps': [],
+        }
         parts = (fen_now or '').strip().split()
         if not parts:
-            return []
+            return empty_res
         opp_char = 'b' if user_side == 'red' else 'w'
         opp_fen = f"{parts[0]} {opp_char} - - 0 1"
         try:
             temp = Game(start_fen=opp_fen)
         except Exception:
-            return []
+            return empty_res
 
         if temp.status()['state'] in ('checkmate', 'stalemate'):
-            return []
+            return empty_res
 
         _, _, pv_moves = self._search_line(temp, max_depth=6, time_limit=0.22)
-        steps: List[Dict[str, Any]] = []
-        for idx, mv in enumerate(pv_moves[:3]):
-            if mv is None or not temp.is_legal(mv):
-                break
-            step_num = idx + 1
-            is_user = (temp.turn == user_side)
-            info = tactics.explain_step_plain(
-                temp.board,
-                temp.red_to_move,
-                mv,
-                step_idx=step_num,
-                is_user=is_user,
-                mode='threat',
-            )
-            if step_num == 1:
-                tag = '👁️ 对手第1步企图：直接动手'
-            elif is_user:
-                tag = '🛡️ 如果我方勉强招架'
+        if not pv_moves:
+            legals = temp.legal_moves()
+            if legals:
+                pv_moves = [legals[0]]
             else:
-                tag = '💥 对手后续杀招：连续打击'
+                return empty_res
 
-            steps.append({
-                'step': step_num,
-                'move': info['iccs'],
-                'iccs': info['iccs'],
-                'chinese': info['chinese'],
-                'side': info['side'],
-                'actor': info['actor'],
-                'tag': tag,
-                'plain': info['plain'],
-                'comment': info['plain'],
-                'captured': info['captured'],
-                'gains': info['gains'],
-                'losses': info['losses'],
-                'threat_squares': info['threat_squares'],
-            })
-            temp.push(mv)
-            if temp.status()['state'] in ('checkmate', 'stalemate'):
-                break
-        return steps
+        mv0 = pv_moves[0]
+        if mv0 is None or not temp.is_legal(mv0):
+            return empty_res
+
+        # 对手第1步出招诊断
+        info0 = tactics.explain_step_plain(
+            temp.board,
+            temp.red_to_move,
+            mv0,
+            step_idx=1,
+            is_user=False,
+            mode='threat',
+        )
+
+        is_mate = bool(info0.get('is_mate'))
+        gives_check = bool(info0.get('gives_check'))
+        captured = info0.get('captured')
+        has_captured = captured is not None
+
+        # 检查捉无保护子（newly_threatened）
+        graph_before = tactics.analyze_board_graph(temp.board)
+        board_after = info0.get('board_after') or core.apply_move(temp.board, temp.red_to_move, mv0)
+        graph_after = tactics.analyze_board_graph(board_after)
+        before_user_hanging = {h['square'] for h in graph_before['hanging'][user_side]}
+        newly_threatened = [
+            h for h in graph_after['hanging'][user_side]
+            if h['square'] not in before_user_hanging
+        ]
+        has_newly_threatened = bool(newly_threatened) or any('瞄准捉击' in g for g in info0.get('gains', []))
+
+        # 检查 PV 中是否包含杀招
+        has_mate_in_pv = is_mate
+        if not has_mate_in_pv:
+            sim = Game(start_fen=opp_fen)
+            for idx, mv in enumerate(pv_moves[:4]):
+                if not sim.is_legal(mv):
+                    break
+                mover_is_opp = (sim.turn != user_side)
+                sim.push(mv)
+                if sim.status()['state'] == 'checkmate' and mover_is_opp:
+                    has_mate_in_pv = True
+                    break
+
+        is_substantial = bool(is_mate or has_mate_in_pv or gives_check or has_captured or has_newly_threatened)
+
+        target_move = info0['iccs']
+        target_chinese = info0['chinese']
+        route = [target_move[:2], target_move[2:4]] if len(target_move) >= 4 else []
+        threat_squares = list(info0.get('threat_squares', []))
+
+        tag_map = {
+            1: '对手出招',
+            2: '我方应对',
+            3: '后续变化',
+        }
+
+        if is_substantial:
+            has_threat = True
+            headline = f'对手企图：{info0["chinese"]}'
+            intent_desc = f'对手意图走「{info0["chinese"]}」发起进攻（{info0["plain"]}）。'
+
+            # 扩展 PV 序列到 2~3 步（如果当前局面未结束且 PV 不足）
+            sim_line = list(pv_moves)
+            curr = Game(start_fen=opp_fen)
+            for m in sim_line:
+                if not curr.is_legal(m):
+                    break
+                curr.push(m)
+
+            while len(sim_line) < 3 and curr.status()['state'] not in ('checkmate', 'stalemate'):
+                extra_mv, _, extra_pv = self._search_line(curr, max_depth=5, time_limit=0.15)
+                candidates = extra_pv if extra_pv else ([extra_mv] if extra_mv else [])
+                added = False
+                for em in candidates:
+                    if em and curr.is_legal(em):
+                        sim_line.append(em)
+                        curr.push(em)
+                        added = True
+                        if len(sim_line) >= 3 or curr.status()['state'] in ('checkmate', 'stalemate'):
+                            break
+                if not added:
+                    legals = curr.legal_moves()
+                    if legals:
+                        sim_line.append(legals[0])
+                        curr.push(legals[0])
+                    break
+
+            steps: List[Dict[str, Any]] = []
+            sim_game = Game(start_fen=opp_fen)
+            for idx, mv in enumerate(sim_line[:3]):
+                if mv is None or not sim_game.is_legal(mv):
+                    break
+                step_num = idx + 1
+                is_user = (sim_game.turn == user_side)
+                info = tactics.explain_step_plain(
+                    sim_game.board,
+                    sim_game.red_to_move,
+                    mv,
+                    step_idx=step_num,
+                    is_user=is_user,
+                    mode='threat',
+                )
+                tag = tag_map.get(step_num, '后续变化')
+                steps.append({
+                    'step': step_num,
+                    'move': info['iccs'],
+                    'iccs': info['iccs'],
+                    'chinese': info['chinese'],
+                    'side': info['side'],
+                    'actor': info['actor'],
+                    'role_label': info.get('role_label', ''),
+                    'tag': tag,
+                    'plain': info['plain'],
+                    'comment': info['plain'],
+                    'short_bubble': info.get('short_bubble', ''),
+                    'captured': info.get('captured'),
+                    'gives_check': info.get('gives_check', False),
+                    'is_mate': info.get('is_mate', False),
+                    'threat_squares': info.get('threat_squares', []),
+                    'gains': info.get('gains', []),
+                    'losses': info.get('losses', []),
+                })
+                sim_game.push(mv)
+                if sim_game.status()['state'] in ('checkmate', 'stalemate'):
+                    break
+        else:
+            has_threat = False
+            headline = f'局面平稳：对手走「{info0["chinese"]}」'
+            intent_desc = f'对手暂无直接杀招，下一步意图走「{info0["chinese"]}」推进局势。'
+            steps = [{
+                'step': 1,
+                'move': info0['iccs'],
+                'iccs': info0['iccs'],
+                'chinese': info0['chinese'],
+                'side': info0['side'],
+                'actor': info0['actor'],
+                'role_label': info0.get('role_label', ''),
+                'tag': '对手下一步动向',
+                'plain': info0['plain'],
+                'comment': info0['plain'],
+                'short_bubble': info0.get('short_bubble', ''),
+                'captured': info0.get('captured'),
+                'gives_check': info0.get('gives_check', False),
+                'is_mate': info0.get('is_mate', False),
+                'threat_squares': info0.get('threat_squares', []),
+                'gains': info0.get('gains', []),
+                'losses': info0.get('losses', []),
+            }]
+
+        return {
+            'has_threat': has_threat,
+            'is_substantial': is_substantial,
+            'headline': headline,
+            'intent_desc': intent_desc,
+            'target_move': target_move,
+            'target_chinese': target_chinese,
+            'route': route,
+            'threat_squares': threat_squares,
+            'steps': steps,
+        }
+
+    def _build_opponent_threat_steps(
+        self,
+        fen_now: str,
+        user_side: str,
+    ) -> List[Dict[str, Any]]:
+        """生成对手企图分步动画列表（委托给 _analyze_opponent_threat）。"""
+        return self._analyze_opponent_threat(fen_now, user_side)['steps']
 
     def _build_pros_cons(
         self,
@@ -1032,8 +1258,30 @@ class TrainingController:
                     best_gains.append(item)
             if s['step'] <= 3 and s.get('plain') and len(best_gains) < 4:
                 best_gains.append(f"第{s['step']}步收益：{s['plain']}")
+
+        # 结合正着关键位置几何棋理，彻底替换空话
+        best_key_sq = None
+        if best_iccs:
+            mv_b_temp = nt.from_iccs(best_iccs)
+            best_key_sq = tactics.explain_key_square(board_before, red_before, mv_b_temp) if mv_b_temp else None
+
+        if best_key_sq and best_key_sq.get('why_key'):
+            k_why = f"占领{best_key_sq['zone_name']}（{best_key_sq['dest_square']}）：{best_key_sq['why_key']}"
+            if k_why not in best_gains:
+                best_gains.insert(0, k_why)
+
         if not best_gains:
-            best_gains.append('抢占关键攻防要点，逼迫对手被动招架')
+            if best_key_sq:
+                best_gains.append(f"抢占{best_key_sq['zone_name']}，牢牢控制攻防要津")
+            else:
+                best_gains.append('抢占关键攻防要点，逼迫对手被动招架')
+
+        radar_metrics = self._build_radar_metrics(
+            loss_cp=loss_cp,
+            best_cp=best_cp,
+            wrong_cp=wrong_cp,
+            motif=(diag or {}).get('motif', ''),
+        )
 
         return {
             'wrong_iccs': wrong_iccs or '',
@@ -1049,7 +1297,190 @@ class TrainingController:
             'wrong_summary': (diag or {}).get('plain_reason') or trap_comment or verdict_headline,
             'wrong_losses': wrong_losses[:4],
             'best_gains': best_gains[:4],
+            'key_square_info': best_key_sq,
+            'radar_metrics': radar_metrics,
         }
+
+    def _build_radar_metrics(
+        self,
+        loss_cp: int,
+        best_cp: int,
+        wrong_cp: int,
+        motif: str = '',
+    ) -> Dict[str, Any]:
+        """计算 3D 战局量化指标：九宫敌帅危急度、子力平衡存活率、行棋争夺主动权。"""
+        if loss_cp >= 500:
+            best_king = 95
+            wrong_king = 15
+            best_king_text = '叫将绝杀在即，对方老帅插翅难飞'
+            wrong_king_text = '错失攻杀要穴，对方老帅解除警报'
+            best_mat = 92
+            wrong_mat = 35
+            best_mat_text = '大子安然无恙，甚至白吃敌方关键子'
+            wrong_mat_text = '直接白丢车/马/炮大子，阵脚崩溃'
+            best_init = 96
+            wrong_init = 18
+            best_init_text = '绝对先手控盘，招招步步紧逼'
+            wrong_init_text = '主动权彻底丧失，陷入被动挨打'
+        elif loss_cp >= 200:
+            best_king = 85
+            wrong_king = 30
+            best_king_text = '直逼敌帅要穴，迫使对方疲于应付'
+            wrong_king_text = '攻势顿挫，防守压力骤降'
+            best_mat = 85
+            wrong_mat = 55
+            best_mat_text = '子力紧密护卫，兑子占得便宜'
+            wrong_mat_text = '露出无根子破绽，面临少子亏损'
+            best_init = 88
+            wrong_init = 35
+            best_init_text = '抢得主攻先机，调动敌方阵型'
+            wrong_init_text = '痛失攻防先手，攻守异势'
+        else:
+            best_king = 72
+            wrong_king = 45
+            best_king_text = '保持对敌中路与九宫的持续牵制'
+            wrong_king_text = '攻势放缓，给敌方调整阵型之机'
+            best_mat = 80
+            wrong_mat = 65
+            best_mat_text = '全军协调，子力无折损'
+            wrong_mat_text = '微亏兵卒或阵型受损'
+            best_init = 78
+            wrong_init = 50
+            best_init_text = '步步有先，保持压制'
+            wrong_init_text = '缓手失先，节奏被断'
+
+        return {
+            'enemy_king_danger': {
+                'wrong_pct': wrong_king,
+                'best_pct': best_king,
+                'wrong_text': wrong_king_text,
+                'best_text': best_king_text,
+            },
+            'material_score': {
+                'wrong_pct': wrong_mat,
+                'best_pct': best_mat,
+                'wrong_text': wrong_mat_text,
+                'best_text': best_mat_text,
+            },
+            'initiative_score': {
+                'wrong_pct': wrong_init,
+                'best_pct': best_init,
+                'wrong_text': wrong_init_text,
+                'best_text': best_init_text,
+            },
+        }
+
+    def _build_choice_options(
+        self,
+        fen_now: str,
+        user_side: str,
+        best_iccs: str,
+        wrong_iccs: Optional[str] = None,
+        trap_comment: str = '',
+        preset_refute: Optional[List[Dict[str, Any]]] = None,
+        good_steps: Optional[List[Dict[str, Any]]] = None,
+        bad_steps: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
+        """构建 3 选 1 试走引导选项卡（A/B/C 三选一）。"""
+        options: List[Dict[str, Any]] = []
+        try:
+            temp = Game(start_fen=fen_now)
+        except Exception:
+            return []
+
+        # Option A: 最佳正着
+        mv_best = nt.from_iccs(best_iccs) if best_iccs else None
+        if mv_best and temp.is_legal(mv_best):
+            best_ch = nt.to_chinese(temp.board, mv_best)
+            g_steps = good_steps or self._build_good_steps(fen_now, user_side)
+            k_info = tactics.explain_key_square(temp.board, temp.red_to_move, mv_best)
+            teaser_a = (
+                f"占领{k_info['zone_name']}（{k_info['dest_square']}）！{k_info['why_key']}"
+                if k_info and k_info.get('why_key')
+                else '直捣要害！牢牢掌握行棋主动权，逼使对手防线破绽百出'
+            )
+            options.append({
+                'id': 'A',
+                'label': 'A',
+                'iccs': best_iccs,
+                'chinese': best_ch,
+                'is_correct': True,
+                'teaser': teaser_a,
+                'verdict_tag': '✅ 必胜正着',
+                'steps': g_steps,
+                'key_square_info': k_info,
+            })
+
+        # Option B: 典型错着 / 陷阱
+        w_iccs = wrong_iccs
+        if not w_iccs:
+            for m in temp.legal_moves():
+                miccs = nt.to_iccs(m)
+                if miccs != best_iccs:
+                    w_iccs = miccs
+                    break
+        if w_iccs and w_iccs != best_iccs:
+            mv_w = nt.from_iccs(w_iccs)
+            if mv_w and temp.is_legal(mv_w):
+                w_ch = nt.to_chinese(temp.board, mv_w)
+                b_steps = bad_steps or self._build_bad_steps(
+                    fen_now,
+                    user_side,
+                    w_iccs,
+                    preset_refute=preset_refute,
+                    trap_comment=trap_comment,
+                    fast=True,
+                )
+                kw_info = tactics.explain_key_square(temp.board, temp.red_to_move, mv_w)
+                t_text = trap_comment if trap_comment else (
+                    f"偏离关键要道，误入{kw_info['zone_name']}（{kw_info['dest_square']}），暴露严重空档"
+                    if kw_info else '看似能攻能守，实则正中对手下怀，暴露严重空档'
+                )
+                options.append({
+                    'id': 'B',
+                    'label': 'B',
+                    'iccs': w_iccs,
+                    'chinese': w_ch,
+                    'is_correct': False,
+                    'teaser': t_text,
+                    'verdict_tag': '❌ 典型陷阱',
+                    'steps': b_steps,
+                    'key_square_info': kw_info,
+                })
+
+        # Option C: 表面平稳的缓手 / 漏着
+        c_iccs = None
+        for m in temp.legal_moves():
+            miccs = nt.to_iccs(m)
+            if miccs != best_iccs and miccs != w_iccs:
+                c_iccs = miccs
+                break
+
+        if c_iccs:
+            mv_c = nt.from_iccs(c_iccs)
+            if mv_c and temp.is_legal(mv_c):
+                c_ch = nt.to_chinese(temp.board, mv_c)
+                c_steps = self._build_bad_steps(
+                    fen_now,
+                    user_side,
+                    c_iccs,
+                    trap_comment='消极退守应付，不仅没能破局，反而将好局走成僵局被对手反制',
+                    fast=True,
+                )
+                kc_info = tactics.explain_key_square(temp.board, temp.red_to_move, mv_c)
+                options.append({
+                    'id': 'C',
+                    'label': 'C',
+                    'iccs': c_iccs,
+                    'chinese': c_ch,
+                    'is_correct': False,
+                    'teaser': f"消极缓手：错失关键要道，在{kc_info['zone_name'] if kc_info else '局部'}消磨步数，白白拱手送出先手！",
+                    'verdict_tag': '⚠️ 缓手失先',
+                    'steps': c_steps,
+                    'key_square_info': kc_info,
+                })
+
+        return options
 
     # ------------------------------------------------------------------ #
     # 悔棋撤销与定式树游标精准回溯
@@ -1136,22 +1567,97 @@ class TrainingController:
     def reset_drill_reply(self, payload: Dict[str, Any]) -> Reply:
         puzzle_id = str(payload.get('puzzle_id') or '').strip()
         stage = str(payload.get('stage') or 'drill').strip()
-        sess = self._get_or_create_session(puzzle_id)
+        sess = self._get_or_create_session(puzzle_id, stage=stage)
         if sess is None:
             return Reply({'ok': False, 'message': '题目不存在'}, 404)
 
         sess.reset(stage=stage)
         base_snap = sess.game.snapshot()
+        pz_data = dict(sess.puzzle)
+
+        good_steps = self._build_good_steps(sess.start_fen, sess.user_side, pz_data)
+        opp_threat_data = self._analyze_opponent_threat(sess.start_fen, sess.user_side)
+        opp_threat_steps = opp_threat_data['steps']
+
+        default_wrong_iccs = pz_data.get('wrong_iccs') or ''
+        default_trap_comment = ''
+        default_preset_refute = pz_data.get('refute_line') or []
+        traps_dict = pz_data.get('traps') or {}
+        if not default_wrong_iccs and isinstance(traps_dict, dict) and traps_dict:
+            default_wrong_iccs = next(iter(traps_dict.keys()))
+            t_info = traps_dict[default_wrong_iccs] or {}
+            default_trap_comment = t_info.get('comment', '')
+            default_preset_refute = t_info.get('refute_line') or []
+
+        default_bad_steps: List[Dict[str, Any]] = []
+        if default_wrong_iccs:
+            default_bad_steps = self._build_bad_steps(
+                sess.start_fen,
+                sess.user_side,
+                default_wrong_iccs,
+                preset_refute=default_preset_refute,
+                trap_comment=default_trap_comment,
+                fast=True,
+            )
+
+        best_iccs = pz_data.get('best_iccs') or (good_steps[0]['iccs'] if good_steps else '')
+        thinking_guide = pz_data.get('thinking_guide') or tactics.build_thinking_guide(
+            sess.game.board,
+            sess.game.red_to_move,
+            best_iccs=best_iccs,
+            wrong_iccs=default_wrong_iccs or None,
+            motif=pz_data.get('motif', 'tactical_oversight'),
+        )
+        pros_cons = self._build_pros_cons(
+            board_before=sess.game.board,
+            red_before=sess.game.red_to_move,
+            user_side=sess.user_side,
+            wrong_iccs=default_wrong_iccs or None,
+            best_iccs=best_iccs or None,
+            eval_before_red=None,
+            eval_after_red=None,
+            bad_steps=default_bad_steps,
+            good_steps=good_steps,
+            loss_override=pz_data.get('loss'),
+            trap_comment=default_trap_comment,
+        )
+        xray = tactics.extract_xiangqi_xray(sess.game.board, sess.game.red_to_move)
+        choice_options = self._build_choice_options(
+            sess.start_fen,
+            sess.user_side,
+            best_iccs=best_iccs,
+            wrong_iccs=default_wrong_iccs or None,
+            trap_comment=default_trap_comment,
+            preset_refute=default_preset_refute,
+            good_steps=good_steps,
+            bad_steps=default_bad_steps,
+        )
+
         return Reply({
             'ok': True,
             'message': '已重整棋盘！',
+            'puzzle': pz_data,
             'game': base_snap,
             'base_game': base_snap,
             'hints_used': sess.hints_used,
             'solved': False,
             'stage': sess.stage,
             'in_rebuttal': False,
+            'good_steps': good_steps,
+            'default_bad_steps': default_bad_steps,
+            'opponent_threat_steps': opp_threat_data['steps'],
+            'opponent_threat': opp_threat_data,
+            'pros_cons': pros_cons,
+            'thinking_guide': thinking_guide,
+            'xray': xray,
+            'choice_options': choice_options,
         })
+
+    def preview_drill_reply(self, payload: Dict[str, Any]) -> Reply:
+        """实训盘面重置/预演接口。"""
+        if 'puzzle_id' in payload:
+            return self.reset_drill_reply(payload)
+        return self.sandbox_reply(payload)
 
     # ------------------------------------------------------------------ #
     # 无状态回放沙盒推演（What-If Sandbox，只读零副作用）
@@ -1177,20 +1683,30 @@ class TrainingController:
 
         if not move_text:
             good_steps = self._build_good_steps(fen, user_side)
-            opp_threat_steps = self._build_opponent_threat_steps(fen, user_side)
+            opp_threat_data = self._analyze_opponent_threat(fen, user_side)
             best_iccs = good_steps[0]['iccs'] if good_steps else ''
             thinking_guide = tactics.build_thinking_guide(
                 temp.board,
                 temp.red_to_move,
                 best_iccs=best_iccs,
             )
+            xray = tactics.extract_xiangqi_xray(temp.board, temp.red_to_move)
+            choice_options = self._build_choice_options(
+                fen,
+                user_side,
+                best_iccs=best_iccs,
+                good_steps=good_steps,
+            )
             return Reply({
                 'ok': True,
                 'game': base_snap,
                 'base_game': base_snap,
                 'good_steps': good_steps,
-                'opponent_threat_steps': opp_threat_steps,
+                'opponent_threat_steps': opp_threat_data['steps'],
+                'opponent_threat': opp_threat_data,
                 'thinking_guide': thinking_guide,
+                'xray': xray,
+                'choice_options': choice_options,
             })
 
         mv = nt.from_iccs(move_text)
@@ -1258,7 +1774,8 @@ class TrainingController:
             fast=True,
         )
         good_steps = self._build_good_steps(fen, user_side)
-        opp_threat_steps = self._build_opponent_threat_steps(fen, user_side)
+        opp_threat_data = self._analyze_opponent_threat(fen, user_side)
+        opp_threat_steps = opp_threat_data['steps']
         pros_cons = self._build_pros_cons(
             board_before=board_before,
             red_before=red_before,
@@ -1283,6 +1800,16 @@ class TrainingController:
         if reply_mv and temp.is_legal(reply_mv):
             temp.push(reply_mv, by='engine')
 
+        xray = tactics.extract_xiangqi_xray(temp.board, temp.red_to_move)
+        choice_options = self._build_choice_options(
+            fen,
+            user_side,
+            best_iccs=best_iccs,
+            wrong_iccs=user_iccs if user_iccs != best_iccs else None,
+            good_steps=good_steps,
+            bad_steps=bad_steps,
+        )
+
         return Reply({
             'ok': True,
             'fen_before': fen,
@@ -1295,9 +1822,12 @@ class TrainingController:
             'game': temp.snapshot(),
             'bad_steps': bad_steps,
             'good_steps': good_steps,
-            'opponent_threat_steps': opp_threat_steps,
+            'opponent_threat_steps': opp_threat_data['steps'],
+            'opponent_threat': opp_threat_data,
             'pros_cons': pros_cons,
             'thinking_guide': thinking_guide,
+            'xray': xray,
+            'choice_options': choice_options,
         })
 
     # ------------------------------------------------------------------ #

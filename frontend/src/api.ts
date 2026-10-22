@@ -1,6 +1,7 @@
 import type {
   ApiReply,
   AppState,
+  GameBreakdownReply,
   GameSnapshot,
   GamesReply,
   MistakeBookReply,
@@ -141,10 +142,22 @@ export const api = {
     request<ReplayReply>(`/api/game?game_id=${encodeURIComponent(gameId)}`),
 
   // ---------------- 实训营（Drill Lab）接口 ----------------
-  trainingPuzzles: (category?: string) =>
-    request<TrainingPuzzlesReply>(
-      category ? `/api/training/puzzles?category=${encodeURIComponent(category)}` : '/api/training/puzzles',
-    ),
+  trainingPuzzles: (category?: string, motif?: string, gameId?: string) => {
+    const params = new URLSearchParams()
+    if (category) params.set('category', category)
+    if (motif) params.set('motif', motif)
+    if (gameId) params.set('game_id', gameId)
+    const qs = params.toString()
+    return request<TrainingPuzzlesReply>(qs ? `/api/training/puzzles?${qs}` : '/api/training/puzzles')
+  },
+
+  /** 特定对局开/中/残三阶段拆解与胜负手特训接口 */
+  trainingGameBreakdown: (gameId?: string) => {
+    const params = new URLSearchParams()
+    if (gameId) params.set('game_id', gameId)
+    const qs = params.toString()
+    return request<GameBreakdownReply>(qs ? `/api/training/game-breakdown?${qs}` : '/api/training/game-breakdown')
+  },
 
   trainingStart: (puzzleId: string, stage: string = 'drill') =>
     request<TrainingStartReply>('/api/training/start', {
@@ -171,7 +184,7 @@ export const api = {
     }),
 
   trainingReset: (puzzleId: string, stage: string = 'drill') =>
-    request<{ ok: boolean; message: string; game: GameSnapshot; hints_used: number; solved: boolean; stage: string; in_rebuttal: boolean }>(
+    request<TrainingStartReply>(
       '/api/training/reset',
       {
         method: 'POST',

@@ -88,9 +88,17 @@ export function MistakeBook(props: MistakeBookProps) {
 
       <p className="mistake-source">
         {summary
-          ? `来源：存档里的 ${summary.games} 局历次对局 —— 同一个局面被走过 ${summary.graded_plies} 次，` +
-            `其中 ${summary.misses} 次证得出比引擎的第一选择差。不是这一局的棋谱。`
-          : '来源：存档里的历次对局，按局面（不是按手数）把判分聚在一起。'}
+          ? `跨 ${summary.games} 局实战 · 共沉淀 ${summary.positions ?? listed} 道典型错题`
+          : '存档里的历次对局，按局面把判分聚在一起。'}
+        {summary && (summary.blurred > 0 || summary.unreadable > 0) && (
+          <span
+            className="mistake-caveat-tip"
+            title={`另有 ${summary.blurred} 次判分证不出对错（界的方向互相抵消或未进前几名）${summary.unreadable ? `，${summary.unreadable} 次无法读取` : ''}，不属于下对。`}
+            style={{ cursor: 'help', marginLeft: '6px', opacity: 0.7 }}
+          >
+            ❓
+          </span>
+        )}
       </p>
 
       {summary?.prescription && (
@@ -146,18 +154,9 @@ export function MistakeBook(props: MistakeBookProps) {
         </ul>
       )}
 
-      {summary && (summary.blurred > 0 || summary.unreadable > 0) && (
-        <p className="mistake-caveat">
-          另有 {summary.blurred} 次判分证不出对错（界的方向互相抵消、或那一手压根没进引擎前几名），
-          没有算进错题{summary.unreadable ? `；还有 ${summary.unreadable} 次判分读不出来` : ''}。
-          这些也不是「下对了」。
-        </p>
-      )}
-
       {listed > 0 && (
-        <p className="hint mistake-hint">
-          「摆到盘上」开的是复盘台：它读的是存档里那一局，一手手摆回去；
-          「入营重练」将此局面送入精训营由引擎动态防守实战攻坚。
+        <p className="hint mistake-hint" style={{ fontSize: '11px', opacity: 0.8 }}>
+          「摆到盘上」查验历史局面；「入营重练」将此局面交由引擎防守攻坚。
         </p>
       )}
     </section>
@@ -174,6 +173,7 @@ function MistakeRow({
   onReplay: (gameId: string, ply: number | null) => void
   onDrill?: (puzzleId: string) => void
 }) {
+  const [copied, setCopied] = useState(false)
   const review = entry.worst_review
   const grade = gradeLabel(review)
   const word = review ? bestLineWord(review) : '引擎第一选择'
@@ -181,6 +181,12 @@ function MistakeRow({
   const blurredText = Object.entries(entry.blurred_kinds)
     .map(([kind, n]) => `${kind} ${n} 次`)
     .join(' · ')
+
+  const copyFen = () => {
+    void navigator.clipboard?.writeText(entry.fen_before)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
 
   return (
     <li className={`mistake-row side-${entry.side}`}>
@@ -214,27 +220,27 @@ function MistakeRow({
         </span>
       </div>
 
-      {/* 错题本挑的是**最差那次**，所以这句「为什么」讲的也是那一次的主变，
-          不是眼前这一局 —— 与左边判分块共用同一个出口，两句话不会各说一套。 */}
       {why && <p className="mistake-why">{why}</p>}
       {entry.coach_summary && (
         <p className="mistake-coach-note">{entry.coach_summary}</p>
       )}
 
-      <code className="mistake-fen" title="这个局面（FEN）：错题本按它把历次对局归到同一题">
-        {entry.fen_before}
-      </code>
-
       <div className="mistake-foot">
-        <span>
-          最近一次：{entry.last_game_id} 第 {entry.last_ply ?? '—'} 手 ·{' '}
+        <span title={`局面 FEN: ${entry.fen_before}`}>
+          最近：{entry.last_game_id} 第 {entry.last_ply ?? '—'} 手 ·{' '}
           {relativeTime(entry.last_at)}
         </span>
         {blurredText && <span className="mistake-blurred">看不准：{blurredText}</span>}
-        {/* 摆上去的是**最差那一次**：这一题上面那句判分与那句「为什么」讲的就是它，
-            复盘台停在别处就成了另一道题。存档里没有那一局时（worst_game_id 空）
-            这颗按钮整个不出现 —— 按下去读回来一个 404 是骗人。 */}
         <div className="mistake-actions">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm mistake-copy-fen"
+            onClick={copyFen}
+            title={`复制局面 FEN: ${entry.fen_before}`}
+            style={{ minHeight: '32px' }}
+          >
+            {copied ? '✓ 已复制' : '📋 复制局面'}
+          </button>
           {entry.worst_game_id && (
             <button
               type="button"
@@ -244,6 +250,7 @@ function MistakeRow({
                 entry.worst_ply ? `，停在第 ${entry.worst_ply} 手` : ''
               }`}
               data-mistake-replay={entry.worst_game_id}
+              style={{ minHeight: '32px' }}
             >
               摆到盘上
             </button>
@@ -254,6 +261,7 @@ function MistakeRow({
               className="btn btn-outline btn-sm mistake-drill"
               onClick={() => onDrill(`mistake_${entry.worst_game_id}_${entry.worst_ply ?? 1}`)}
               title="将该局面送入精训营，进行人机实战防守重练"
+              style={{ minHeight: '32px' }}
             >
               入营重练
             </button>

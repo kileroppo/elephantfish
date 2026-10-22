@@ -421,8 +421,9 @@ class EngineSet:
 
     def stop(self) -> None:
         """中断正在运行的搜索进程。"""
-        self.builtin.stop()
-        if self.pikafish:
+        if hasattr(self.builtin, 'stop'):
+            self.builtin.stop()
+        if self.pikafish and hasattr(self.pikafish, 'stop'):
             self.pikafish.stop()
 
     def set_options(self, threads: Optional[int] = None,

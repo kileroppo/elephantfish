@@ -67,10 +67,8 @@ export function GameShelf(props: GameShelfProps) {
 
       <p className="mistake-source shelf-source">
         {summary
-          ? `来源：存档里的 ${summary.total_games} 局（${summary.play_games} 局对局` +
-            `${summary.setup_games ? `、${summary.setup_games} 局排局` : ''}），` +
-            `其中 ${summary.graded_games} 局带着判分，值得重看。`
-          : '来源：存档里的历次对局，新的在前。'}
+          ? `共 ${summary.total_games} 局存档 · ${summary.graded_games} 局含教练判分`
+          : '存档里的历次对局，新的在前。'}
       </p>
 
       {error && <p className="hint mistake-hint">{error}</p>}
@@ -89,26 +87,38 @@ export function GameShelf(props: GameShelfProps) {
         <ul className="shelf-list">
           {rows.map((row) => (
             <li key={row.game_id} className="shelf-row">
-              <button
-                type="button"
-                className={`shelf-pick${row.graded_plies ? ' has-graded' : ''}`}
-                onClick={() => onPick(row.game_id)}
-                title={`把这一局摆到复盘台上（${row.ply_count} 手）`}
-                data-shelf-game={row.game_id}
-              >
-                <span className="shelf-kind">{describeSource(row.source)}</span>
-                <span className="shelf-count">
-                  {row.ply_count} 手
-                  {row.graded_plies ? ` · ${row.graded_plies} 手有判分` : ''}
-                </span>
-                <span className="shelf-side">引擎执{shortSide(row.engine_side)}</span>
-                <span className="shelf-when">{relativeTime(row.updated_at)}</span>
-                <span className="shelf-over">
-                  {row.state && row.state !== 'playing'
-                    ? row.reason || (row.winner ? `${sideName(row.winner)}胜` : '结束')
-                    : '进行中'}
-                </span>
-              </button>
+              <div className="flex items-center gap-1.5 w-full">
+                <button
+                  type="button"
+                  className={`shelf-pick flex-1${row.graded_plies ? ' has-graded' : ''}`}
+                  onClick={() => onPick(row.game_id)}
+                  title={`把这一局摆到复盘台上（${row.ply_count} 手）`}
+                  data-shelf-game={row.game_id}
+                >
+                  <span className="shelf-kind">{describeSource(row.source)}</span>
+                  <span className="shelf-count">
+                    {row.ply_count} 手
+                    {row.graded_plies ? ` · ${row.graded_plies} 手有判分` : ''}
+                  </span>
+                  <span className="shelf-side">引擎执{shortSide(row.engine_side)}</span>
+                  <span className="shelf-when">{relativeTime(row.updated_at)}</span>
+                  <span className="shelf-over">
+                    {row.state && row.state !== 'playing'
+                      ? row.reason || (row.winner ? `${sideName(row.winner)}胜` : '结束')
+                      : '进行中'}
+                  </span>
+                </button>
+                {row.graded_plies > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-xs px-2 py-1 text-[11px] shrink-0 text-cinnabar border-cinnabar/40 hover:bg-cinnabar/10 rounded cursor-pointer"
+                    onClick={() => ui.openDrillAt(undefined, row.game_id)}
+                    title={`在训练营中拆解本局 ${row.graded_plies} 处胜负手`}
+                  >
+                    ⚔️ 拆解特训
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>

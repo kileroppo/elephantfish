@@ -21,6 +21,18 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+
+MOTIF_FALLBACK_CATEGORY: Dict[str, str] = {
+    'missed_mate': 'kill_tactics',
+    'walked_into_mate': 'kill_tactics',
+    'king_exposed': 'kill_tactics',
+    'greedy_capture': 'midgame',
+    'fork_or_skewer': 'midgame',
+    'left_hanging': 'midgame',
+    'missed_tactics': 'midgame',
+    'lost_tempo': 'endgame',
+}
+
 CATEGORIES = [
     {
         'id': 'kill_tactics',
@@ -41,8 +53,14 @@ CATEGORIES = [
         'icon': '🎯',
     },
     {
+        'id': 'game_breakdown',
+        'name': '第四篇 · 特定对局拆解特训',
+        'desc': '“单局透视，起死回生”。针对您刚下完或指定的某盘实战，按开局/中局/残局连贯重练胜负手。',
+        'icon': '⚔️',
+    },
+    {
         'id': 'mistake_replay',
-        'name': '第四篇 · 实战心魔攻坚',
+        'name': '第五篇 · 历史心魔靶向攻坚',
         'desc': '“知耻后勇，复盘长棋”。从您过往实战的劣着与漏杀局面靶向转化，逐一攻克技术盲区。',
         'icon': '🔥',
     },
@@ -56,6 +74,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'kill_01_tiemenshuan',
         'title': '铁门栓 · 沉底破门',
         'category': 'kill_tactics',
+        'motif': 'missed_mate',
+        'motif_label': '错失必杀',
         'difficulty': 1,
         'side': 'red',
         'target': '红先一步沉底绝杀',
@@ -104,6 +124,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'kill_02_chongpao',
         'title': '连环双重炮 · 势如破竹',
         'category': 'kill_tactics',
+        'motif': 'missed_mate',
+        'motif_label': '错失必杀',
         'difficulty': 1,
         'side': 'red',
         'target': '红先二步连环重炮绝杀',
@@ -150,6 +172,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'kill_03_mahoupao',
         'title': '马后炮 · 绝地封喉',
         'category': 'kill_tactics',
+        'motif': 'missed_mate',
+        'motif_label': '错失必杀',
         'difficulty': 2,
         'side': 'red',
         'target': '红先二步马后炮绝杀',
@@ -196,6 +220,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'kill_04_wocaoma',
         'title': '卧槽马 · 锁死将门',
         'category': 'kill_tactics',
+        'motif': 'missed_mate',
+        'motif_label': '错失必杀',
         'difficulty': 2,
         'side': 'red',
         'target': '红先二步卧槽马绝杀',
@@ -242,6 +268,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'kill_05_guajiaoma',
         'title': '挂角马 · 侧翼合围',
         'category': 'kill_tactics',
+        'motif': 'missed_mate',
+        'motif_label': '错失必杀',
         'difficulty': 2,
         'side': 'red',
         'target': '红先二步挂角绝杀',
@@ -288,6 +316,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'kill_06_shuangchecuo',
         'title': '双车错 · 翻江倒海',
         'category': 'kill_tactics',
+        'motif': 'missed_mate',
+        'motif_label': '错失必杀',
         'difficulty': 2,
         'side': 'red',
         'target': '红先二步交错斩将',
@@ -334,6 +364,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'kill_07_diaoyuma',
         'title': '钓鱼马 · 借车破防',
         'category': 'kill_tactics',
+        'motif': 'missed_mate',
+        'motif_label': '错失必杀',
         'difficulty': 2,
         'side': 'red',
         'target': '红先一步钓鱼马成杀',
@@ -375,6 +407,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'kill_08_bailianjiang',
         'title': '白脸将 · 帅威助战',
         'category': 'kill_tactics',
+        'motif': 'missed_mate',
+        'motif_label': '错失必杀',
         'difficulty': 2,
         'side': 'red',
         'target': '红先一步借帅绝杀',
@@ -420,6 +454,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'endgame_01_danma_danshi',
         'title': '单马破单士 · 挂角抽士',
         'category': 'endgame',
+        'motif': 'lost_tempo',
+        'motif_label': '缓手失先',
         'difficulty': 2,
         'side': 'red',
         'target': '红先巧踏黑士必胜',
@@ -466,6 +502,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'endgame_02_paobing_shuangshi',
         'title': '炮高兵胜双士 · 借兵破士',
         'category': 'endgame',
+        'motif': 'missed_tactics',
+        'motif_label': '漏看妙手',
         'difficulty': 3,
         'side': 'red',
         'target': '红先破士奠定胜势',
@@ -512,6 +550,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'endgame_03_mabing_que_xiang',
         'title': '马兵胜单缺象 · 挂角夺象',
         'category': 'endgame',
+        'motif': 'left_hanging',
+        'motif_label': '丢无根子',
         'difficulty': 3,
         'side': 'red',
         'target': '红先破象奠定胜势',
@@ -558,6 +598,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'endgame_04_chebing_que_shi',
         'title': '车兵破单缺士 · 沉底催杀',
         'category': 'endgame',
+        'motif': 'missed_mate',
+        'motif_label': '错失必杀',
         'difficulty': 3,
         'side': 'red',
         'target': '红先二步破士绝杀',
@@ -608,6 +650,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'midgame_01_shangji_chouzi',
         'title': '闪击抽车 · 开门见将',
         'category': 'midgame',
+        'motif': 'fork_or_skewer',
+        'motif_label': '遭抽将捉双',
         'difficulty': 2,
         'side': 'red',
         'target': '红先闪击净吃黑车',
@@ -654,6 +698,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'midgame_02_qizi_gongxin',
         'title': '弃子攻心 · 强撕将门',
         'category': 'midgame',
+        'motif': 'missed_tactics',
+        'motif_label': '漏看妙手',
         'difficulty': 3,
         'side': 'red',
         'target': '红先弃车引将绝杀',
@@ -700,6 +746,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'id': 'midgame_03_qianzhi_chuanda',
         'title': '牵制串打 · 骑河捉双',
         'category': 'midgame',
+        'motif': 'fork_or_skewer',
+        'motif_label': '遭抽将捉双',
         'difficulty': 2,
         'side': 'red',
         'target': '红先骑河捉双得子',
@@ -745,18 +793,41 @@ def list_categories() -> List[Dict[str, Any]]:
     return list(CATEGORIES)
 
 
-def list_puzzles(category: Optional[str] = None, store: Any = None) -> List[Dict[str, Any]]:
-    """列出题目列表（包含名师经典教案与实战心魔转化题）。"""
+def list_puzzles(category: Optional[str] = None, store: Any = None, motif: Optional[str] = None, game_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """列出题目列表（包含名师经典教案、特定对局拆解题与实战心魔转化题）。"""
     res = []
     for pz in CLASSICAL_PUZZLES:
-        if category and category != pz['category']:
+        if category and category != pz.get('category'):
+            continue
+        if motif and motif != pz.get('motif'):
             continue
         res.append(dict(pz))
+
+    # 特定对局拆解特训题
+    if store is not None and (category is None or category == 'game_breakdown'):
+        from engine import tactics
+        # 若指定了 game_id，提取该局；若未指定，默认提取最近一局有判分的对局
+        target_gid = game_id
+        if not target_gid and hasattr(store, 'recent_games'):
+            recent = store.recent_games(limit=10)
+            graded_games = [g for g in recent.get('games', []) if g.get('graded_plies', 0) > 0]
+            if graded_games:
+                target_gid = graded_games[0].get('game_id')
+        if target_gid and hasattr(store, 'game_replay'):
+            g_replay = store.game_replay(target_gid)
+            breakdown = tactics.breakdown_specific_game(g_replay)
+            for pz in breakdown.get('puzzles', []):
+                if motif and motif != pz.get('motif'):
+                    continue
+                res.append(pz)
 
     # 动态实战心魔转换题
     if store is not None and (category is None or category == 'mistake_replay'):
         dynamic_mistakes = extract_mistake_puzzles(store)
-        res.extend(dynamic_mistakes)
+        for pz in dynamic_mistakes:
+            if motif and motif != pz.get('motif'):
+                continue
+            res.append(pz)
 
     return res
 
@@ -768,6 +839,22 @@ def get_puzzle(puzzle_id: str, store: Any = None) -> Optional[Dict[str, Any]]:
             return dict(pz)
 
     if puzzle_id.startswith('mistake_') and store is not None:
+        # 首先尝试从 puzzle_id 解析出特定对局（格式: mistake_{game_id}_{ply}）
+        parts = puzzle_id.split('_')
+        if len(parts) >= 3 and hasattr(store, 'game_replay'):
+            gid = parts[1]
+            try:
+                ply_req = int(parts[2])
+            except ValueError:
+                ply_req = None
+            g_replay = store.game_replay(gid)
+            if g_replay.get('found'):
+                from engine import tactics
+                breakdown = tactics.breakdown_specific_game(g_replay)
+                for pz in breakdown.get('puzzles', []):
+                    if pz['id'] == puzzle_id or (ply_req is not None and pz.get('ply') == ply_req):
+                        return dict(pz)
+
         dynamic_mistakes = extract_mistake_puzzles(store)
         for pz in dynamic_mistakes:
             if pz['id'] == puzzle_id:
@@ -781,7 +868,7 @@ def extract_mistake_puzzles(store: Any) -> List[Dict[str, Any]]:
     if not hasattr(store, 'mistake_book'):
         return []
     try:
-        book = store.mistake_book(limit=15)
+        book = store.mistake_book(limit=30)
         items = book.get('mistakes', [])
     except Exception:
         return []
