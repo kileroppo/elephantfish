@@ -1,0 +1,104 @@
+/* ==========================================================================
+   引擎思考期间：全站停摆
+   --------------------------------------------------------------------------
+   机器算它的，人看人的。这段时间里画面上不该有任何东西自己动 ——
+   只在引擎真正落子那一下（此时 thinking 已经是 false），棋子才走。
+
+   注意这里去掉的是「动」，不是「信息」：深度刻度、评分条、主变照常更新，
+   只是改成离散地跳，不滑、不弹、不呼吸。一个都不藏，一个都不动。
+   触发类名由 App 挂在根节点上（.app.is-thinking）。 */
+
+.app.is-thinking .pill-spin,
+.app.is-thinking .live-dot,
+.app.is-thinking .check-flag,
+.app.is-thinking .queue-dot {
+  animation: none;
+}
+
+/* 落点那圈弧环：它是全站唯一「从第一手挂到终局」的常驻动画，而且思考期间一定在盘上
+   （引擎正是在回应上一手，落点框刚亮着）。原来用 SMIL 转，这一段停摆清单管不着它 ——
+   现在换成 CSS transform 了，才终于停得下来。 */
+.app.is-thinking .last-to-rotator {
+  animation: none;
+}
+
+/* 深度刻度：点亮就是点亮，不要 pop */
+.app.is-thinking .rung {
+  animation: none;
+  transition: none;
+}
+
+/* 评分条与游标：数值照变，但是「跳」不是「滑」 */
+.app.is-thinking .eval-red,
+.app.is-thinking .eval-black,
+.app.is-thinking .eval-tick-track {
+  transition: none;
+}
+
+/* 主变条目：出现就是出现，不从下面升上来 */
+.app.is-thinking .pv-list li {
+  animation: none;
+}
+
+/* 判分块同理：前几名换一批就是换一批，别在引擎抢算力那段时间里跳舞。
+   chip 在思考期间也可能第一次出现（排队的那一步落地时判分已经算好了），
+   停掉的是它的入场，不是它的内容。 */
+.app.is-thinking .rank-row,
+.app.is-thinking .learn-block,
+.app.is-thinking .grade-chip {
+  animation: none;
+}
+
+/* 顶栏那枚状态丸：状态是「切」过去的，不是「渐变」过去的 */
+.app.is-thinking .pill {
+  transition: none;
+}
+
+/* 转述台②换到「思考中」那一下不淡入 —— 换好就是换好了 */
+.app.is-thinking .relay-thinking,
+.app.is-thinking .relay-move,
+.app.is-thinking .relay-empty {
+  animation: none;
+}
+
+/* 按钮：.btn 的 transition 是 all，思考一开始「悔一步」这类会随禁用态一起淡进淡出，
+   状态该是「切」过去的，不是「渐变」过去的 */
+.app.is-thinking .btn {
+  transition: none;
+}
+
+/* 被将军那一响（.piece.is-check-alarm::before）**不进**停摆清单：它是「刚刚发生了一手
+   将军」这件事本身，跟落子音同一拍，正是思考期间要看见的东西。停掉它等于把汇报吞了。
+   要停的是常驻的那类 —— 这里以前写的 `.piece.is-check .piece-face { animation: none }`
+   管的那条动画根本不存在（静态朱砂环是 box-shadow，不是动画），是一条空规则，删了。 */
+
+
+.coord-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.board-surface:hover .coord-layer {
+  opacity: 1;
+}
+
+.coord {
+  position: absolute;
+  font-family: var(--font-num);
+  font-size: calc(var(--u) * 13px);
+  color: var(--board-line);
+  opacity: 0.5;
+}
+
+.coord-file {
+  bottom: calc(var(--u) * 7px);
+  transform: translateX(-50%);
+}
+
+.coord-rank {
+  left: calc(var(--u) * 6px);
+  transform: translateY(-50%);
+}

@@ -291,14 +291,14 @@ export function ReplayDesk(props?: ReplayDeskProps) {
 
   return (
     <div
-      className={`overlay replay-veil fixed inset-0 z-40 bg-[rgba(22,19,15,0.58)] flex items-center justify-center p-3 sm:p-5 ${
-        leaving ? 'is-leaving' : ''
+      className={`overlay replay-veil fixed inset-0 z-40 bg-ink-0/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 select-none transition-opacity duration-200 ${
+        leaving ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
       onClick={onClose}
     >
       <div
-        className={`sheet replay-desk w-[min(1060px,100%)] h-[min(88vh,880px)] flex flex-col overflow-hidden p-4 sm:p-5 bg-paper-0 rounded-lg shadow-2xl border border-hairline-strong ${
-          leaving ? 'is-leaving' : ''
+        className={`sheet replay-desk w-[min(1060px,100%)] h-[min(88vh,880px)] flex flex-col overflow-hidden p-4 sm:p-6 bg-paper-0/98 rounded-2xl shadow-2xl border border-hairline transition-all duration-200 ${
+          leaving ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
         }`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"

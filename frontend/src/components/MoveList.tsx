@@ -45,12 +45,12 @@ export function MoveList(props: MoveListProps) {
 
   return (
     <section
-      className="panel movelist flex flex-col min-h-[180px] flex-1 max-h-[360px] pt-3 pb-1 border-t border-hairline"
+      className="panel movelist flex flex-col min-h-[180px] flex-1 max-h-[360px] p-3 rounded-2xl bg-paper-0/95 border border-hairline/80 shadow-2xs select-none"
       aria-label="棋谱"
     >
-      <header className="panel-head flex items-center justify-between mb-2 px-1">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-3">棋谱</h2>
-        <span className="panel-count text-[11px] font-num text-ink-mute bg-paper-2 px-2 py-0.5 rounded-full border border-hairline">
+      <header className="panel-head flex items-center justify-between mb-2">
+        <h2 className="text-xs font-bold text-ink-1">棋谱记录</h2>
+        <span className="panel-count text-[11px] font-num text-ink-mute bg-paper-2 px-2.5 py-0.5 rounded-full border border-hairline font-semibold">
           {lastPly} 手
         </span>
       </header>

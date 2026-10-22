@@ -1,22 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api } from '../api'
-import type {
-  AnimatedStep,
-  GameSnapshot,
-  OpponentThreatInfo,
-  ProsConsAnalysis,
-  ThinkingGuide,
-  VisualClues,
-} from '../types'
-import { buildAnimatedFrames } from '../lib/replay'
-import { play } from '../lib/sound'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { GameSnapshot, VisualClues } from '../types'
 import type { SubmitOutcome } from '../hooks/useGame'
 import { useGameContext } from '../context/GameContext'
 import { useUIContext } from '../context/UIContext'
 import {
   CoachInterruptCard,
   EngineHero,
-  LiveHelperDrawer,
   QueuedStrip,
   TypeInlineFloating,
 } from './relay'
@@ -71,153 +60,6 @@ export function RelayConsole(props: RelayConsoleProps) {
   const [dismissedPly, setDismissedPly] = useState<number | null>(null)
   const copyTimer = useRef<number>()
 
-  // 实战盘面「对手企图 / 优劣势分步动画 / 算路三问」助手状态
-  const [helperOpen, setHelperOpen] = useState(false)
-  const [helperLoading, setHelperLoading] = useState(false)
-  const [helperMode, setHelperMode] = useState<'threat' | 'good' | 'bad' | 'guide'>('threat')
-  const [opponentThreat, setOpponentThreat] = useState<OpponentThreatInfo | null>(null)
-  const [threatSteps, setThreatSteps] = useState<AnimatedStep[]>([])
-  const [goodSteps, setGoodSteps] = useState<AnimatedStep[]>([])
-  const [badSteps, setBadSteps] = useState<AnimatedStep[]>([])
-  const [prosCons, setProsCons] = useState<ProsConsAnalysis | null>(null)
-  const [thinkingGuide, setThinkingGuide] = useState<ThinkingGuide | null>(null)
-  const [baseSnap, setBaseSnap] = useState<GameSnapshot | null>(null)
-  const [animStep, setAnimStep] = useState(0)
-  const [animPlaying, setAnimPlaying] = useState(false)
-  const animTimerRef = useRef<number | null>(null)
-
-  const clearAnimTimer = useCallback(() => {
-    if (animTimerRef.current !== null) {
-      window.clearInterval(animTimerRef.current)
-      animTimerRef.current = null
-    }
-  }, [])
-
-  const closeHelper = useCallback(() => {
-    clearAnimTimer()
-    setAnimPlaying(false)
-    setAnimStep(0)
-    setHelperOpen(false)
-    setOpponentThreat(null)
-    onPreviewBoard?.(null, [], null)
-  }, [clearAnimTimer, onPreviewBoard])
-
-  // 当实战盘面手数变化时，自动退出演示，回到真实对局
-  useEffect(() => {
-    closeHelper()
-  }, [game.ply, closeHelper])
-
-  const activeSteps: AnimatedStep[] = useMemo(() => {
-    if (helperMode === 'threat') return threatSteps
-    if (helperMode === 'good') return goodSteps
-    if (helperMode === 'bad') return badSteps
-    return []
-  }, [helperMode, threatSteps, goodSteps, badSteps])
-
-  const animFrames: GameSnapshot[] = useMemo(() => {
-    const start = baseSnap || game
-    if (!start || activeSteps.length === 0) return []
-    return buildAnimatedFrames(start, activeSteps)
-  }, [baseSnap, game, activeSteps])
-
-  // 自动连播控制
-  useEffect(() => {
-    clearAnimTimer()
-    if (!helperOpen || !animPlaying || helperMode === 'guide' || activeSteps.length === 0) return
-
-    const maxStep = activeSteps.length
-    animTimerRef.current = window.setInterval(() => {
-      setAnimStep((prev) => {
-        if (prev < maxStep) {
-          const next = prev + 1
-          const st = activeSteps[next - 1]
-          if (st?.captured) play('capture')
-          else play('move')
-          return next
-        } else {
-          clearAnimTimer()
-          setAnimPlaying(false)
-          return prev
-        }
-      })
-    }, 1300)
-
-    return clearAnimTimer
-  }, [helperOpen, animPlaying, helperMode, activeSteps, clearAnimTimer])
-
-  // 同步当前动画帧到主棋盘
-  useEffect(() => {
-    if (!helperOpen || helperMode === 'guide') {
-      onPreviewBoard?.(null, [], null)
-      return
-    }
-    if (helperMode === 'threat' && opponentThreat && !opponentThreat.is_substantial) {
-      return
-    }
-    if (animFrames.length === 0) {
-      onPreviewBoard?.(null, [], null)
-      return
-    }
-    const frame = animFrames[Math.min(animStep, animFrames.length - 1)]
-    const curStep = animStep > 0 ? activeSteps[animStep - 1] : activeSteps[0]
-    const pv = curStep ? [curStep.iccs || curStep.move] : []
-    const clues: VisualClues | null =
-      curStep?.threat_squares && curStep.threat_squares.length > 0
-        ? { weakness_squares: curStep.threat_squares }
-        : null
-    onPreviewBoard?.(frame, pv, clues)
-  }, [helperOpen, helperMode, opponentThreat, animStep, animFrames, activeSteps, onPreviewBoard])
-
-  // 触发实战预演与对手企图分析（支持再次点击相同模式按钮切换关闭）
-  const openLiveHelper = async (
-    targetMode: 'threat' | 'good' | 'bad' | 'guide',
-    candidateMove?: string,
-  ) => {
-    if (helperOpen && helperMode === targetMode) {
-      closeHelper()
-      return
-    }
-    clearAnimTimer()
-    setHelperOpen(true)
-    setHelperLoading(true)
-    setHelperMode(targetMode)
-    setAnimStep(0)
-    setAnimPlaying(false)
-    try {
-      const res = await api.preview(game.fen, candidateMove)
-      setBaseSnap(res.base_game || game)
-      setOpponentThreat(res.opponent_threat || null)
-      setThreatSteps(res.opponent_threat?.steps || res.opponent_threat_steps || [])
-      setGoodSteps(res.good_steps || [])
-      setBadSteps(res.bad_steps || [])
-      if (res.pros_cons) setProsCons(res.pros_cons)
-      if (res.thinking_guide) setThinkingGuide(res.thinking_guide)
-
-      if (targetMode === 'threat') {
-        if (res.opponent_threat && !res.opponent_threat.is_substantial) {
-          setAnimPlaying(false)
-          setAnimStep(0)
-          if (res.opponent_threat.target_move) {
-            onPreviewBoard?.(res.base_game || game, [res.opponent_threat.target_move], {
-              weakness_squares: res.opponent_threat.threat_squares || [],
-              route: res.opponent_threat.route || [],
-            })
-          }
-        } else {
-          setAnimStep(0)
-          setAnimPlaying(true)
-        }
-      } else if (targetMode !== 'guide') {
-        setAnimStep(0)
-        setAnimPlaying(true)
-      }
-    } catch {
-      // 忽略网络异常
-    } finally {
-      setHelperLoading(false)
-    }
-  }
-
   const lastEngineMove = useMemo(() => {
     for (let i = game.records.length - 1; i >= 0; i -= 1) {
       if (game.records[i].by === 'engine') return game.records[i]
@@ -234,6 +76,8 @@ export function RelayConsole(props: RelayConsoleProps) {
 
   const humanTactics = lastHumanMove?.review?.tactics ?? null
   const showCoachInterrupt =
+    !ui.drillOpen &&
+    !ui.replay &&
     coachGuard &&
     lastHumanMove &&
     dismissedPly !== lastHumanMove.ply &&
@@ -265,7 +109,7 @@ export function RelayConsole(props: RelayConsoleProps) {
 
   useEffect(() => () => window.clearTimeout(copyTimer.current), [])
 
-  // 换了一手，复制态归零 —— 「已复制」只属于那一手
+  // 换了一手，复制态归零
   useEffect(() => {
     setCopied(false)
   }, [lastEngineMove?.ply])
@@ -278,7 +122,6 @@ export function RelayConsole(props: RelayConsoleProps) {
       setText('')
       setShowTypeInput(false)
     } else {
-      // 走法不合法：输入框横向抖一下，比只弹一条 toast 更贴手
       setRejected((n) => n + 1)
     }
   }
@@ -296,11 +139,11 @@ export function RelayConsole(props: RelayConsoleProps) {
 
   return (
     <section
-      className="relay-compact relative shrink-0 flex flex-col md:flex-row items-center justify-center mt-2.5 mx-auto w-full md:w-fit md:h-10 md:min-h-10 md:max-h-10 max-w-[min(100%,720px)] box-border"
+      className="relay-compact relative shrink-0 flex flex-col md:flex-row items-center justify-center mt-2 mx-auto w-full md:w-fit md:h-10 md:min-h-10 md:max-h-10 max-w-[min(100%,720px)] box-border"
       aria-label="应手与控制"
       data-relay=""
     >
-      {/* 核心应手展示区 / 对弈Dock（移动端双行等宽对齐，桌面端单行超紧凑胶囊） */}
+      {/* 核心应手展示区 / 对弈Dock（桌面端单行超紧凑胶囊，移动端精致双行） */}
       <EngineHero
         thinking={thinking}
         lastEngineMove={lastEngineMove}
@@ -309,14 +152,14 @@ export function RelayConsole(props: RelayConsoleProps) {
         copied={copied}
         playing={playing}
         gameEngineToMove={!!game.engine_to_move}
-        helperOpen={helperOpen}
-        helperMode={helperMode}
+        helperOpen={ui.coachLive.open}
+        helperMode={ui.coachLive.mode}
         showTypeInput={showTypeInput}
         onStop={onStop}
         onUndo={playMode === 'sparring' ? onUndo : undefined}
         onEngineMove={onEngineMove}
         onCopyMove={copyMove}
-        onOpenHelper={(mode) => void openLiveHelper(mode)}
+        onOpenHelper={(mode) => void ui.openCoachLive(mode)}
         onToggleTypeInput={() => setShowTypeInput((v) => !v)}
         coachGuard={coachGuard}
         onToggleCoachGuard={onToggleCoachGuard}
@@ -326,56 +169,19 @@ export function RelayConsole(props: RelayConsoleProps) {
         onToggleRailR={ui.toggleRailR}
       />
 
-      {/* 实战分步动画与逆向算路抽屉 */}
-      <LiveHelperDrawer
-        helperOpen={helperOpen}
-        helperLoading={helperLoading}
-        helperMode={helperMode}
-        opponentThreat={opponentThreat}
-        thinkingGuide={thinkingGuide}
-        activeSteps={activeSteps}
-        animStep={animStep}
-        animPlaying={animPlaying}
-        prosCons={prosCons}
-        onStepClick={(stepIdx) => {
-          clearAnimTimer()
-          setAnimPlaying(false)
-          setAnimStep(stepIdx)
-        }}
-        onPrevStep={() => {
-          clearAnimTimer()
-          setAnimPlaying(false)
-          setAnimStep((s) => Math.max(0, s - 1))
-        }}
-        onNextStep={() => {
-          clearAnimTimer()
-          setAnimPlaying(false)
-          setAnimStep((s) => Math.min(activeSteps.length, s + 1))
-        }}
-        onTogglePlay={() => {
-          if (animPlaying) {
-            clearAnimTimer()
-            setAnimPlaying(false)
-          } else {
-            if (animStep >= activeSteps.length) setAnimStep(0)
-            setAnimPlaying(true)
-          }
-        }}
-        onClose={closeHelper}
-      />
-
-      {/* 走错失误提醒 · 大白话解释 + 一键看为什么亏动画 */}
+      {/* 走错失误提醒 · 大白话解释 + 一键看为什么亏动画（固定于左下角，远离棋盘） */}
       <CoachInterruptCard
         show={!!showCoachInterrupt}
         lastHumanMove={lastHumanMove}
         tactics={humanTactics}
         cluesActive={cluesActive}
         onUndo={() => {
-          closeHelper()
+          ui.closeCoachLive()
           onUndo()
         }}
         onToggleClues={onToggleClues}
         onOpenDrill={() => {
+          if (lastHumanMove) setDismissedPly(lastHumanMove.ply)
           if (props.onOpenDrill) {
             props.onOpenDrill()
           } else {
@@ -383,7 +189,7 @@ export function RelayConsole(props: RelayConsoleProps) {
             ui.openDrillAt(motif)
           }
         }}
-        onOpenThreatHelper={() => void openLiveHelper('threat')}
+        onOpenThreatHelper={() => void ui.openCoachLive('threat')}
         onDismiss={() => {
           if (lastHumanMove) setDismissedPly(lastHumanMove.ply)
         }}
@@ -397,7 +203,7 @@ export function RelayConsole(props: RelayConsoleProps) {
       {/* 排队步提醒 */}
       <QueuedStrip queued={queued} onClearQueue={onClearQueue} />
 
-      {/* 极轻量键盘录入浮层（展开时浮动展示，不挤占棋盘高度） */}
+      {/* 极轻量键盘录入浮层 */}
       <TypeInlineFloating
         show={showTypeInput}
         text={text}

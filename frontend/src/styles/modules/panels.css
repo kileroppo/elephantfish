@@ -1,0 +1,41 @@
+/* ==========================================================================
+   面板
+   ========================================================================== */
+
+.panel {
+  background: linear-gradient(180deg, var(--paper-0), var(--paper-1));
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  padding: 14px
+    14px;
+  box-shadow: var(--shadow-panel);
+  animation: rise var(--dur-slow) var(--ease-out) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.panel-head h2 {
+  font-size: 13.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink-1);
+}
+
+.panel-count {
+  font-family: var(--font-num);
+  font-size: 11px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}

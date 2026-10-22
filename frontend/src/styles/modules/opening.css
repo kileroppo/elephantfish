@@ -1,0 +1,29 @@
+/* ==========================================================================
+   页面开场编排
+   --------------------------------------------------------------------------
+   加载不是「啪」地全亮：顶栏先落定，回合条跟进，棋盘压轴升起（boardIn
+   自带 220ms 延迟，见「棋盘」一节），棋子再按波次逐颗落盘（波次由
+   Board.tsx 用 --enter-delay 排，见「棋子」一节）。
+   全长约 1.2s，之后界面进入稳态 —— 编排只属于开场，不打扰对局。
+   侧栏面板不参与：它们常驻挂载，入场会对着看不见的栏白放（见 .rail 段）。 */
+.topbar {
+  animation: topbarIn 480ms var(--ease-enter) both;
+}
+
+@keyframes topbarIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+.stage-head {
+  animation: stageHeadIn 420ms var(--ease-enter) 140ms both;
+}
+
+@keyframes stageHeadIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}

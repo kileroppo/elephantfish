@@ -1,0 +1,167 @@
+/* ==========================================================================
+   第一性原理认知教练：棋理标签 / 师傅扶手 / 病因图谱 / 复盘沙盒
+   ========================================================================== */
+
+.motif-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+  border: 1px solid var(--cinnabar-edge);
+  white-space: nowrap;
+}
+
+.motif-chip.is-accent {
+  font-size: 12px;
+}
+
+.motif-chip.is-sandbox {
+  color: var(--ink-0);
+  background: var(--paper-2);
+  border-color: var(--hairline-strong);
+}
+
+.coach-good-pill {
+  color: var(--jade);
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.coach-interrupt-card {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--cinnabar-edge);
+  border-left: 3px solid var(--cinnabar);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.coach-interrupt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.coach-interrupt-badge {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cinnabar);
+}
+
+.coach-interrupt-ply {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.coach-interrupt-summary {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.coach-interrupt-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.learn-tactics {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.mistake-prescription {
+  margin: 8px 0 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--cinnabar-edge);
+}
+
+.mistake-prescription-head {
+  margin-bottom: 5px;
+}
+
+.mistake-prescription-advice {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.mistake-motif-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+
+.mistake-coach-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.replay-coach-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 6px 0 8px;
+}
+
+.replay-tactics-card,
+.replay-sandbox-card {
+  margin: 6px 0 10px;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline-strong);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.replay-tactics-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.replay-tactics-card.is-critical {
+  border-color: var(--cinnabar-edge);
+}
+
+.replay-sandbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.replay-sandbox-summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}

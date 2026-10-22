@@ -1,0 +1,456 @@
+/* ==========================================================================
+   直观优劣势分步动画推演器 · 优劣势对比卡 · 第一性原理逆向三问算路助手
+   ========================================================================== */
+
+.live-helper-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline);
+}
+
+.drill-anim-tab {
+  border-radius: 999px;
+  font-weight: 600;
+  transition: color 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.drill-anim-tab.is-bad {
+  color: var(--cinnabar);
+  border: 1px solid var(--cinnabar-edge);
+  background: var(--cinnabar-wash);
+}
+.drill-anim-tab.is-bad.is-active {
+  background: var(--cinnabar);
+  color: #fff;
+}
+
+.drill-anim-tab.is-good {
+  color: var(--jade);
+  border: 1px solid rgba(16, 124, 92, 0.32);
+  background: rgba(16, 124, 92, 0.08);
+}
+.drill-anim-tab.is-good.is-active {
+  background: var(--jade);
+  color: #fff;
+}
+
+.drill-anim-tab.is-threat {
+  color: #b45309;
+  border: 1px solid rgba(180, 83, 9, 0.32);
+  background: rgba(245, 158, 11, 0.1);
+}
+.drill-anim-tab.is-threat.is-active {
+  background: #b45309;
+  color: #fff;
+}
+
+/* 🎬 分步动画推演剧场 */
+.drill-theater-card {
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1.5px solid var(--hairline-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drill-theater-card.mode-bad {
+  border-color: var(--cinnabar-edge);
+  background: linear-gradient(180deg, rgba(185, 43, 39, 0.05), var(--paper-1));
+}
+
+.drill-theater-card.mode-good {
+  border-color: rgba(16, 124, 92, 0.35);
+  background: linear-gradient(180deg, rgba(16, 124, 92, 0.05), var(--paper-1));
+}
+
+.drill-theater-card.mode-threat {
+  border-color: rgba(180, 83, 9, 0.35);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.06), var(--paper-1));
+}
+
+.drill-theater-card.is-calm {
+  padding: 8px 12px;
+  gap: 0;
+  border-color: rgba(180, 83, 9, 0.25);
+  background: var(--paper-1);
+}
+
+.drill-calm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.drill-calm-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 2px 7px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+
+.drill-calm-text {
+  font-size: 12.5px;
+  color: var(--ink-0);
+  font-weight: 500;
+  flex: 1;
+  min-width: 180px;
+}
+
+.drill-calm-route-hint {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+.drill-theater-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.drill-theater-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-0);
+}
+
+.drill-theater-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.drill-theater-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.drill-step-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  border: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.drill-step-item:hover {
+  border-color: var(--hairline-strong);
+}
+
+.drill-step-item.is-current {
+  border: 1.5px solid var(--cinnabar);
+  background: var(--cinnabar-wash);
+  box-shadow: 0 2px 8px rgba(185, 43, 39, 0.1);
+}
+
+.drill-step-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.drill-step-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-1);
+}
+
+.drill-step-badge.has-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1.5px 6px;
+  border-radius: var(--r-sm);
+  background: var(--paper-2);
+  color: var(--ink-0);
+  border: 1px solid var(--hairline);
+}
+
+.drill-step-badge.tag-opp {
+  background: rgba(185, 43, 39, 0.1);
+  color: var(--cinnabar);
+  border-color: rgba(185, 43, 39, 0.2);
+}
+
+.drill-step-badge.tag-our {
+  background: rgba(16, 124, 92, 0.1);
+  color: var(--jade);
+  border-color: rgba(16, 124, 92, 0.2);
+}
+
+.drill-step-badge.tag-follow {
+  background: rgba(100, 116, 139, 0.1);
+  color: var(--ink-1);
+  border-color: rgba(100, 116, 139, 0.2);
+}
+
+.drill-step-move {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cinnabar);
+}
+
+.drill-step-plain {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-1);
+}
+
+.drill-step-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.step-pill {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.step-pill.is-gain {
+  color: var(--jade);
+  background: rgba(16, 124, 92, 0.1);
+}
+
+.step-pill.is-loss {
+  color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+}
+
+/* 📊 优劣势直观对比卡 */
+.drill-pros-cons-card {
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pros-cons-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pros-cons-header h4 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-0);
+}
+
+.pros-cons-drop-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+  border: 1px solid var(--cinnabar-edge);
+}
+
+.pros-cons-headline {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-1);
+  line-height: 1.45;
+}
+
+.pros-cons-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .pros-cons-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pros-cons-col {
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  border: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pros-cons-col.is-bad {
+  border-top: 2.5px solid var(--cinnabar);
+}
+
+.pros-cons-col.is-good {
+  border-top: 2.5px solid var(--jade);
+}
+
+.pros-cons-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pros-cons-col-head .col-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-0);
+}
+
+.pros-cons-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 🧠 第一性原理 · 逆向思维 · 对抗三问算路助手 */
+.drill-thinking-card {
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.thinking-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.thinking-card-head h4 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-0);
+}
+
+.thinking-section {
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  border: 1px solid var(--hairline);
+}
+
+.thinking-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--ink-0);
+}
+
+.thinking-badge.is-fp {
+  color: #1d4ed8;
+}
+
+.thinking-badge.is-inv {
+  color: var(--jade);
+}
+
+.thinking-badge.is-adv {
+  color: var(--cinnabar);
+}
+
+.thinking-fp-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.thinking-inv-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.thinking-qa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.thinking-qa-item {
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  background: var(--paper-1);
+  cursor: pointer;
+}
+
+.qa-question {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-0);
+}
+
+.qa-answer {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  margin-top: 2px;
+}
+
+.live-helper-drawer {
+  margin: 6px 0;
+}
+
+.live-helper-loading {
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.live-pros-cons-mini {
+  padding-top: 6px;
+  border-top: 1px dashed var(--hairline);
+  font-size: 12px;
+  color: var(--ink-1);
+}

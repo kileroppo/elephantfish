@@ -55,7 +55,6 @@ export function RankList({ lines, playedIccs, withPv }: RankListProps) {
               {boundMark(line.bound)}
               {scoreText(line.eval_red, line.mate ? line.mate_in : null)}
             </span>
-            <span className="rank-depth font-num text-[10.5px] text-ink-mute">{line.depth}层</span>
 
             {played && (
               <span className="rank-flag text-[10px] font-medium text-cinnabar bg-cinnabar/15 px-1.5 py-0.2 rounded">

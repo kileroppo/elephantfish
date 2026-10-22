@@ -1,0 +1,203 @@
+/* ==========================================================================
+   提示条 / 弹层 / 启动态
+   ========================================================================== */
+
+.toast-stack {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  right: auto;
+  bottom: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 220;
+  pointer-events: none;
+  max-width: min(460px, calc(100vw - 40px));
+}
+
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--ink-0);
+  color: var(--paper-0);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: toastIn 320ms var(--ease-spring) both;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+}
+
+/* 退场和进场对仗：往下沉一点、缩一点，spring 收走 */
+.toast.is-leaving {
+  animation: toastOut 280ms var(--ease-spring) both;
+  pointer-events: none;
+}
+
+@keyframes toastOut {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+  }
+}
+
+.toast-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--paper-4);
+}
+
+.toast-ok .toast-dot {
+  background: #7fd6b4;
+}
+.toast-error .toast-dot {
+  background: #ff8a7a;
+}
+.toast-warn .toast-dot {
+  background: #f0c674;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(22, 19, 15, 0.42);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 200ms var(--ease-out) both;
+}
+
+.sheet {
+  width: min(560px, 100%);
+  max-height: 84vh;
+  overflow-y: auto;
+  padding: 26px 28px;
+  border-radius: var(--r-xl);
+  background: var(--paper-0);
+  box-shadow: var(--shadow-float);
+  /* 弹层不是「升上来」，是「落到眼前」：上移 + 轻缩 + 微回弹，
+     比单纯的 rise 多一层「有质量的东西停住了」的手感 */
+  animation: sheetIn 400ms var(--ease-spring-sm) both;
+}
+
+@keyframes sheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.965);
+  }
+}
+
+/* 退场：关掉时不能一帧消失。
+   有入场编舞却一刀切地关，手感是不对等的 —— 这一下「收」要更快（180ms）、
+   方向相反（往回沉一点、再收小一点），像把纸片放回桌上。
+   指针事件在退场期间就掐掉，免得点到正在淡出的层。 */
+.overlay.is-leaving {
+  animation: fadeOut 180ms var(--ease-out) both;
+  pointer-events: none;
+}
+
+.sheet.is-leaving {
+  animation: sheetOut 180ms var(--ease-out) both;
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sheetOut {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.sheet-head h2 {
+  font-size: 20px;
+  letter-spacing: 0.08em;
+}
+
+.sheet h3 {
+  margin: 22px 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.howto {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--ink-2);
+}
+
+.howto strong {
+  color: var(--ink-0);
+}
+
+.howto code {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--paper-2);
+}
+
+.shortcuts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.shortcuts li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+kbd {
+  flex: 0 0 auto;
+  min-width: 46px;
+  text-align: center;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--hairline-strong);
+  border-bottom-width: 2px;
+  background: var(--paper-1);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.shortcuts span {
+  color: var(--ink-3);
+}

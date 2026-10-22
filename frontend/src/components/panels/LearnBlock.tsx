@@ -48,12 +48,12 @@ export function LearnBlock({ game, analysis }: LearnBlockProps) {
 
   return (
     <section
-      className="learn-block flex flex-col gap-2 p-2.5 rounded bg-paper-1/70 border border-hairline/80"
-      aria-label="判分提示"
+      className="learn-block flex flex-col gap-2.5 p-3 rounded-2xl bg-paper-0/95 border border-hairline/80 shadow-2xs select-none"
+      aria-label="推荐走法与评估"
       data-learn=""
     >
       <header className="learn-head flex items-center justify-between pb-1.5 border-b border-hairline/60">
-        <h3 className="text-xs font-semibold text-ink-2">判分</h3>
+        <h3 className="text-xs font-bold text-ink-1">候选走法与评估</h3>
         <LearnStatus analysis={analysis} fresh={fresh} lines={lines.length} />
       </header>
 
@@ -80,9 +80,6 @@ export function LearnBlock({ game, analysis }: LearnBlockProps) {
             )}
             <span className="learn-played flex items-center gap-1.5 font-medium text-xs text-ink-1">
               <span>{graded?.chinese ?? review.played_iccs}</span>
-              <em className="not-italic font-num text-[11px] text-ink-mute">
-                {review.played_iccs}
-              </em>
             </span>
           </div>
 
@@ -93,7 +90,7 @@ export function LearnBlock({ game, analysis }: LearnBlockProps) {
             </span>
             <span className="learn-rank-meta font-num text-[11px] text-ink-3">
               {review.rank !== 1 && review.rank !== null ? `第 ${review.rank} 名 · ` : ''}
-              前 {review.width} 名 · {review.depth} 层
+              前 {review.width} 名优选
             </span>
           </div>
 
@@ -131,7 +128,7 @@ export function LearnBlock({ game, analysis }: LearnBlockProps) {
       {lines.length > 0 && fresh && (playMode === 'relay' || game.engine_to_move || liveHelper === 'live_hints') && (
         <div className="live-lines flex flex-col gap-1.5 mt-1 pt-1 border-t border-hairline/50">
           <p className="learn-sub text-[11px] text-ink-mute m-0">
-            {game.engine_to_move ? '引擎正在想，前几名先摆着' : '轮到你 —— 引擎眼下的前几名'}
+            {game.engine_to_move ? '引擎正在推演候选走法…' : '轮到您出招 · 推荐候选走法'}
           </p>
           <RankList lines={lines} playedIccs={null} withPv />
         </div>
@@ -139,7 +136,7 @@ export function LearnBlock({ game, analysis }: LearnBlockProps) {
 
       {lines.length > 0 && !fresh && (
         <p className="hint learn-hint text-[11px] text-ink-mute m-0 leading-relaxed font-kai">
-          上一手的排名线已经翻篇了，轮到你的时候会重新算。
+          上一手的推荐走法已结束，轮到出招时将实时更新。
         </p>
       )}
     </section>
@@ -148,32 +145,30 @@ export function LearnBlock({ game, analysis }: LearnBlockProps) {
 
 function LearnStatus({
   analysis,
-  fresh,
   lines,
 }: {
   analysis: AnalysisTask | null
-  fresh: boolean
+  fresh?: boolean
   lines: number
 }) {
-  if (!analysis) return <span className="learn-state text-[11px] text-ink-mute">这一手没有判分</span>
+  if (!analysis) return null
   if (analysis.status === 'skipped')
     return (
       <span className="learn-state is-warn text-[11px] text-amber-700 font-medium">
-        {analysis.result?.message || '引擎正忙，这一手先不判'}
+        {analysis.result?.message || '引擎繁忙'}
       </span>
     )
   if (analysis.status === 'error')
-    return <span className="learn-state is-bad text-[11px] text-rose-700 font-medium">判分没跑成</span>
+    return <span className="learn-state is-bad text-[11px] text-rose-700 font-medium">分析超时</span>
   if (analysis.status === 'running')
     return (
       <span className="learn-state is-live text-[11px] text-jade font-medium animate-pulse">
-        正在算{fresh ? '' : '下一步'}前几名
-        {analysis.progress ? ` · ${analysis.progress.depth} 层` : ''}
+        推演候选走法中…
       </span>
     )
   return (
     <span className="learn-state text-[11px] text-ink-3 font-num">
-      {lines ? `${lines} 条排名线${fresh ? '' : ' · 已翻篇'}` : '这一手没排出前几名'}
+      {lines ? `${lines} 条候选` : ''}
     </span>
   )
 }

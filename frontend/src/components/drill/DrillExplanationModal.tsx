@@ -44,24 +44,24 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
   onTabChange,
   animMode,
   animStep,
-  animPlaying,
+  animPlaying: _animPlaying,
   inRebuttal,
   activeSteps,
   prosCons,
   badStepsCount,
   goodStepsCount,
-  hints,
-  hintLevel,
+  hints: _hints,
+  hintLevel: _hintLevel,
   solved,
   stage,
-  onResetAnimStep,
-  onPrevAnimStep,
-  onTogglePlayAnim,
-  onNextAnimStep,
+  onResetAnimStep: _onResetAnimStep,
+  onPrevAnimStep: _onPrevAnimStep,
+  onTogglePlayAnim: _onTogglePlayAnim,
+  onNextAnimStep: _onNextAnimStep,
   onSelectAnimStep,
   onStartBadAnim,
   onStartGoodAnim,
-  onRequestHint,
+  onRequestHint: _onRequestHint,
   thinkingGuide,
   threatStepsCount,
   onStartThreatAnim,
@@ -72,127 +72,102 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
   currentPuzzleId,
   onSelectPuzzle,
 }) => {
+  // 是否可以展示答案级的优劣势完整对比（避免在用户思考实训时剧透正解）
+  const showFullProsCons = solved || stage === 'demo' || inRebuttal || animMode !== 'none'
+
   return (
-    <div className="flex flex-col gap-3">
-      {/* 右侧分栏 Tab 导航 */}
-      <div className="flex items-center gap-1 border-b-1.5 border-hairline pb-0.5" role="tablist">
+    <div className="flex flex-col gap-3 select-none">
+      {/* 右侧分栏 iOS Segmented Control */}
+      <div className="flex items-center p-0.5 bg-paper-1/90 rounded-xl border border-hairline shrink-0" role="tablist">
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === 'pros_cons'}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 cursor-pointer transition-all ${
+          className={`flex-1 py-1 px-2 text-xs font-medium rounded-lg text-center transition cursor-pointer border-0 ${
             activeTab === 'pros_cons'
-              ? 'text-ink-0 border-ink-0 font-bold bg-black/5'
-              : 'text-ink-2 border-transparent hover:text-ink-0'
+              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
+              : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={() => onTabChange('pros_cons')}
         >
-          📊 优劣动画与对比
+          📊 优劣详析
         </button>
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === 'thinking'}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 cursor-pointer transition-all ${
+          className={`flex-1 py-1 px-2 text-xs font-medium rounded-lg text-center transition cursor-pointer border-0 ${
             activeTab === 'thinking'
-              ? 'text-ink-0 border-ink-0 font-bold bg-black/5'
-              : 'text-ink-2 border-transparent hover:text-ink-0'
+              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
+              : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={() => onTabChange('thinking')}
         >
-          🧠 逆向算路三问
+          🧠 算路三问
         </button>
         {gameBreakdown && (
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'breakdown'}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 cursor-pointer transition-all ${
+            className={`flex-1 py-1 px-2 text-xs font-medium rounded-lg text-center transition cursor-pointer border-0 ${
               activeTab === 'breakdown'
-                ? 'text-ink-0 border-ink-0 font-bold bg-black/5'
-                : 'text-ink-2 border-transparent hover:text-ink-0'
+                ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
+                : 'bg-transparent text-ink-3 hover:text-ink-1'
             }`}
             onClick={() => onTabChange('breakdown')}
           >
-            ⚔️ 本局全盘拆解 ({gameBreakdown.turning_points?.length || 0})
+            ⚔️ 实战拆解
           </button>
         )}
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === 'catalog'}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 cursor-pointer transition-all ${
+          className={`flex-1 py-1 px-2 text-xs font-medium rounded-lg text-center transition cursor-pointer border-0 ${
             activeTab === 'catalog'
-              ? 'text-ink-0 border-ink-0 font-bold bg-black/5'
-              : 'text-ink-2 border-transparent hover:text-ink-0'
+              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
+              : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={() => onTabChange('catalog')}
         >
-          🗂️ 题库列表 ({categoryPuzzles.length})
+          🗂️ 题库 ({categoryPuzzles.length})
         </button>
       </div>
 
       {/* Tab 1: 📊 优劣动画与对比 */}
       {activeTab === 'pros_cons' && (
         <div className="flex flex-col gap-3">
-          {/* 🎬 分步动画推演剧场 */}
+          {/* 🎬 分步动画推演剧场（动画激活时展示） */}
           {(animMode !== 'none' || inRebuttal) && activeSteps.length > 0 && (
             <div
-              className={`p-3 rounded-lg border-1.5 flex flex-col gap-2.5 transition-all ${
+              className={`p-3 rounded-2xl border flex flex-col gap-2.5 transition-all shadow-xs ${
                 animMode === 'bad'
-                  ? 'border-cinnabar/40 bg-gradient-to-b from-cinnabar/5 to-paper-1'
+                  ? 'border-cinnabar/30 bg-cinnabar/5'
                   : animMode === 'good'
-                    ? 'border-emerald-600/40 bg-gradient-to-b from-emerald-600/5 to-paper-1'
-                    : 'border-amber-600/40 bg-gradient-to-b from-amber-500/10 to-paper-1'
+                    ? 'border-emerald-600/30 bg-emerald-600/5'
+                    : 'border-amber-500/30 bg-amber-500/5'
               }`}
               aria-label="分步动画时间轴"
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-xs font-bold text-ink-0">
-                  {animMode === 'bad'
-                    ? '🎬 走错会怎样（多步连锁亏损动画）'
-                    : animMode === 'good'
-                      ? '🎬 走对会怎样（最佳正着分步动画）'
-                      : '🎬 对手想干嘛（不设防时对手杀招动画）'}
-                </div>
-                <div className="flex items-center gap-1 flex-wrap">
-                  <button
-                    type="button"
-                    className="px-2 py-0.5 text-xs font-medium rounded border border-hairline text-ink-2 hover:text-ink-0 bg-transparent hover:bg-black/5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    onClick={onResetAnimStep}
-                    disabled={animStep === 0}
-                    title="回到走棋前的初始局面"
-                  >
-                    ⏮ 走前
-                  </button>
-                  <button
-                    type="button"
-                    className="px-2 py-0.5 text-xs font-medium rounded border border-hairline text-ink-2 hover:text-ink-0 bg-transparent hover:bg-black/5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    onClick={onPrevAnimStep}
-                    disabled={animStep <= 0}
-                  >
-                    ◀ 上一步
-                  </button>
-                  <button
-                    type="button"
-                    className="px-2.5 py-0.5 text-xs font-semibold rounded bg-cinnabar hover:bg-cinnabar-bright text-white transition-colors cursor-pointer shadow-xs"
-                    onClick={onTogglePlayAnim}
-                  >
-                    {animPlaying ? '⏸ 暂停' : '▶ 自动连播'}
-                  </button>
-                  <button
-                    type="button"
-                    className="px-2 py-0.5 text-xs font-medium rounded border border-hairline text-ink-2 hover:text-ink-0 bg-transparent hover:bg-black/5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    onClick={onNextAnimStep}
-                    disabled={animStep >= activeSteps.length}
-                  >
-                    下一步 ▶
-                  </button>
-                </div>
+                <span className="text-xs font-bold text-ink-0 flex items-center gap-1">
+                  <span>🎬</span>
+                  <span>
+                    {animMode === 'bad'
+                      ? '走错会怎样（连锁亏损推演）'
+                      : animMode === 'good'
+                        ? '走对会怎样（最佳正着推演）'
+                        : '对手企图（未设防杀招推演）'}
+                  </span>
+                </span>
+                <span className="text-[11px] text-ink-3 font-num">
+                  第 {animStep} / {activeSteps.length} 动
+                </span>
               </div>
 
               {/* 分步卡片列表 */}
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto">
                 {activeSteps.map((st, idx) => {
                   const stepIndex = idx + 1
                   const isCurrent = animStep === stepIndex
@@ -200,15 +175,15 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
                     <button
                       key={st.step}
                       type="button"
-                      className={`w-full text-left p-2 rounded-md border transition-all cursor-pointer ${
+                      className={`w-full text-left p-2 rounded-xl border transition-all cursor-pointer ${
                         isCurrent
-                          ? 'border-cinnabar bg-cinnabar/10 shadow-xs'
-                          : 'bg-paper-0 border-hairline hover:border-hairline-strong'
+                          ? 'border-cinnabar bg-paper-0 shadow-xs'
+                          : 'bg-paper-0/70 border-hairline hover:bg-paper-0'
                       }`}
                       onClick={() => onSelectAnimStep(stepIndex)}
                     >
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-[11.5px] font-bold text-ink-1">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <span className="text-[11px] font-bold text-ink-2">
                           {st.tag || `第 ${st.step} 步`}
                         </span>
                         <span className="font-display text-xs font-bold text-cinnabar">
@@ -219,11 +194,11 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
                         {st.plain || st.comment}
                       </div>
                       {((st.gains && st.gains.length > 0) || (st.losses && st.losses.length > 0)) && (
-                        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
                           {st.gains?.map((g, gi) => (
                             <span
                               key={`g-${gi}`}
-                              className="text-[10.5px] px-1.5 py-0.5 rounded-full font-semibold text-emerald-800 bg-emerald-100"
+                              className="text-[10px] px-1.5 py-0.2 rounded-full font-semibold text-emerald-800 bg-emerald-100"
                             >
                               + {g}
                             </span>
@@ -231,7 +206,7 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
                           {st.losses?.map((l, li) => (
                             <span
                               key={`l-${li}`}
-                              className="text-[10.5px] px-1.5 py-0.5 rounded-full font-semibold text-rose-800 bg-rose-100"
+                              className="text-[10px] px-1.5 py-0.2 rounded-full font-semibold text-rose-800 bg-rose-100"
                             >
                               - {l}
                             </span>
@@ -247,184 +222,145 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
 
           {/* 📊 优劣势直观对比卡 */}
           {prosCons && (
-            <div className="p-3 rounded-lg bg-paper-1 border border-hairline-strong flex flex-col gap-2" aria-label="优劣势直观对比">
+            <div className="p-3.5 rounded-2xl bg-paper-0/95 border border-hairline shadow-xs flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <h4 className="m-0 text-xs font-bold text-ink-0">📊 走错失去什么 vs 走对赢得什么</h4>
-                {prosCons.pawn_drop > 0 && (
+                {showFullProsCons && prosCons.pawn_drop > 0 && (
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-cinnabar bg-cinnabar/10 border border-cinnabar/30">
                     走错亏约 {prosCons.pawn_drop} 个兵
                   </span>
                 )}
               </div>
-              <p className="m-0 text-xs font-semibold text-ink-1 leading-relaxed">
-                {prosCons.verdict_headline}
-              </p>
 
-              {/* 关键位置几何透视解析卡片 */}
-              {prosCons.key_square_info && (
-                <div className="p-2.5 rounded-md bg-blue-50/80 border border-blue-200 text-xs text-blue-950 flex flex-col gap-1 shadow-2xs">
-                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                    <span className="font-bold flex items-center gap-1">
-                      <span>📍 为什么「{prosCons.best_chinese || prosCons.best_iccs}」是关键位置？</span>
-                      <span className="text-[11px] font-semibold px-1.5 py-0.2 rounded bg-blue-200/80 text-blue-900">
-                        {prosCons.key_square_info.zone_name}（{prosCons.key_square_info.dest_square}）
-                      </span>
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {prosCons.key_square_info.tactical_tags.map((tag, ti) => (
-                        <span key={ti} className="text-[10.5px] px-1.5 py-0.5 rounded-full bg-blue-100 border border-blue-300 font-medium">
-                          #{tag}
+              {!showFullProsCons ? (
+                /* 用户独立思考实训中：避免直接泄密答案 */
+                <div className="p-3 rounded-xl bg-paper-1/80 border border-hairline text-ink-2 text-xs flex flex-col gap-2">
+                  <p className="m-0 leading-relaxed">
+                    💡 <b>独立思考中</b>：请先在棋盘上尝试走出你认为的最佳走法。
+                  </p>
+                  <p className="m-0 text-[11.5px] text-ink-3">
+                    若走出正解，此处将自动解锁本题的深层算路依据与得失拆解；或点击右上角「正着演示」直接观摩。
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="m-0 text-xs font-semibold text-ink-1 leading-relaxed">
+                    {prosCons.verdict_headline}
+                  </p>
+
+                  {/* 关键位置几何透视解析卡片 */}
+                  {prosCons.key_square_info && (
+                    <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-950 flex flex-col gap-1">
+                      <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                        <span className="font-bold flex items-center gap-1">
+                          <span>📍 为什么「{prosCons.best_chinese || prosCons.best_iccs}」是关键位置？</span>
+                          <span className="text-[11px] font-semibold px-1.5 py-0.2 rounded bg-blue-200/80 text-blue-900">
+                            {prosCons.key_square_info.zone_name}（{prosCons.key_square_info.dest_square}）
+                          </span>
                         </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="text-[11.5px] leading-relaxed text-blue-900 mt-0.5">
-                    👉 <b>棋理依据</b>：{prosCons.key_square_info.why_key}
-                  </div>
-                  {(prosCons.key_square_info.controlled_targets.length > 0 || prosCons.key_square_info.protected_targets.length > 0) && (
-                    <div className="flex items-center gap-2 flex-wrap text-[11px] text-blue-800 pt-1 border-t border-blue-200/60 mt-0.5">
-                      {prosCons.key_square_info.controlled_targets.length > 0 && (
-                        <span>🎯 瞄准控制：<b>{prosCons.key_square_info.controlled_targets.join('、')}</b></span>
-                      )}
-                      {prosCons.key_square_info.protected_targets.length > 0 && (
-                        <span>🛡️ 稳固生根：<b>{prosCons.key_square_info.protected_targets.join('、')}</b></span>
-                      )}
+                        <div className="flex items-center gap-1">
+                          {prosCons.key_square_info.tactical_tags.map((tag, ti) => (
+                            <span key={ti} className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 border border-blue-300 font-medium">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="text-[11.5px] leading-relaxed text-blue-900 mt-0.5">
+                        👉 <b>棋理依据</b>：{prosCons.key_square_info.why_key}
+                      </div>
                     </div>
                   )}
-                </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-0.5">
+                    {/* 左列：走错会失去什么 */}
+                    <div className="p-2.5 rounded-xl bg-paper-1 border border-hairline border-t-2 border-t-cinnabar flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="text-xs font-bold text-ink-0">
+                          ❌ 走错{prosCons.wrong_chinese ? `「${prosCons.wrong_chinese}」` : ''}
+                        </span>
+                        {badStepsCount > 0 && (
+                          <button
+                            type="button"
+                            className="px-2 py-0.5 text-[10.5px] rounded-lg border border-hairline text-ink-2 hover:text-ink-0 bg-paper-0 transition cursor-pointer"
+                            onClick={onStartBadAnim}
+                          >
+                            ▶ 看动画
+                          </button>
+                        )}
+                      </div>
+                      <ul className="m-0 pl-4 text-[11.5px] leading-relaxed text-ink-2 flex flex-col gap-1">
+                        {prosCons.wrong_losses.map((item, i) => (
+                          <li key={i}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* 右列：走对能赢得什么 */}
+                    <div className="p-2.5 rounded-xl bg-paper-1 border border-hairline border-t-2 border-t-emerald-600 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="text-xs font-bold text-ink-0">
+                          ✅ 走对{prosCons.best_chinese ? `「${prosCons.best_chinese}」` : ''}
+                        </span>
+                        {goodStepsCount > 0 && (
+                          <button
+                            type="button"
+                            className="px-2 py-0.5 text-[10.5px] rounded-lg border border-hairline text-ink-2 hover:text-ink-0 bg-paper-0 transition cursor-pointer"
+                            onClick={onStartGoodAnim}
+                          >
+                            ▶ 看动画
+                          </button>
+                        )}
+                      </div>
+                      <ul className="m-0 pl-4 text-[11.5px] leading-relaxed text-ink-2 flex flex-col gap-1">
+                        {prosCons.best_gains.map((item, i) => (
+                          <li key={i}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </>
               )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                {/* 左列：走错会失去什么 */}
-                <div className="p-2.5 rounded bg-paper-0 border border-hairline border-t-2.5 border-t-cinnabar flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                    <span className="text-xs font-bold text-ink-0">
-                      ❌ 走错{prosCons.wrong_chinese ? `「${prosCons.wrong_chinese}」` : ''}的劣势
-                    </span>
-                    {badStepsCount > 0 && (
-                      <button
-                        type="button"
-                        className="px-2 py-0.5 text-[11px] rounded border border-hairline text-ink-2 hover:text-ink-0 bg-transparent hover:bg-black/5 transition-colors cursor-pointer"
-                        onClick={onStartBadAnim}
-                      >
-                        ▶ 看动画({badStepsCount}步)
-                      </button>
-                    )}
-                  </div>
-                  <ul className="m-0 pl-4 text-xs leading-relaxed text-ink-1 flex flex-col gap-1">
-                    {prosCons.wrong_losses.map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* 右列：走对能赢得什么 */}
-                <div className="p-2.5 rounded bg-paper-0 border border-hairline border-t-2.5 border-t-emerald-600 flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                    <span className="text-xs font-bold text-ink-0">
-                      ✅ 走对{prosCons.best_chinese ? `「${prosCons.best_chinese}」` : ''}的优势
-                    </span>
-                    {goodStepsCount > 0 && (
-                      <button
-                        type="button"
-                        className="px-2 py-0.5 text-[11px] rounded border border-hairline text-ink-2 hover:text-ink-0 bg-transparent hover:bg-black/5 transition-colors cursor-pointer"
-                        onClick={onStartGoodAnim}
-                      >
-                        ▶ 看动画({goodStepsCount}步)
-                      </button>
-                    )}
-                  </div>
-                  <ul className="m-0 pl-4 text-xs leading-relaxed text-ink-1 flex flex-col gap-1">
-                    {prosCons.best_gains.map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
             </div>
           )}
-
-          {/* 💡 分步提示区 */}
-          <div className="p-3 bg-paper-0 rounded-lg border border-hairline flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <h4 className="m-0 text-xs font-bold text-ink-0">
-                💡 实在想不出？看分步提示 ({hints.length}/3)
-              </h4>
-              <button
-                type="button"
-                className="px-2 py-0.5 text-xs font-medium rounded border border-hairline text-ink-2 hover:text-ink-0 bg-transparent hover:bg-black/5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                onClick={onRequestHint}
-                disabled={hintLevel >= 3 || solved || stage === 'exam'}
-              >
-                {stage === 'exam'
-                  ? '实战检验中已关闭提示'
-                  : hintLevel >= 3
-                    ? '已显示全部 3 步提示'
-                    : `点我看第 ${hintLevel + 1} 步提示`}
-              </button>
-            </div>
-            <div className="flex flex-col gap-2">
-              {stage === 'exam' ? (
-                <p className="m-0 text-xs text-cinnabar">
-                  当前为无提示实战检验模式，不开启提示一次走对即可标记为「★ 已掌握」。
-                </p>
-              ) : hints.length === 0 ? (
-                <p className="m-0 text-xs text-ink-3">
-                  点击右上角按钮可依次查看：① 对手破绽在哪一格 → ② 我方该动哪颗主力子 → ③ 具体走哪一步。
-                </p>
-              ) : (
-                hints.map((h, i) => (
-                  <div
-                    key={i}
-                    className="bg-amber-50 border border-amber-200 p-2 rounded-md text-xs text-amber-900 flex items-start gap-2 leading-relaxed"
-                  >
-                    <span className="font-bold text-[10.5px] bg-amber-200 px-1.5 py-0.5 rounded text-amber-950 shrink-0">
-                      {i === 0 ? '提示① 看破绽' : i === 1 ? '提示② 选主力' : '提示③ 走正着'}
-                    </span>
-                    <span>{h}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </div>
       )}
 
       {/* Tab 2: 🧠 逆向算路三问 */}
       {activeTab === 'thinking' && thinkingGuide && (
-        <div className="p-3 rounded-lg bg-paper-1 border border-hairline-strong flex flex-col gap-2.5" aria-label="第一性原理与逆向思维算路助手">
+        <div className="p-3.5 rounded-2xl bg-paper-0/95 border border-hairline shadow-xs flex flex-col gap-2.5" aria-label="第一性原理与逆向思维算路助手">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <h4 className="m-0 text-xs font-bold text-ink-0">🧠 脑子想不明白接下来的走向？用这 3 步算路法</h4>
             {threatStepsCount > 0 && (
               <button
                 type="button"
-                className="px-2 py-0.5 text-xs font-medium rounded border border-hairline text-ink-2 hover:text-ink-0 bg-transparent hover:bg-black/5 transition-colors cursor-pointer"
+                className="h-6.5 px-2.5 text-xs font-medium rounded-lg border border-hairline text-ink-2 hover:text-ink-0 bg-paper-1 hover:bg-paper-2 transition cursor-pointer"
                 onClick={onStartThreatAnim}
               >
-                👁️ 动画看对手企图
+                👁️ 看对手企图动画
               </button>
             )}
           </div>
 
-          <div className="p-2 rounded bg-paper-0 border border-hairline">
+          <div className="p-2.5 rounded-xl bg-paper-1 border border-hairline">
             <div className="text-[11.5px] font-bold text-blue-700 mb-1">
               ① 第一性原理（只抓盘面 3 件本质，不瞎算）
             </div>
-            <ul className="m-0 pl-4 text-xs leading-relaxed text-ink-1 flex flex-col gap-1">
+            <ul className="m-0 pl-4 text-xs leading-relaxed text-ink-2 flex flex-col gap-1">
               {thinkingGuide.first_principles.map((fp, idx) => (
                 <li key={idx}>{fp}</li>
               ))}
             </ul>
           </div>
 
-          <div className="p-2 rounded bg-paper-0 border border-hairline">
+          <div className="p-2.5 rounded-xl bg-paper-1 border border-hairline">
             <div className="text-[11.5px] font-bold text-emerald-700 mb-1">
               ② 逆向思维（从 3 步后的结果倒推现在第 1 步）
             </div>
-            <p className="m-0 text-xs leading-relaxed text-ink-1">{thinkingGuide.inversion_tip}</p>
+            <p className="m-0 text-xs leading-relaxed text-ink-2">{thinkingGuide.inversion_tip}</p>
           </div>
 
-          <div className="p-2 rounded bg-paper-0 border border-hairline">
+          <div className="p-2.5 rounded-xl bg-paper-1 border border-hairline">
             <div className="text-[11.5px] font-bold text-cinnabar mb-1">
               ③ 对抗式提问（落子前站到对手角度问自己 3 句话）
             </div>
@@ -432,7 +368,7 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
               {thinkingGuide.adversarial_qa.map((item, idx) => (
                 <div
                   key={idx}
-                  className="p-1.5 rounded bg-paper-1 hover:bg-paper-2 cursor-pointer transition-colors"
+                  className="p-2 rounded-lg bg-paper-0 hover:bg-paper-2 cursor-pointer transition border border-hairline"
                   onClick={() => {
                     if (item.focus) {
                       onFocusWeakness(item.focus)
@@ -440,7 +376,7 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
                   }}
                   title={item.focus ? `点击在棋盘高亮格：${item.focus}` : undefined}
                 >
-                  <div className="text-xs font-semibold text-ink-0">{item.q}</div>
+                  <div className="text-xs font-bold text-ink-0">{item.q}</div>
                   <div className="text-[11.5px] leading-relaxed text-ink-2 mt-0.5">👉 {item.a}</div>
                 </div>
               ))}
@@ -452,14 +388,13 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
       {/* Tab Breakdown: ⚔️ 特定对局全盘拆解 */}
       {activeTab === 'breakdown' && gameBreakdown && (
         <div className="flex flex-col gap-3">
-          {/* 三阶段概览卡 */}
-          <div className="p-3 rounded-lg bg-paper-1 border border-hairline-strong flex flex-col gap-2">
+          <div className="p-3.5 rounded-2xl bg-paper-0/95 border border-hairline shadow-xs flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-xs font-bold text-ink-0">
-                对局 {gameBreakdown.game_id} · 三阶段胜负手拆解
+                对局胜负手拆解 · 共 {gameBreakdown.ply_count} 手
               </span>
-              <span className="text-[11.5px] text-ink-2">
-                共 {gameBreakdown.ply_count} 手 · 发现 {gameBreakdown.turning_points?.length || 0} 处关键胜负手
+              <span className="text-[11px] text-ink-3">
+                发现 {gameBreakdown.turning_points?.length || 0} 处关键转折
               </span>
             </div>
 
@@ -468,20 +403,20 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
                 const pInfo = gameBreakdown.phases?.[phaseKey]
                 if (!pInfo) return null
                 return (
-                  <div key={phaseKey} className="p-2 rounded bg-paper-0 border border-hairline flex flex-col gap-1">
+                  <div key={phaseKey} className="p-2 rounded-xl bg-paper-1 border border-hairline flex flex-col gap-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11.5px] font-bold text-ink-1">{pInfo.name}</span>
-                      <span className={`text-[10.5px] font-semibold px-1.5 py-0.2 rounded ${
+                      <span className="text-[11px] font-bold text-ink-1">{pInfo.name}</span>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded ${
                         pInfo.accuracy >= 80
                           ? 'bg-emerald-100 text-emerald-800'
                           : pInfo.accuracy >= 60
                             ? 'bg-amber-100 text-amber-800'
                             : 'bg-rose-100 text-rose-800'
                       }`}>
-                        准确率 {pInfo.accuracy}%
+                        {pInfo.accuracy}%
                       </span>
                     </div>
-                    <div className="text-[11px] text-ink-3">
+                    <div className="text-[10.5px] text-ink-3 truncate">
                       {pInfo.verdict}
                     </div>
                   </div>
@@ -491,21 +426,21 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
           </div>
 
           {/* 转折点列表 */}
-          <div className="bg-paper-0 rounded-lg border border-hairline p-2.5 flex flex-col gap-2">
+          <div className="bg-paper-0/95 rounded-2xl border border-hairline p-3 flex flex-col gap-2 shadow-xs">
             <h4 className="m-0 text-xs font-bold text-ink-0">
-              📌 本局关键转折点（点击直接加载到棋盘重练）
+              📌 本局关键转折点（点击加载重练）
             </h4>
-            <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[300px]">
+            <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[280px]">
               {gameBreakdown.turning_points?.map((tp: any, idx: number) => {
                 const isCurrent = currentPuzzleId === tp.puzzle_id
                 return (
                   <button
                     key={idx}
                     type="button"
-                    className={`w-full text-left p-2.5 rounded-md border transition-all cursor-pointer ${
+                    className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
                       isCurrent
                         ? 'bg-rose-50 border-cinnabar shadow-xs'
-                        : 'bg-paper-1 border-hairline hover:border-hairline-strong'
+                        : 'bg-paper-1 border-hairline hover:bg-paper-2'
                     }`}
                     onClick={() => {
                       if (onSelectBreakdownPly) {
@@ -520,23 +455,13 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
                       <span className="font-bold text-xs text-ink-0">
                         第 {tp.ply} 手 · {tp.phase_name}
                       </span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">
-                          #{tp.motif_label} (-{tp.loss_pawn}兵)
-                        </span>
-                        <span className="font-display text-xs font-bold text-cinnabar">
-                          错走 {tp.played_chinese} → 正着 {tp.best_chinese}
-                        </span>
-                      </div>
+                      <span className="text-[10.5px] font-semibold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800">
+                        #{tp.motif_label} (-{tp.loss_pawn}兵)
+                      </span>
                     </div>
                     <div className="text-[11.5px] text-ink-2 leading-relaxed">
                       {tp.coach_summary}
                     </div>
-                    {tp.key_square_info && (
-                      <div className="mt-1 text-[11px] text-blue-900 bg-blue-50/70 p-1.5 rounded border border-blue-200">
-                        📍 <b>为什么当时该占 {tp.key_square_info.dest_square}（{tp.key_square_info.zone_name}）</b>：{tp.key_square_info.why_key}
-                      </div>
-                    )}
                   </button>
                 )
               })}
@@ -547,36 +472,38 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
 
       {/* Tab 3: 🗂️ 题库列表 */}
       {activeTab === 'catalog' && (
-        <div className="bg-paper-0 rounded-lg border border-hairline p-2.5 flex flex-col min-h-[140px]">
+        <div className="bg-paper-0/95 rounded-2xl border border-hairline p-3 flex flex-col shadow-xs min-h-[160px]">
           <div className="mb-2">
             <h4 className="m-0 text-xs font-bold text-ink-1">
-              本类训练题列表 ({categoryPuzzles.length})
+              本类精训题库 ({categoryPuzzles.length})
             </h4>
           </div>
-          <div className="flex flex-col gap-1 overflow-y-auto max-h-[260px]">
+          <div className="flex flex-col gap-1 overflow-y-auto max-h-[300px]">
             {categoryPuzzles.map((pz, idx) => {
               const isCurrent = currentPuzzleId === pz.id
               return (
                 <button
                   key={pz.id}
                   type="button"
-                  className={`flex items-center justify-between px-2.5 py-1.5 rounded text-xs transition-colors cursor-pointer border ${
+                  className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs transition cursor-pointer border ${
                     isCurrent
-                      ? 'bg-rose-50 border-cinnabar font-semibold text-cinnabar'
+                      ? 'bg-cinnabar/10 border-cinnabar font-bold text-cinnabar shadow-2xs'
                       : 'bg-paper-1 border-transparent hover:bg-paper-2 text-ink-1'
                   }`}
                   onClick={() => onSelectPuzzle(pz.id)}
                 >
-                  <span className="font-num text-[11px] opacity-60 mr-1.5">#{idx + 1}</span>
+                  <span className="font-num text-[11px] opacity-50 mr-2">#{idx + 1}</span>
                   <span className="flex-1 truncate text-left">{pz.title}</span>
-                  <span className="ml-1.5 text-xs">
-                    {pz.status === 'mastered'
-                      ? '★'
-                      : pz.status === 'solved_with_hints'
-                        ? '✓'
-                        : pz.status === 'in_progress'
-                          ? '⏳'
-                          : '○'}
+                  <span className="ml-2 text-xs">
+                    {pz.status === 'mastered' ? (
+                      <span className="text-emerald-600 font-bold">★ 已掌握</span>
+                    ) : pz.status === 'solved_with_hints' ? (
+                      <span className="text-blue-600">✓ 已通关</span>
+                    ) : pz.status === 'in_progress' ? (
+                      <span className="text-amber-600">⏳ 练过</span>
+                    ) : (
+                      <span className="text-ink-4">○ 待挑战</span>
+                    )}
                   </span>
                 </button>
               )

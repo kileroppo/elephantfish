@@ -1,0 +1,237 @@
+/* ==========================================================================
+   控件
+   ========================================================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper-0);
+  color: var(--ink-1);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  /* 以前这里是一条 transition:all —— 思考一开始禁用态跟着 opacity 一起淡变，
+     状态该是「切」不是「渐」（.app.is-thinking 那段不得不专门去关它）。
+     显式列出属性后，那段特赦仍然保留：它关的是所有过渡的「动」，没错。 */
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--ink-4);
+  transform: translateY(-1px);
+  box-shadow: calc(6px * var(--light-x)) 6px 14px -8px rgba(43, 35, 26, 0.5);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--cinnabar-bright), var(--cinnabar));
+  border-color: transparent;
+  color: #fff8f2;
+  box-shadow: calc(6px * var(--light-x)) 6px 16px -8px rgba(180, 50, 42, 0.9);
+}
+
+.btn-danger {
+  background: var(--cinnabar);
+  border-color: transparent;
+  color: #fff8f2;
+}
+
+.btn-ghost {
+  background: transparent;
+}
+
+.btn-sm {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.btn.wide {
+  width: 100%;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper-0);
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
+}
+
+.seg:active {
+  transform: scale(0.97);
+}
+
+.seg-disc {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  /* 选中那一侧的小圆点微微鼓起 —— 「是我」这件事让形状也说话 */
+  transition: transform var(--dur-fast) var(--ease-spring-sm);
+}
+
+.seg.is-on .seg-disc {
+  transform: scale(1.2);
+}
+.seg-red .seg-disc {
+  background: var(--piece-red);
+}
+.seg-black .seg-disc {
+  background: var(--piece-black);
+}
+
+.seg-red.is-on {
+  border-color: var(--cinnabar);
+  color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+}
+.seg-black.is-on {
+  border-color: var(--ink-2);
+  color: var(--ink-0);
+  background: var(--paper-2);
+}
+
+
+
+.preset {
+  height: 34px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
+}
+
+.preset:hover {
+  border-color: var(--ink-4);
+  color: var(--ink-1);
+}
+
+.preset:active {
+  transform: scale(0.96);
+}
+
+.preset.is-on {
+  background: var(--cinnabar);
+  border-color: transparent;
+  color: #fff8f2;
+}
+
+/* ---- 设置里的数字格 ----
+   与 .preset 同一套边框与圆角，只是把「按下去」换成「打进去」。
+   值是右对齐的等宽数字：三个格子并排时，眼睛扫的是个位而不是字头。 */
+.field-grid {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: 4.5em 1fr 2.2em;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  color: var(--ink-mute);
+}
+
+.field-label {
+  white-space: nowrap;
+}
+
+.field input {
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper-0);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink-1);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+/* 正在编辑的那一格自己说出来（草稿还没提交，值和服务端那份不一致） */
+.field.is-editing input,
+.field input:focus-visible {
+  border-color: var(--cinnabar);
+  box-shadow: 0 0 0 2px var(--cinnabar-wash);
+}
+
+.field input:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.field-unit {
+  font-size: 10.5px;
+  color: var(--ink-4);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* 累计战绩：跨局的胜负，训练「下赢那款大模型」时最该盯着的一个数 */

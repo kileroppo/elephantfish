@@ -1,0 +1,82 @@
+/* ==========================================================================
+   布局与外观
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-1);
+  background-color: var(--paper-1);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+/* 纸的质感：一层极淡的斜纹 + 一盏从左上打下来的光 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(
+      120% 80% at 12% -10%,
+      rgba(255, 255, 255, 0.9),
+      rgba(255, 255, 255, 0) 60%
+    ),
+    repeating-linear-gradient(
+      45deg,
+      rgba(109, 80, 40, 0.022) 0 1px,
+      rgba(255, 255, 255, 0) 1px 4px
+    );
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-0);
+}
+
+code,
+kbd {
+  font-family: var(--font-num);
+  font-size: 0.86em;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-3);
+}
+
+.hint.warn {
+  color: var(--cinnabar);
+}

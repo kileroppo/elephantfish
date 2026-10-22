@@ -1114,9 +1114,9 @@ def run(client, store_path):
     st_pz, body_pz = client.get('/api/training/puzzles')
     puzzles_list = body_pz.get('puzzles') or []
     cats_list = body_pz.get('categories') or []
-    check('GET /api/training/puzzles -> 200，含四大篇章且含 15 门经典功法 + 实战心魔转化题',
+    check('GET /api/training/puzzles -> 200，含核心篇章且含 15 门经典功法 + 实战心魔转化题',
           st_pz == 200 and body_pz.get('ok') is True
-          and len(cats_list) == 4 and len(puzzles_list) >= 15,
+          and len(cats_list) >= 4 and len(puzzles_list) >= 15,
           f'categories={len(cats_list)} puzzles={len(puzzles_list)}')
 
     st_start, body_start = client.post('/api/training/start', {

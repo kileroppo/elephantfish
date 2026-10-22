@@ -10,23 +10,29 @@ export interface ReplayHeaderProps {
 
 export function ReplayHeader({ head, seedGameId, onClose }: ReplayHeaderProps) {
   return (
-    <header className="sheet-head replay-head flex items-center justify-between pb-3 mb-3 border-b border-hairline">
-      <div>
-        <h2 className="text-base font-bold text-ink-0 m-0">复盘台</h2>
-        <p className="replay-sub font-num text-[11px] text-ink-3 mt-1 m-0">
+    <header className="flex items-center justify-between pb-3 mb-2 border-b border-hairline select-none shrink-0">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded-lg bg-cinnabar text-white font-kai text-xs font-bold flex items-center justify-center shadow-xs">
+            谱
+          </span>
+          <h2 className="text-sm sm:text-base font-bold text-ink-0 m-0">对局复盘台</h2>
+        </div>
+        <p className="font-num text-[11px] text-ink-3 hidden sm:block m-0">
           {head
-            ? `${describeSource(head.source)} ${head.game_id} · 引擎执${shortSide(head.engine_side)} · ` +
+            ? `${describeSource(head.source)} · 引擎执${shortSide(head.engine_side)} · ` +
               `${head.ply_count} 手 · ${relativeTime(head.updated_at)}`
             : seedGameId
-              ? `读存档 ${seedGameId} 中的那一局`
-              : '读存档里的那一局'}
+              ? `对局 ID: ${seedGameId}`
+              : '对局历史'}
         </p>
       </div>
       <button
         type="button"
-        className="icon-btn text-ink-3 hover:text-ink-0 text-base w-7 h-7 flex items-center justify-center rounded hover:bg-paper-2 transition-colors cursor-pointer"
+        className="w-7 h-7 flex items-center justify-center text-ink-3 hover:text-ink-0 hover:bg-paper-2 rounded-full text-sm transition cursor-pointer"
         onClick={onClose}
         aria-label="关闭复盘台"
+        title="返回主界面 (Esc)"
       >
         ✕
       </button>

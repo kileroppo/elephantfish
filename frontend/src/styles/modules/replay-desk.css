@@ -1,0 +1,398 @@
+/* ==========================================================================
+   复盘台
+   --------------------------------------------------------------------------
+   这层里最大的东西是那块盘，而盘只有一把尺：.board 的 height:100% +
+   aspect-ratio 720/800 + max-width:100%。所以这里做的不是重写尺寸，
+   而是**给那条 height 链一个确定的头** —— .replay-desk 直接定高（窄屏改成按内容长、
+   自己滚，见下面 900 那一档），body 与 board 逐级 stretch，盘就和现场那块同一个比例。
+   另写一套「按宽度算高度」的算法，会在某个窗口宽度上让复盘的盘与对局的盘
+   长得不一样，而那正是「同一条棋谱两种样子」的来源。
+   ========================================================================== */
+
+/* 底下那台机器在回放期间照常 130ms 轮询、照常重绘，这一层糊在其上就不是「开一次
+   算一次」而是每 tick 重糊一整屏 —— 第 17 条帧预算最贵的一档。改吃纯色压暗：
+   要看清的是自己那副盘，不是透过毛玻璃猜底下走到哪了。 */
+.replay-veil {
+  background: rgba(22, 19, 15, 0.58);
+  backdrop-filter: none;
+}
+
+.replay-desk {
+  width: min(1060px, 100%);
+  height: min(88vh, 880px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 18px 22px 16px;
+}
+
+.replay-head {
+  margin-bottom: 12px;
+}
+
+.replay-sub {
+  margin: 4px 0 0;
+  font-family: var(--font-num);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.replay-hint {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+}
+
+.replay-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(272px, 336px);
+  gap: 18px;
+  /* 读下一局的路上不许盘面上出现一个洞：留着上一局，整块压暗、不接点击，
+     比先清空再填上诚实 —— 空的盘会被读成「这一局没走子」。 */
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.replay-body.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.replay-board {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 这一层是整块盘的尺头。盘自己那条 `height:100% + aspect-ratio + max-width:100%`
+   只会「按高度算宽度」，一旦栏高乘出来的宽度超过栏宽，max-width 就把宽度压回去、
+   高度不动 —— 1024 上实测盘成了 578×695，比例 0.832，盘面被拉成长方。
+   所以在垫盘这一层同时给两个上限：比例先由宽度算出一个高，再用 max-height 收进
+   栏高。谁小听谁的，盘自己那条规则就永远落在框里，四档视口量出来都是 0.9000。 */
+.replay-board-wrap {
+  min-width: 0;
+  flex: 0 1 auto;
+  width: 100%;
+  max-height: 100%;
+  aspect-ratio: 720 / 800;
+  padding-bottom: 6px;
+}
+
+.replay-ctrl {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 20px;
+  position: relative;
+  z-index: 10;
+}
+
+.replay-at {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  /* 第 12 手 → 第 2 手 少一位，居中那排按钮会跟着左右跳；定宽钉住这一格。
+     宽度是这一行里唯一的数，改它之前先想清楚最大手数。 */
+  min-width: 92px;
+  text-align: center;
+}
+
+.replay-graded {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.replay-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 8px;
+}
+
+.replay-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+  min-height: 40px;
+  font-size: 12.5px;
+  color: var(--ink-1);
+}
+
+.replay-now b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.replay-by {
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+
+.replay-row.side-red .replay-by,
+.replay-now .replay-by.side-red {
+  color: var(--piece-red);
+}
+
+.replay-row.side-black .replay-by,
+.replay-now .replay-by.side-black {
+  color: var(--piece-black);
+}
+
+/* 引擎那一步的评估与棋谱里那个数是同一个数、同一把尺，所以它就是 .move-eval
+   那条规则共用的第二个选择器（见上面棋谱那一段），这里不再定第二次字号。 */
+.replay-start {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.replay-why {
+  flex: 0 0 auto;
+}
+
+/* 全局胜势曲线波形图（Eval Trend Scrubber） */
+.replay-eval-chart {
+  display: flex;
+  align-items: stretch;
+  height: 48px;
+  background: var(--paper-2, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 2px 6px;
+  margin: 6px 0 10px 0;
+  position: relative;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.replay-eval-chart::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--hairline-strong);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.eval-bar-col {
+  flex: 1 1 0;
+  min-width: 8px;
+  max-width: 22px;
+  height: 100%;
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+
+.eval-bar-col:hover {
+  opacity: 0.85;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.eval-bar-track {
+  width: 4px;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.eval-bar-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 1px;
+  z-index: 2;
+}
+
+.eval-bar-fill.is-red {
+  background: var(--piece-red, #b8332a);
+}
+
+.eval-bar-fill.is-black {
+  background: var(--piece-black, #2b231a);
+}
+
+.eval-bar-col.is-blunder .eval-bar-fill {
+  background: #f59e0b;
+  box-shadow: 0 0 3px #f59e0b;
+}
+
+.eval-bar-col.is-selected .eval-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--cinnabar);
+  z-index: 3;
+}
+
+/* 棋谱条：一行一手，整行可点。它自己滚，但**不霸占**右栏剩下的空间 ——
+   五手的小局也要让「这一局共几手」那句紧跟在末行下面，中间空出一大片
+   会让人以为这一局还有别的行没渲染出来。长局靠 flex-shrink 收进可用高度。
+   不加逐行入场动画：索引一变整列就重渲染（键是 ply，不重挂），动画只会反复播同一句。 */
+.replay-strip {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.replay-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 7px;
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  font: inherit;
+  text-align: left;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.replay-row:hover {
+  border-color: var(--hairline-strong);
+  background: var(--paper-0);
+}
+
+/* 引擎录的那一手是「它走的」，不是功课：整行退到墨灰，把朱砂留给判分。 */
+.replay-row.by-engine {
+  background: transparent;
+  color: var(--ink-3);
+}
+
+.replay-n {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  color: var(--ink-4);
+  min-width: 20px;
+}
+
+.replay-cn {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--ink-1);
+}
+
+/* 停在哪一手：朱砂描边 + 纸面抬起。这是整列里唯一的「眼下」，
+   错题本与判分块用的都是同一套语言（.rank-row.is-best）。 */
+.replay-row.is-on {
+  border-color: var(--cinnabar-edge);
+  background: linear-gradient(180deg, var(--paper-0), #fbf3e8);
+  color: var(--ink-0);
+}
+
+.replay-row.is-on .replay-cn {
+  color: var(--cinnabar);
+}
+
+.replay-foot {
+  flex: 0 0 auto;
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px dashed var(--hairline);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+/* 窄屏一栏放不下两栏：台子顶满一屏高时，量出来盘那一行只有 402px 高、里面却要放
+   472px 的东西 —— 盘溢出到棋谱条上，压着下面那几行。这里让台子**按内容长、超出自己滚**，
+   行高跟着盘走；盘的尺还是上面那一条（宽度算高、再收进栏高），一处都没换。 */
+@media (max-width: 900px) {
+  .replay-desk {
+    height: auto;
+    max-height: 92vh;
+    padding: 14px 14px 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .replay-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    gap: 10px;
+  }
+
+  .replay-strip {
+    max-height: 34vh;
+    flex: 0 0 auto;
+  }
+
+  .replay-side {
+    min-height: 0;
+  }
+}
+
+.boot {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+.boot h2 {
+  font-size: 20px;
+  color: var(--ink-1);
+}
+
+.boot-mark {
+  font-family: var(--font-kai);
+  font-size: 44px;
+  color: var(--cinnabar);
+  width: 86px;
+  height: 86px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(160deg, var(--paper-0), var(--paper-3));
+  box-shadow: var(--shadow-panel);
+  animation: breathe 2s var(--ease-out) infinite;
+}
+
+.boot-mark.dim {
+  color: var(--ink-mute);
+  animation: none;
+}
+
+.boot code {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--paper-2);
+  color: var(--ink-1);
+}

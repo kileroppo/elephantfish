@@ -1,0 +1,226 @@
+/* ==========================================================================
+   棋谱
+   ========================================================================== */
+
+.movelist {
+  flex: 0 0 auto;
+  max-height: 220px;
+  display: flex;
+  flex-direction: column;
+}
+
+.move-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: 156px;
+  overflow-y: auto;
+  margin: 0 -6px;
+  padding: 0 6px;
+  scrollbar-width: thin;
+  /* 每一手都要把棋谱带回最新那一行（MoveList 里那句 scrollTop）。
+     没有这一条它就是**硬切**：读到第 40 手时视野猛跳一屏，上一行还没看清就没了。
+     写在 CSS 而不是 JS 里：程序化滚动读的就是这个属性，
+     而滚动由合成器跑，不占落子那几百毫秒的主线程。 */
+  scroll-behavior: smooth;
+}
+
+.move-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.move-round:nth-child(odd) {
+  background: rgba(43, 35, 26, 0.025);
+}
+
+.round-no {
+  width: 26px;
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  text-align: right;
+  padding-right: 8px;
+  vertical-align: middle;
+}
+
+.move-scroll td {
+  padding: 3px 2px;
+  vertical-align: middle;
+}
+
+.move-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  /* 判分 chip 的文案有长有短（「正解」到「这手 5 步杀，最优 3 步」），
+     装不下就折到第二行 —— 折行难看，截断则是把结论砍掉。 */
+  flex-wrap: wrap;
+  row-gap: 3px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.move-cell:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+.move-cell.is-last {
+  background: var(--cinnabar-wash);
+  box-shadow: inset 0 0 0 1px var(--cinnabar-edge);
+  /* 盖印入场：is-last 每易手一次，新那一手就像被朱砂印盖上去 ——
+     先放大压下来，再弹定。类只加在新 cell 上，所以动画每手只播一次。 */
+  animation: stampIn 380ms var(--ease-spring);
+}
+
+@keyframes stampIn {
+  0% {
+    opacity: 0;
+    transform: scale(1.18);
+    box-shadow: inset 0 0 0 2px var(--cinnabar);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.move-glyph {
+  font-family: var(--font-kai);
+  font-size: 13px;
+  width: 15px;
+  text-align: center;
+}
+
+.side-red .move-glyph {
+  color: var(--piece-red);
+}
+.side-black .move-glyph {
+  color: var(--piece-black);
+}
+
+.move-cn {
+  font-family: var(--font-display);
+  color: var(--ink-0);
+}
+
+.move-tags {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.tag {
+  font-style: normal;
+  font-size: 9.5px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.tag-capture {
+  color: var(--ink-2);
+  background: var(--paper-3);
+}
+
+.tag-check {
+  color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+}
+
+.tag-mate {
+  color: #fff8f2;
+  background: var(--cinnabar);
+}
+
+.move-eval,
+.replay-eval {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 判分 chip ----
+   颜色说的是这一手怎么样，边框与字重说的是这句话有几分可信：
+   `tone-soft`（名次层面、上限层面能说出口的）一律浅底细字，
+   只有精确差值与「没进前几名」才配得上朱砂。措辞由 lib/format 的 gradeLabel
+   统一给，这里只负责把 tone 翻成颜色 —— 两边都不许自己组织语言。 */
+.grade-chip {
+  font-style: normal;
+  font-size: 9.5px;
+  line-height: 1.3;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--paper-2);
+  color: var(--ink-2);
+  /* 一行的宽度装不下长文案（「这手 5 步杀，最优 3 步」）时让它自己折，
+     也不许截断：截掉的是判分结论的后半句，比难看严重得多 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  animation: gradeIn var(--dur) var(--ease-enter) both;
+}
+
+@keyframes gradeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.94);
+  }
+}
+
+.grade-chip.tone-good {
+  border-color: rgba(44, 106, 86, 0.34);
+  background: var(--jade-wash);
+  color: var(--jade);
+}
+
+.grade-chip.tone-soft {
+  border-color: var(--hairline);
+  background: var(--paper-2);
+  color: var(--ink-2);
+}
+
+.grade-chip.tone-warn {
+  border-color: var(--cinnabar-edge);
+  background: var(--cinnabar-wash);
+  color: var(--cinnabar);
+}
+
+.grade-chip.tone-bad {
+  border-color: transparent;
+  background: linear-gradient(180deg, var(--cinnabar-bright), var(--cinnabar));
+  color: #fff8f2;
+}
+
+.grade-chip.tone-mate {
+  border-color: transparent;
+  background: var(--ink-1);
+  color: var(--paper-0);
+}
+
+/* 「还没有判分」：虚线、最淡的一档。它必须和「判了、而且没问题」看得出区别，
+   又要比任何一条结论都安静 —— 它说的是界面的事，不是人的棋。 */
+.grade-chip.tone-mute {
+  border-style: dashed;
+  border-color: var(--hairline);
+  background: transparent;
+  color: var(--ink-4);
+}
+
+.move-placeholder {
+  display: block;
+  height: 24px;
+}
+
+.move-empty {
+  padding: 24px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-mute);
+}

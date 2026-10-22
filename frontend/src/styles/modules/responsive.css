@@ -1,0 +1,359 @@
+/* ==========================================================================
+   响应式
+   ========================================================================== */
+
+@media (max-width: 1320px) {
+  .workspace {
+    --rail-l: 236px;
+    --rail-r: 320px;
+    --rail-gap: 16px;
+    padding: 8px 16px 16px;
+  }
+  .workspace.no-left {
+    grid-template-columns: 0px minmax(0, 1fr) calc(var(--rail-r) + var(--rail-gap));
+  }
+}
+
+@media (max-width: 1140px) {
+  body {
+    overflow: auto;
+  }
+
+  /* 窄屏只有一条主栏。
+     这里必须把 .no-left / .no-right 那几个变体一起写进来：它们（上方 118-128 行）
+     的特异性是 (0,2,0)/(0,3,0)，比单个 .workspace 高，所以光写 .workspace 是压不住
+     的 —— 于是窄屏仍然是个三栏栅格，而下面 `.stage { display: contents }` 会把
+     stage-head / board-wrap / relay 从这个栅格里"吐"出来重新参与排布，棋盘正好落进
+     宽度为 0 的边栏轨道里。表现就是：视口窄于 1140px 时棋盘宽度算出来是 0，
+     整块盘面直接看不见。 */
+  .workspace,
+  .workspace.no-left,
+  .workspace.no-right,
+  .workspace.no-left.no-right {
+    grid-template-columns: minmax(0, 1fr);
+    padding-bottom: 64px;
+  }
+
+  /* 顶栏在窄屏不需要换布局：.topbar 是 flex，写 grid-template-columns
+     从来没生效过；它想摆的 .topbar-center 也早已不在组件里。
+     真正放不下的是手机 —— 见下面 720 那一档。 */
+  .rail {
+    overflow: visible;
+    /* 窄屏是靠页面滚动的，别让 auto 行被压得比内容还矮 */
+    min-height: auto;
+  }
+
+  /* 收起态的侧栏是 visibility:hidden，但仍然占着位置，子面板还带着 ±20px 的
+     抽屉平移 —— 于是不可见的它们照样把页面撑出横向滚动（实测 6px）。
+     这一档本来就没有「从侧面滑入」这回事，把平移撤掉。 */
+  .rail > * {
+    transform: none;
+  }
+
+  /* 窄屏上顺序只有一条：棋盘 → 转述台 → 分析 → 控制。
+     转述台是这个软件的心脏，绝不能被挤到页面最底下。 */
+  .stage {
+    display: contents;
+  }
+
+  .stage-head {
+    order: 1;
+  }
+
+  /* 这里是关键：桌面端 board-wrap 是 flex 里撑满剩余空间的一块，
+     所以带着 min-height: 0。到了窄屏它变成 grid 行，min-height: 0 会让
+     行高被压到比棋盘还矮 —— 棋盘就会同时顶穿上方的回合条和下方的转述台。
+     恢复 auto，让行高跟着棋盘的内容走。
+     两条规则都必须限定在 .stage 里：它们说的是「现场那一列」的顺序与行高，
+     而复盘台那块盘也用了 .board-wrap/.board（同一把尺，故意共用）。不限定就会
+     串进那层 —— order: 2 把按钮排到盘上面，height: auto 把盘的尺换成按宽度算，
+     于是「同一条棋谱两种样子」从样式表这一头就成立了（实测 1024 与 414 都中招）。 */
+  .stage > .board-wrap {
+    order: 2;
+    display: block;
+    min-height: auto;
+    /* 窄屏的 .workspace 是个没有 row-gap 的单列栅格，而 .stage 被
+       `display: contents` 拆散 —— 桌面那份 12px 的 flex 间距到这里就没了，
+       回合条与棋盘是**零间距**紧贴的（实测两者边界像素完全重合）。于是棋盘垫
+       上探的 14px 整片吃进回合条。这里把那份净距补回来，量取同一个 --board-clearance。 */
+    margin-top: var(--board-clearance);
+  }
+
+  /* 现场列主操作区：应手台/排局控制台排在棋盘正下方 */
+  .stage > .relay-compact,
+  .stage > .setup-panel,
+  .relay-compact,
+  .setup-panel {
+    order: 3;
+  }
+
+  .rail-right {
+    order: 4;
+  }
+  .rail-left {
+    order: 5;
+  }
+
+  /* 窄屏下侧栏全宽拉伸，面板自适应容器宽度，消灭卡片定宽334px靠右与留白 */
+  .rail-right,
+  .rail-left {
+    align-items: stretch !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .rail-right > *,
+  .rail-left > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex-shrink: 1 !important;
+    transform: none !important;
+  }
+
+  .stage .board {
+    height: auto;
+    width: min(100%, 520px);
+    margin: 0 auto;
+  }
+
+  /* 窄屏下侧边拉手彻底隐藏，由底栏设置/棋谱按键统一接管，绝不在半空打乱排版 */
+  .rail-tab,
+  .rail-tab-left,
+  .rail-tab-right {
+    display: none !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .workspace {
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-bottom: 72px;
+  }
+
+  .app-shell {
+    padding-bottom: 72px;
+  }
+
+  /* 顶栏紧凑单行自适应：高度压缩至 48px，为手机棋盘腾出宝贵首屏纵向空间 */
+  .topbar {
+    padding: 6px 12px;
+    min-height: 48px;
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: center;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .topbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .brand {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .brand-text h1 {
+    font-size: 14.5px;
+    letter-spacing: 0.05em;
+    line-height: 1;
+    margin: 0;
+  }
+
+  .brand-text p {
+    display: none;
+  }
+
+  .topbar-setting {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 4px;
+    border-left: 1px solid var(--hairline);
+    font-size: 11px;
+  }
+
+  .setting-link {
+    min-height: 28px;
+    height: 28px;
+    padding: 0 4px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .topbar-actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-top: 0;
+    border-top: 0;
+    margin-left: auto;
+  }
+
+  .mode-segmented button {
+    height: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .tools-group {
+    padding-left: 4px;
+  }
+
+  .tools-group button {
+    height: 26px;
+    padding: 0 6px;
+    font-size: 11px;
+  }
+
+  .icon-btn {
+    height: 32px;
+    padding: 0 8px;
+    font-size: 11.5px;
+    gap: 3px;
+    border-radius: var(--r-sm);
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .icon-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* 局面状态指示条 HUD：居中、轻盈且不压迫 */
+  .stage-head {
+    min-height: var(--badge-h);
+    margin-top: 2px;
+    margin-bottom: 0;
+  }
+
+  .turn-badge {
+    min-width: 0;
+    max-width: 100%;
+    height: var(--badge-h);
+    padding: 4px 12px;
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  /* 棋盘：自适应宽度 + 屏幕高度保护，确保首屏完整看全棋盘与底线落子 */
+  .stage .board {
+    width: min(100%, calc((100dvh - 230px) * 720 / 800), 480px);
+    height: auto;
+    margin: 0 auto;
+  }
+
+  /* 手机端页边距微调，棋盘垫收进 8px，防止横向溢出 */
+  .board::before {
+    inset: -8px;
+    border-radius: 20px;
+  }
+
+  /* 胶囊条在移动端自适应双行工具栏高度 */
+  .stage > .relay-compact,
+  .relay-compact {
+    height: auto;
+    min-height: 38px;
+    max-height: none;
+    margin: 8px auto 0;
+    position: relative;
+    z-index: 30;
+  }
+
+
+
+
+
+
+
+  /* 文本录入栏紧凑化 */
+  .type-toggle-btn {
+    min-height: 32px;
+    height: 32px;
+    padding: 4px 14px;
+    font-size: 12px;
+    border-radius: 999px;
+  }
+
+  .type-inline-box {
+    padding: 4px 8px;
+    gap: 6px;
+  }
+
+  .type-inline-box input {
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .type-inline-box .btn {
+    height: 32px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  /* 侧栏把手耳片：半透明药丸胶囊，贴底安全区，不遮挡棋盘落子与标题 */
+  .rail-tab {
+    display: none !important;
+  }
+
+  .shortcuts {
+    grid-template-columns: 1fr;
+  }
+
+  /* 触控控件尺寸标准（>=32px，适手且不笨重） */
+  .btn,
+  .seg,
+  .btn-sm {
+    height: 34px;
+    font-size: 12.5px;
+  }
+  .preset {
+    height: 34px;
+    font-size: 12px;
+  }
+  .panel {
+    padding: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    /* delay 也得压掉：开场编排的 --stagger 与逐颗 --enter-delay 是
+       animation-delay，只压 duration 的话用户还是要干等编排跑完 */
+    animation-delay: 1ms !important;
+    transition-delay: 1ms !important;
+  }
+  /* scroll-behavior 不在上面那几条的管辖区里：它不是一个时长，而是「程序化滚动
+     要不要走一段路」。减弱动效的人要的是每一下都直接到位 —— 棋谱那一跳落到底就行。 */
+  * {
+    scroll-behavior: auto !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--cinnabar);
+  outline-offset: 2px;
+  border-radius: 4px;
+  /* 焦点环「贴上去」而不是「跳出来」：offset 由远及近，键盘走子时视线跟得上。
+     起点写在同一条规则外的 `*` 上 —— 过渡要有个「从哪来」的值才播得出来。 */
+  transition: outline-offset var(--dur-xs) var(--ease-out);
+}
+
+/* 非焦点态的起点：6px。outline 本身只在 focus-visible 时才画，
+   所以这条平时看不见，只用来给上面那条过渡一个出发点。 */
+:not(:focus-visible) {
+  outline-offset: 6px;
+}

@@ -33,7 +33,7 @@ export function CoachInterruptCard({
 }: CoachInterruptCardProps) {
   const ui = useUIContext()
 
-  if (!show || !tactics || !lastHumanMove) return null
+  if (!show || !tactics || !lastHumanMove || ui.drillOpen || !!ui.replay) return null
 
   // 严禁使用带有 translateX(-50%) 的居中动画，防止卡片向左漂移出屏幕
   // 在桌面端固定在屏幕左下角（24px），展开左侧栏时智能靠右（284px），完全远离中央棋盘（棋盘在 700px+）

@@ -1,0 +1,332 @@
+/* ==========================================================================
+   分析面板
+   ========================================================================== */
+
+.analysis {
+  position: relative;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  animation: breathe 1.4s var(--ease-out) infinite;
+}
+
+.eval-block {
+  margin-bottom: 14px;
+}
+
+/* 一句判定语 + 一个原始分值：转述的人要的是「现在谁占优」 */
+.eval-verdict {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.eval-call {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-0);
+}
+
+.eval-call.tone-red {
+  color: var(--cinnabar);
+}
+.eval-call.tone-black {
+  color: var(--ink-0);
+}
+.eval-call.tone-even {
+  color: var(--ink-2);
+}
+
+.eval-score {
+  font-family: var(--font-num);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mute);
+}
+
+.eval-bar {
+  position: relative;
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(43, 35, 26, 0.16);
+}
+
+/* 评分条左右两段。这里过的是 width（布局属性）。换成 transform: scaleX 就能上
+   合成器，之所以没换：这两段的渐变是 90deg 的，scaleX 会把渐变一起压扁，要保持
+   渐变本来的样子还得再写一条 calc(100% / var(--er)) 的 background-size，并且给
+   --er 兜一个不为 0 的下限。收益只是一个 8px 高的叶子节点少一次重排，不值这个
+   复杂度。 */
+.eval-red {
+  background: linear-gradient(90deg, #9d2820, var(--cinnabar-bright));
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+.eval-black {
+  background: linear-gradient(90deg, #4a4034, #2a241d);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/* 中线：让「两边各一半」这件事一眼看得出来 */
+.eval-mid {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(253, 250, 244, 0.55);
+  pointer-events: none;
+}
+
+/* tick 轨道：全宽，位移用 transform（translateX % 以轨道自身宽度为参照），
+   回弹感来自 --ease-spring */
+.eval-tick-track {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  transform: translateX(calc(var(--er, 0.5) * 100%));
+  transition: transform var(--dur-slow) var(--ease-spring);
+}
+
+.eval-tick {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  background: var(--paper-0);
+  box-shadow: 0 0 0 1.5px rgba(43, 35, 26, 0.45),
+    calc(1px * var(--light-x)) 1px 3px rgba(43, 35, 26, 0.4);
+}
+
+/* 棋势走势线：评分条下面的一条极淡的叙事线，不抢评分条的视觉 */
+.eval-trend {
+  display: block;
+  width: 100%;
+  height: 26px;
+  margin-top: 6px;
+}
+
+.eval-trend path {
+  fill: none;
+  stroke: var(--ink-4);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.75;
+}
+
+.eval-trend-mid {
+  stroke: var(--hairline);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.eval-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink-mute);
+}
+
+.scale-red {
+  color: var(--cinnabar);
+}
+.scale-black {
+  color: var(--ink-1);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* ---- 深度阶梯 ----
+   迭代加深的「加深」过程本身是这个软件的核心观感之一：
+   它一层一层往下钻，钻到时间用完为止。一列刻度比一个数字更接近这件事。 */
+.depth-ladder {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 2px;
+}
+
+.ladder-label {
+  font-size: 11px;
+  color: var(--ink-mute);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.ladder-rungs {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 16px;
+}
+
+.rung {
+  flex: 1;
+  border-radius: 1px;
+  background: var(--paper-3);
+  /* 越靠后越高，读起来像「越来越深」而不是十二根一样高的柱子。
+     高度只在挂载那一刻由下面几条 :nth-child 定死，运行期从不变化，
+     所以过渡里只留 background —— 原来那条 `height` 是跑不起来的死代码。 */
+  height: 34%;
+  transform-origin: bottom;
+  transition: background var(--dur) var(--ease-out);
+}
+
+.rung:nth-child(n + 4) {
+  height: 52%;
+}
+.rung:nth-child(n + 7) {
+  height: 72%;
+}
+.rung:nth-child(n + 10) {
+  height: 100%;
+}
+
+.rung.lit {
+  background: linear-gradient(180deg, var(--cinnabar-bright), var(--cinnabar));
+  /* 新点亮的那一级 pop 一下：搜索深度在「爬」，不是「换数字」 */
+  animation: rungPop 300ms var(--ease-spring);
+}
+
+@keyframes rungPop {
+  0% {
+    transform: scaleY(0.3);
+  }
+  60% {
+    transform: scaleY(1.25);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
+
+.depth-ladder.is-live .rung.lit:last-of-type {
+  box-shadow: 0 0 0 0 rgba(180, 50, 42, 0.5);
+  animation: breathe 1.4s var(--ease-out) infinite;
+}
+
+.ladder-value {
+  font-family: var(--font-num);
+  font-size: 12px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stat-label {
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  letter-spacing: 0.06em;
+}
+
+.stat-value {
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-0);
+}
+
+.pv-block {
+  margin-top: 12px;
+}
+
+.pv-block h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink-mute);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.pv-note {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-4);
+}
+
+.pv-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pv-list li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--paper-0);
+  animation: rise 300ms var(--ease-out) both;
+}
+
+.pv-list li.pv-red {
+  border-color: var(--cinnabar-edge);
+}
+
+.pv-num {
+  font-family: var(--font-num);
+  font-size: 9.5px;
+  color: var(--ink-mute);
+}
+
+.pv-cn {
+  font-family: var(--font-display);
+  color: var(--ink-0);
+}
+
+.pv-list li.pv-red .pv-cn {
+  color: var(--cinnabar);
+}
+
+.pv-iccs {
+  font-family: var(--font-num);
+  font-size: 10px;
+  color: var(--ink-mute);
+}

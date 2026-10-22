@@ -5,11 +5,21 @@ import {
   useEffect,
   useCallback,
   useRef,
+  useMemo,
   type ReactNode,
   type Dispatch,
   type SetStateAction,
 } from 'react'
-import type { GameSnapshot, VisualClues } from '../types'
+import type {
+  AnimatedStep,
+  GameSnapshot,
+  OpponentThreatInfo,
+  ProsConsAnalysis,
+  ThinkingGuide,
+  VisualClues,
+} from '../types'
+import { api } from '../api'
+import { buildAnimatedFrames } from '../lib/replay'
 import type { ReplaySeed } from '../components/ReplayDesk'
 import { setSoundEnabled, unlockAudio } from '../lib/sound'
 import { useGameContext } from './GameContext'
@@ -21,6 +31,21 @@ const LS_SOUND = 'ef.sound'
 const LS_RAIL_L = 'ef.rail-left'
 const LS_RAIL_R = 'ef.rail-right'
 const LS_THEME = 'ef.theme'
+
+export interface CoachLiveState {
+  open: boolean
+  loading: boolean
+  mode: 'threat' | 'good' | 'bad' | 'guide'
+  opponentThreat: OpponentThreatInfo | null
+  thinkingGuide: ThinkingGuide | null
+  threatSteps: AnimatedStep[]
+  goodSteps: AnimatedStep[]
+  badSteps: AnimatedStep[]
+  prosCons: ProsConsAnalysis | null
+  activeSteps: AnimatedStep[]
+  animStep: number
+  animPlaying: boolean
+}
 
 export interface UIContextType {
   theme: 'xuan' | 'wumu'
@@ -38,6 +63,13 @@ export interface UIContextType {
   setFlipOverride: (v: boolean) => void
   liveHelper: string | null
   setLiveHelper: (v: string | null) => void
+  coachLive: CoachLiveState
+  openCoachLive: (mode: 'threat' | 'good' | 'bad' | 'guide', candidateMove?: string) => Promise<void>
+  closeCoachLive: () => void
+  setCoachLiveAnimStep: (step: number) => void
+  toggleCoachLivePlay: () => void
+  nextCoachLiveStep: () => void
+  prevCoachLiveStep: () => void
   railL: boolean
   toggleRailL: () => void
   setRailL: Dispatch<SetStateAction<boolean>>
@@ -237,6 +269,217 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const toggleRailR = useCallback(() => setRailR((v) => !v), [])
   const toggleSound = useCallback(() => setSoundOn((v) => !v), [])
 
+  // 实时教练推演状态（💡 招法提示 / 🛡️ 识破企图 / 🧭 算路拆解）
+  const [coachLiveOpen, setCoachLiveOpen] = useState(false)
+  const [coachLiveLoading, setCoachLiveLoading] = useState(false)
+  const [coachLiveMode, setCoachLiveMode] = useState<'threat' | 'good' | 'bad' | 'guide'>('good')
+  const [opponentThreat, setOpponentThreat] = useState<OpponentThreatInfo | null>(null)
+  const [thinkingGuide, setThinkingGuide] = useState<ThinkingGuide | null>(null)
+  const [threatSteps, setThreatSteps] = useState<AnimatedStep[]>([])
+  const [goodSteps, setGoodSteps] = useState<AnimatedStep[]>([])
+  const [badSteps, setBadSteps] = useState<AnimatedStep[]>([])
+  const [prosCons, setProsCons] = useState<ProsConsAnalysis | null>(null)
+  const [baseSnap, setBaseSnap] = useState<GameSnapshot | null>(null)
+  const [animStep, setAnimStep] = useState(0)
+  const [animPlaying, setAnimPlaying] = useState(false)
+  const animTimerRef = useRef<number | null>(null)
+
+  const clearAnimTimer = useCallback(() => {
+    if (animTimerRef.current !== null) {
+      window.clearInterval(animTimerRef.current)
+      animTimerRef.current = null
+    }
+  }, [])
+
+  const activeSteps = useMemo(() => {
+    if (coachLiveMode === 'threat') return threatSteps
+    if (coachLiveMode === 'good') return goodSteps
+    if (coachLiveMode === 'bad') return badSteps
+    return []
+  }, [coachLiveMode, threatSteps, goodSteps, badSteps])
+
+  const animFrames = useMemo(() => {
+    const startSnap = baseSnap || game
+    if (!startSnap || activeSteps.length === 0) return []
+    return buildAnimatedFrames(startSnap, activeSteps)
+  }, [baseSnap, game, activeSteps])
+
+  const closeCoachLive = useCallback(() => {
+    clearAnimTimer()
+    setAnimPlaying(false)
+    setAnimStep(0)
+    setCoachLiveOpen(false)
+    setPreviewGame(null)
+    setPreviewPv([])
+    setLiveClues(null)
+  }, [clearAnimTimer])
+
+  // 当盘面回合变化时，自动收起已完成的推演
+  useEffect(() => {
+    closeCoachLive()
+  }, [game?.ply, closeCoachLive])
+
+  // 连播定时器驱动
+  useEffect(() => {
+    if (!coachLiveOpen || !animPlaying || coachLiveMode === 'guide' || activeSteps.length === 0) {
+      clearAnimTimer()
+      return
+    }
+    clearAnimTimer()
+    animTimerRef.current = window.setInterval(() => {
+      setAnimStep((prev) => {
+        if (prev < activeSteps.length) {
+          return prev + 1
+        } else {
+          setAnimPlaying(false)
+          return prev
+        }
+      })
+    }, 1300)
+    return clearAnimTimer
+  }, [coachLiveOpen, animPlaying, coachLiveMode, activeSteps, clearAnimTimer])
+
+  // 同步动画帧到主棋盘
+  useEffect(() => {
+    if (!coachLiveOpen || coachLiveMode === 'guide') {
+      return
+    }
+    if (coachLiveMode === 'threat' && opponentThreat && !opponentThreat.is_substantial) {
+      return
+    }
+    if (animFrames.length === 0) {
+      return
+    }
+    const frame = animFrames[Math.min(animStep, animFrames.length - 1)]
+    const curStep = animStep > 0 ? activeSteps[animStep - 1] : activeSteps[0]
+    const pv = curStep ? [curStep.iccs || curStep.move] : []
+    const clues: VisualClues | null =
+      curStep?.threat_squares && curStep.threat_squares.length > 0
+        ? { weakness_squares: curStep.threat_squares }
+        : null
+    handlePreviewBoard(frame, pv, clues)
+  }, [coachLiveOpen, coachLiveMode, opponentThreat, animStep, animFrames, activeSteps, handlePreviewBoard])
+
+  const openCoachLive = useCallback(
+    async (targetMode: 'threat' | 'good' | 'bad' | 'guide', candidateMove?: string) => {
+      if (coachLiveOpen && coachLiveMode === targetMode) {
+        closeCoachLive()
+        setRailR(false)
+        return
+      }
+      clearAnimTimer()
+      setCoachLiveOpen(true)
+      setCoachLiveLoading(true)
+      setCoachLiveMode(targetMode)
+      setAnimStep(0)
+      setAnimPlaying(false)
+      // 智能展开右侧栏，确保视线平移到右侧指点卡片，绝不遮挡棋盘
+      setRailR(true)
+
+      if (!game) {
+        setCoachLiveLoading(false)
+        return
+      }
+
+      try {
+        const res = await api.preview(game.fen, candidateMove)
+        setBaseSnap(res.base_game || game)
+        setOpponentThreat(res.opponent_threat || null)
+        setThreatSteps(res.opponent_threat?.steps || res.opponent_threat_steps || [])
+        setGoodSteps(res.good_steps || [])
+        setBadSteps(res.bad_steps || [])
+        if (res.pros_cons) setProsCons(res.pros_cons)
+        if (res.thinking_guide) setThinkingGuide(res.thinking_guide)
+
+        if (targetMode === 'threat') {
+          if (res.opponent_threat && !res.opponent_threat.is_substantial) {
+            setAnimPlaying(false)
+            setAnimStep(0)
+            if (res.opponent_threat.target_move) {
+              handlePreviewBoard(res.base_game || game, [res.opponent_threat.target_move], {
+                weakness_squares: res.opponent_threat.threat_squares || [],
+                route: res.opponent_threat.route || [],
+              })
+            }
+          } else {
+            setAnimStep(0)
+            setAnimPlaying(true)
+          }
+        } else if (targetMode !== 'guide') {
+          setAnimStep(0)
+          setAnimPlaying(true)
+        }
+      } catch {
+        // 静默异常
+      } finally {
+        setCoachLiveLoading(false)
+      }
+    },
+    [coachLiveOpen, coachLiveMode, closeCoachLive, clearAnimTimer, game, handlePreviewBoard],
+  )
+
+  const setCoachLiveAnimStep = useCallback(
+    (step: number) => {
+      clearAnimTimer()
+      setAnimPlaying(false)
+      setAnimStep(step)
+    },
+    [clearAnimTimer],
+  )
+
+  const toggleCoachLivePlay = useCallback(() => {
+    if (animPlaying) {
+      clearAnimTimer()
+      setAnimPlaying(false)
+    } else {
+      if (animStep >= activeSteps.length) setAnimStep(0)
+      setAnimPlaying(true)
+    }
+  }, [animPlaying, animStep, activeSteps.length, clearAnimTimer])
+
+  const nextCoachLiveStep = useCallback(() => {
+    clearAnimTimer()
+    setAnimPlaying(false)
+    setAnimStep((s) => Math.min(activeSteps.length, s + 1))
+  }, [activeSteps.length, clearAnimTimer])
+
+  const prevCoachLiveStep = useCallback(() => {
+    clearAnimTimer()
+    setAnimPlaying(false)
+    setAnimStep((s) => Math.max(0, s - 1))
+  }, [clearAnimTimer])
+
+  const coachLive: CoachLiveState = useMemo(
+    () => ({
+      open: coachLiveOpen,
+      loading: coachLiveLoading,
+      mode: coachLiveMode,
+      opponentThreat,
+      thinkingGuide,
+      threatSteps,
+      goodSteps,
+      badSteps,
+      prosCons,
+      activeSteps,
+      animStep,
+      animPlaying,
+    }),
+    [
+      coachLiveOpen,
+      coachLiveLoading,
+      coachLiveMode,
+      opponentThreat,
+      thinkingGuide,
+      threatSteps,
+      goodSteps,
+      badSteps,
+      prosCons,
+      activeSteps,
+      animStep,
+      animPlaying,
+    ],
+  )
+
   // 引擎执哪一边，这边的棋就朝下
   const prevEngineSide = useRef<string | null>(null)
   useEffect(() => {
@@ -320,6 +563,13 @@ export function UIProvider({ children }: { children: ReactNode }) {
         setFlipOverride: setFlipped,
         liveHelper,
         setLiveHelper,
+        coachLive,
+        openCoachLive,
+        closeCoachLive,
+        setCoachLiveAnimStep,
+        toggleCoachLivePlay,
+        nextCoachLiveStep,
+        prevCoachLiveStep,
         railL,
         toggleRailL,
         setRailL,

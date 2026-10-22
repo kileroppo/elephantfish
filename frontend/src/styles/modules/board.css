@@ -1,0 +1,1179 @@
+/* ==========================================================================
+   棋盘
+   ========================================================================== */
+
+.board-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.board {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 720 / 800;
+  max-width: 100%;
+  border-radius: var(--r-lg);
+  /* 三层影子：贴地的一条硬边、近处的一圈散影、远处的一片环境影。
+     一层 shadow 只会让人觉得「浮起来了」，三层才有「放在桌上」的重量。
+
+     横向那一项乘 --light-x：整站只有一盏灯在左上 45°，投影一律朝右下。
+     以前这里全是 `0 xpx` 的正下方垂直投影，而棋子影明确偏右下 —— 两套光照
+     同框，眼睛读作「廉价」，这是「脏」的另一半来源。 */
+  box-shadow: calc(1px * var(--light-x)) 1px 1px rgba(58, 41, 18, 0.26),
+    calc(3px * var(--light-x)) 3px 8px -3px rgba(58, 41, 18, 0.3),
+    calc(26px * var(--light-x)) 26px 54px -22px rgba(58, 41, 18, 0.45);
+  /* 开场编排的压轴：顶栏与回合条落定之后才升起（延迟 180ms），
+     曲线用 enter —— 尾段极长的减速让棋盘「放」在桌上，不是「滑」到桌上。
+     时长 520ms：与棋子落盘那条线（180 + 波次 + 340 ≈ 950ms）并行，
+     开场压轴由落盘那条线定，整段不到 1s。 */
+  animation: boardIn 520ms var(--ease-enter) 180ms both;
+}
+
+/* 棋盘垫：比棋盘大一圈的圆角面，给三层投影一个承接面 ——
+   没有它，棋盘是浮在纸色背景上的，投影没有落点。 */
+.board::before {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 26px;
+  background: linear-gradient(180deg, var(--paper-2), var(--paper-3));
+  box-shadow: inset calc(-1px * var(--light-x)) 1px 2px rgba(255, 255, 255, 0.55),
+    inset calc(2px * var(--light-x)) -2px 8px rgba(43, 35, 26, 0.14),
+    calc(1px * var(--light-x)) 1px 2px rgba(43, 35, 26, 0.06);
+  z-index: -1;
+  pointer-events: none;
+}
+
+@keyframes boardIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+}
+
+.board-surface {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  cursor: pointer;
+  /* 拖动棋子时别让浏览器顺手选中了页面上的字 */
+  user-select: none;
+  /* 木纹那两层用的是 multiply 混合。开一个独立层叠上下文，
+     让它们只和棋盘自己相乘，不会沾到页面背景上。 */
+  isolation: isolate;
+  /* 盘内再乱也不许把布局与绘制的影响漏到外面：这 720×720 的格子里同时住着 32 颗会滑的
+     子、一圈可走点、月牙环、落点框、墨痕。有了 contain，任何一颗子的几何变化都只在这块
+     盘里重算，重算的边界也就是盘自己 —— 而它本来就 overflow:hidden，画不出这个框。 */
+  contain: layout style paint;
+  /* 棋盘上所有尺寸都按 --u 缩放；这个默认值只是首帧兜底 */
+  --u: 0.55;
+}
+
+/* 棋盘内沿的环境光遮蔽：一层极淡的内暗，让板面有「凹」的感觉。
+   z-index 5 —— 压得住线稿（z auto），碰不到主变线（11）和棋子（20）。 */
+.board-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  box-shadow: inset 0 0 calc(var(--u) * 46px) rgba(58, 41, 18, 0.09),
+    inset 0 0 calc(var(--u) * 7px) rgba(58, 41, 18, 0.13);
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* 翻转视角：盘面先收窄、在最窄处换视角、再展开。
+   直接换视角的话，盘面连同 32 颗子和所有标记是「唰」地镜像过去 —— 全站唯一一处
+   纯切的硬边。中间 40%~58% 留一个平口，那就是换视角的窗口（App 的 turnBoard 在
+   150ms 处换 state，正好落在平口里），镜像这个跳变于是被藏进「几乎看不见宽度」
+   的两帧。两段缓动不同：收窄干脆（--ease-out），展开拖一条长尾（--ease-enter），
+   像一张牌被翻过来之后「放」回桌上。 */
+.board-surface.is-flipping {
+  animation: boardTurn 340ms linear both;
+}
+
+@keyframes boardTurn {
+  0% {
+    transform: scaleX(1);
+    animation-timing-function: var(--ease-out);
+  }
+  40% {
+    transform: scaleX(0.88);
+  }
+  58% {
+    transform: scaleX(0.88);
+    animation-timing-function: var(--ease-enter);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+/* 拖动中的整个棋盘：光标收紧，手机端也由子元素接管手势 */
+.board-surface.is-dragging {
+  cursor: grabbing;
+}
+
+.board-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.river-text text {
+  font-family: var(--font-kai);
+  font-size: 36px;
+  fill: var(--board-line);
+  opacity: 0.6;
+  letter-spacing: 12px;
+}
+
+/* ---- 棋子 ----
+   位置由 transform 承担，不碰 left/top。
+
+   以前这里写的是 `transition: left 240ms, top 240ms` + `will-change: left, top`。
+   left/top 是**布局属性**：每滑一格都要重排一次，而棋子 ::after 上还挂着
+   `filter: blur()`，于是每帧都要重新光栅化一个模糊层 —— 实测一次落子
+   **71 次布局 / 21.3ms**（.devtools/frames.mjs 的基线数字）。那是卡顿的根因，
+   跟时长和缓动曲线无关，调曲线只会得到一个更优雅的卡顿。
+
+   现在的分工：
+     组件只交出「板面坐标系里的中心点」--cx/--cy（单位 px），
+     这里乘 --u 换成真实像素，再减去 50% 居中。--u 一变（窗口缩放）只是
+     乘数变了，transform 跟着变，全程在合成器上跑，不引发布局。
+
+   之所以不用百分比定位：translate 里的百分比是**相对元素自身**的，
+   表达不了「相对棋盘」的位置；板面像素 × --u 才是同一件事的像素写法。 */
+.piece {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(var(--u) * 66px);
+  height: calc(var(--u) * 66px);
+  /* 组件每帧都会覆写这三个；这里只是首帧（还没渲染时）的兜底 */
+  --cx: 0px;
+  --cy: 0px;
+  --lift: 0px;
+  /* --glide-dur 由组件按这一手的跨度给：近手快、远手略慢，但都不拖沓。
+     没在动的那一帧是 0ms —— 于是窗口缩放（--u 变）不会让一堆棋子集体滑行。 */
+  --glide-dur: 0ms;
+  /* 所有 keyframes 都拿它当基底，这样动画不必各自重写一遍定位换算 */
+  --piece-base: translate3d(
+    calc(var(--u) * var(--cx) - 50%),
+    calc(var(--u) * var(--cy) - 50% - var(--lift)),
+    0
+  );
+  transform: var(--piece-base);
+  transition: transform var(--glide-dur) var(--ease-move);
+  will-change: transform;
+  z-index: 20;
+}
+
+/* 开场落盘：首渲染时 Board 给每颗子挂上 is-entering + --enter-delay
+  （按板面波次：从近端一行行向远端落，像摆子）。播完类摘除，之后悔棋 /
+   重开 / 载入都不再播 —— 那些是「局面被换掉」，不是「开场」。 */
+.piece.is-entering {
+  /* 180ms 是基础延迟：等棋盘升起再落子，不然棋子会在一块还没出现的板上落。
+     波次 delay 由 Board.tsx 用 --enter-delay 叠在它上面。 */
+  animation: pieceEnter 340ms var(--ease-enter)
+    calc(180ms + var(--enter-delay, 0ms)) both;
+}
+
+/* 基座是 --piece-base：定位在 transform 里，keyframes 必须从它出发，
+   写死 translate(-50%,-50%) 会把棋子送回棋盘左上角（踩过，见 knockback 段）。
+   opacity 挂在 .piece 上：整颗子（含接触影伪元素）一起淡入。 */
+@keyframes pieceEnter {
+  from {
+    opacity: 0;
+    transform: var(--piece-base) translateY(calc(var(--u) * -16px)) scale(0.9);
+  }
+}
+
+/* 落子涟漪：只在 is-impact 那一瞬间存在的一圈扩散环。
+   占的是 .piece::before —— 这个伪元素此前**没人用**，所以不用新增 DOM。 */
+.piece::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: calc(var(--u) * 1.6px) solid rgba(108, 76, 34, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* 接触影：整块棋子的**唯一**一片投影。
+   方向跟全站主光一致（左上 45° → 右下）。以前棋子身上还额外挂着
+   --disc-shadow 的三层外部投影（正下方垂直），加上这一片，一颗子要算四片影 ——
+   四片半透明影叠在一起就是一团灰雾。现在只留这一片，它负责「放在棋盘上」的重量，
+   盘面自己的 box-shadow 只负责圆面的受光，绝不再往外投影。 */
+.piece::after {
+  content: '';
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 6%;
+  bottom: 6%;
+  border-radius: 50%;
+  transform: translate(calc(var(--u) * 4.6px * var(--light-x)), calc(var(--u) * 4.6px));
+  background: radial-gradient(
+    ellipse at 46% 44%,
+    rgba(36, 22, 9, 0.34) 0%,
+    rgba(42, 27, 12, 0.22) 46%,
+    rgba(50, 32, 14, 0.09) 70%,
+    transparent 100%
+  );
+  filter: blur(calc(var(--u) * 2.4px));
+  z-index: -2;
+  pointer-events: none;
+  /* 不再过渡 filter：模糊半径每帧变一次就要重新光栅化一遍，那正是要消掉的开销。
+     高度变化改用「影子的位移 + 缩放」表达，两者都在合成器上。 */
+  transition: transform var(--dur-fast) var(--ease-move), opacity var(--dur-fast) var(--ease-out);
+}
+
+/* 漆器盘面。
+   材质路线：朱红漆器为骨、玉质透光为皮。盘面是**不透明**的，层次靠明度拉开；
+   「通透」从边缘那一圈透光来，不从整片半透明来 —— 整片半透明在浅色棋盘上
+   只会变成塑料片，还会把朱砂环和字一起拖灰。
+
+   三处「脏」在这里被清掉：
+   1. 亚像素年轮纹。repeating-radial-gradient 的周期写的是 calc(var(--u) * 0.6px)，
+      --u 实测 0.55 → 实际周期 0.33px。亚像素周期的重复渐变必然产生摩尔纹噪点，
+      肉眼读作「灰蒙蒙」。删。
+   2. 一道假的反光。conic-gradient 那道掠射光靠 --sweep 驱动，而 --sweep
+      全库没有任何 keyframes 去改它，恒为初值 -120deg：一道 14deg 宽的纯白硬边
+      光斑钉死在 38%/28%，跟任何光源都对不上，眼睛读作污渍。删。
+   3. 三层半透明暖棕内影叠着上。换成三个职责分明的量，见下面的变量。 */
+.piece-face {
+  /* 圆面受光模型的三个可调量。状态之间只改这几个数，不各写一整套 box-shadow ——
+     以前 .piece.red / .piece.black 的 box-shadow 把基础那套**整体覆盖**了，
+     于是顶缘受光与底缘背光在红黑两方身上直接消失。那是「平、脏」的另一半原因。 */
+  --face-lit: rgba(255, 253, 247, 0.95); /* 顶缘受光 */
+  --face-shade: rgba(74, 46, 14, 0.36); /* 底缘背光 */
+  --face-glow: rgba(255, 236, 196, 0.26); /* 玉质内透光 */
+  --face-shadow: inset calc(var(--u) * -1px) calc(var(--u) * 2.6px) calc(var(--u) * 3px)
+      var(--face-lit),
+    inset calc(var(--u) * 1.5px) calc(var(--u) * -3.4px) calc(var(--u) * 8px) var(--face-shade),
+    /* 光从左上传进材质、在右下侧内壁散出来的一点暖光 —— 「通透」的物理线索，别删 */
+    inset calc(var(--u) * -2px) calc(var(--u) * -2px) calc(var(--u) * 10px) var(--face-glow);
+
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  /* 选中 / 悬停 / 拖起的缩放都走这条微回弹 —— 以前没有它，
+     is-selected 的 scale(1.03) 是硬切，拿起放下一卡一卡的 */
+  transition: transform var(--dur-fast) var(--ease-spring-sm);
+  background:
+    /* 抛光光泽带：一道宽的、**不周期**的高光弧（替掉那条亚像素年轮纹） */
+    radial-gradient(
+      118% 96% at 26% 16%,
+      rgba(255, 253, 246, 0.6) 0%,
+      rgba(255, 251, 240, 0.16) 40%,
+      rgba(255, 249, 236, 0) 64%
+    ),
+    /* 主盘面：左上受光 → 右下背光。只三段，且全是不透明色 */
+    radial-gradient(
+      circle at 30% 22%,
+      var(--disc-face-1) 0%,
+      var(--disc-face-2) 46%,
+      var(--disc-face-3) 78%,
+      var(--disc-face-deep) 100%
+    );
+  box-shadow: var(--face-shadow);
+}
+
+/* 镜面高光：一个收窄的亮点 + 一圈很弱的散光。
+   以前内核实打实是 rgba(255,255,255,1) 再 blur，压着底纹就是一块过曝的白斑 ——
+   高光过曝同样是「脏」：白到顶就丢掉了材质的颜色，只剩一块糊。 */
+.piece-face::before {
+  content: '';
+  position: absolute;
+  left: 15%;
+  right: 41%;
+  top: 6%;
+  height: 27%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at 36% 32%,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.7) 22%,
+    rgba(255, 255, 255, 0.26) 54%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  filter: blur(calc(var(--u) * 1.4px));
+  pointer-events: none;
+}
+
+/* 圈与透光。
+   一圈**连续**的环：左上最亮（受光那一侧），右下最暗。
+
+   画法上有一个坑值得记下来：这里最直觉的写法是
+       background: <透明层> padding-box, conic-gradient(...) border-box;
+       border: 2px solid transparent;
+   以为「padding-box 那层盖住中间」——**盖不住**。那一层本身是透明的，
+   底下 border-box 那层会照原样从中间透出来，于是整块盘面被染成环的颜色，
+   棋子变成一枚红色圆片。第一版就是这么翻车的（截图对比里看得很清楚）。
+   现在用 mask 把内圈精确挖掉：环就是环，盘面还是盘面。
+
+   环的颜色按红黑两方换（见下面 .piece.red / .piece.black）：
+   红方朱砂环、黑方墨环，但**受光模型一模一样**，这才是「同一盏灯照着」。 */
+.piece-face::after {
+  --ring-hi: rgba(255, 255, 255, 0.92);
+  --ring-base: rgba(178, 142, 88, 0.95);
+  --ring-low: rgba(72, 48, 20, 0.98);
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 315deg,
+    var(--ring-hi) 0deg,
+    var(--ring-base) 96deg,
+    var(--ring-low) 180deg,
+    var(--ring-base) 264deg,
+    var(--ring-hi) 360deg
+  );
+  /* closest-side：百分比按「内切圆半径」算，不然默认的 farthest-corner
+     会把分母算成对角线，85% 早就跑到元素外面去了，环根本画不出来。
+     85% → 100% 那一圈就是这个环：厚约 4 个板面像素，外沿与盘面齐平。 */
+  -webkit-mask: radial-gradient(circle closest-side, transparent 0 85%, #000 88% 100%);
+  mask: radial-gradient(circle closest-side, transparent 0 85%, #000 88% 100%);
+  pointer-events: none;
+}
+
+.piece-glyph {
+  position: relative;
+  font-family: var(--font-kai);
+  font-weight: 600;
+  font-size: calc(var(--u) * 42px);
+  line-height: 1;
+  transform: translateY(-1%);
+  /* 字体墨迹：两层就够。以前是三层，顶上那层白色 −1px 会在笔画外缘描出一圈
+     光晕，字号一小就成了「毛边」。
+     这两层**刻意不带** --light-x：字影在这里是「给笔画加分量」的排印手段，
+     不是影子落在地上 —— 跟 .seal span 那种真正表达凹凸的阴刻不是一回事。 */
+  text-shadow:
+    0 calc(var(--u) * 0.5px) calc(var(--u) * 1.1px) rgba(255, 253, 246, 0.6),
+    0 calc(var(--u) * 1.3px) calc(var(--u) * 2.4px) rgba(44, 24, 8, 0.4);
+}
+
+/* 红黑两方只在「环的颜色 + 字的颜色」上分家，受光模型共用同一套。
+   顺带把环从 .piece-face 的 box-shadow 挪到 ::after 上 —— 挪过来之后
+   环不再是「又一层内影」，而是一圈真正有厚度的边。 */
+.piece.red .piece-face::after {
+  --ring-hi: rgba(255, 236, 228, 0.95);
+  --ring-base: #b8382c;
+  --ring-low: #77160f;
+}
+.piece.red .piece-glyph {
+  color: var(--piece-red);
+  text-shadow:
+    0 calc(var(--u) * 0.5px) calc(var(--u) * 1.1px) rgba(255, 236, 230, 0.5),
+    0 calc(var(--u) * 1.3px) calc(var(--u) * 2.4px) rgba(74, 12, 8, 0.42);
+}
+
+.piece.black .piece-face::after {
+  --ring-hi: rgba(246, 244, 240, 0.8);
+  --ring-base: #3d362e;
+  --ring-low: #0f0d0a;
+}
+.piece.black .piece-glyph {
+  color: var(--piece-black);
+  text-shadow:
+    0 calc(var(--u) * 0.5px) calc(var(--u) * 1.1px) rgba(255, 253, 246, 0.42),
+    0 calc(var(--u) * 1.3px) calc(var(--u) * 2.4px) rgba(8, 6, 4, 0.46);
+}
+
+/* 选中：棋子离盘抬起 6px。抬升走 --lift（它就是 transform 里的一项），
+   影子同时向右下移远、放大 —— 「浮起来了」由影子的位移说，不靠再堆几层阴影。 */
+.piece.is-selected {
+  z-index: 45;
+  --lift: calc(var(--u) * 6px);
+}
+
+.piece.is-selected .piece-face {
+  /* 离地之后顶光更直射：只改受光模型的三个量，不重写整套 box-shadow */
+  --face-lit: #ffffff;
+  --face-shade: rgba(58, 32, 6, 0.42);
+  --face-glow: rgba(255, 240, 206, 0.34);
+  transform: scale(1.03);
+}
+
+.piece.is-selected::after {
+  transform: translate(calc(var(--u) * 12px * var(--light-x)), calc(var(--u) * 12px)) scale(0.94);
+  opacity: 0.8;
+}
+
+/* 可走棋子的悬停预告：指尖还没点下去，棋子先轻轻欠身 ——
+   「我可以走」这件事不用等选中才知道。幅度压得很小（2.5px），
+   只给欠身不给抬升；真正的抬升是选中那一刻的事。 */
+.piece.is-grabbable:not(.is-selected):not(.dragging):hover .piece-face {
+  transform: translateY(calc(var(--u) * -2.5px)) scale(1.025);
+}
+
+.piece.is-grabbable:not(.is-selected):not(.dragging):hover::after {
+  transform: translate(calc(var(--u) * 7px * var(--light-x)), calc(var(--u) * 7px))
+    scale(0.97);
+}
+
+/* 被将军：盘面上那圈朱砂。用 --face-shadow 打底再叠两层，不整体覆盖 ——
+   覆盖会连顶缘受光一起吃掉，棋子就会从「立体」变成「贴纸」。 */
+.piece.is-check .piece-face {
+  box-shadow: var(--face-shadow), 0 0 0 calc(var(--u) * 2.2px) var(--piece-red),
+    0 0 calc(var(--u) * 9px) rgba(180, 50, 42, 0.5);
+}
+
+/* 「将军」得在盘上说得出来，不能只在耳边响一声。
+   静态那圈朱砂（上面那条）只说明**状态**；这一条说明**事件** —— 一手棋把王将住了，
+   那一下要有一圈从王底下散出去的朱砂环。它跟涟漪同一个机制：一次性，由 Board 在
+   「看着落定」那一刻挂 `is-check-alarm`（时刻同样是 lib/board.ts 的 landMs，
+   跟落子音、涟漪、撞飞挤在同一拍上），播完自己摘。
+   以前这里写的是「`.piece.is-check` 一挂上就播」—— 那是**持久**类，只要还被将着就一直在：
+   动画只在这个类从无到有的时候播一次，于是悔棋回到同一个被将局面不再响、
+   引擎思考期间轮询重渲染时它也不该重播；更糟的是它在服务端那一帧就播了，
+   比棋子落定早三百多毫秒。挂事件类而不是挂状态类，还顺带让「播几次」变成可控的事。
+   只动 transform + opacity（合成器），环散开就没了，不留常亮的东西 ——
+   被将着这件事由静态朱砂环持续说，不需要一圈动画整局闪个没完。 */
+.piece.is-check-alarm::before {
+  border-width: calc(var(--u) * 2.6px);
+  border-color: rgba(178, 46, 36, 0.92);
+  animation: checkAlarm 640ms var(--ease-out) both;
+}
+
+/* 起点写在 1.02 而不是像涟漪那样从 0.86 起：`.piece::before` 是 inset:0，
+   跟那颗圆面**同一个盒子**，而圆面不透明 —— 缩在 1.0 以内的部分全被自己盖住，
+   等于这一响的前两成时间在做一件看不见的动作。涟漪可以从底下钻出来（它只是
+   落子的余韵），这一响是要报信的，报信的东西得一起步就在画面上。 */
+@keyframes checkAlarm {
+  0% {
+    opacity: 0.95;
+    transform: scale(1.02);
+  }
+  45% {
+    opacity: 0.5;
+    transform: scale(1.18);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.42);
+  }
+}
+
+/* ---- 拿起与拖动 ----
+   拖拽时棋子离盘更高，影子随高度进一步沉到右下并放大。 */
+
+.piece.is-grabbable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.piece.dragging {
+  z-index: 60;
+  pointer-events: none;
+  /* 跟手：位置每帧由组件直接写进 --cx/--cy，这里必须把过渡关掉，否则会拖在指针后面 */
+  transition: none;
+  --lift: calc(var(--u) * 8px);
+}
+
+.piece.dragging .piece-face {
+  --face-lit: #ffffff;
+  --face-shade: rgba(52, 28, 4, 0.48);
+  --face-glow: rgba(255, 244, 216, 0.4);
+  transform: scale(1.08);
+}
+
+/* 拿起时镜面高光更锐、更集中（离地后反射面更直） */
+.piece.dragging .piece-face::before {
+  filter: blur(calc(var(--u) * 1.1px));
+  left: 13%;
+  right: 40%;
+  top: 5%;
+  height: 30%;
+}
+
+.piece.dragging::after {
+  transform: translate(calc(var(--u) * 18px * var(--light-x)), calc(var(--u) * 18px)) scale(1.18);
+  opacity: 0.66;
+}
+
+/* ---- 落子反馈：一次性的，由 Board 在**看着落定**那一刻挂上 is-impact，播完自己摘
+   （时刻是 lib/board.ts 的 landMs，跟落子音效同一个数）。
+   这里以前挂的是 .piece.is-landing —— 一个**持久**类（只要那颗子还停在
+   last_move.to 上就一直在），真正让动画重播的是 .piece-face 上 key 的变化
+   导致的 React 重挂载。等于把「什么时候播」绑死在 React 的重建上：加不出
+   分级时序，每落一手还要白重建一次 DOM。 */
+.piece.is-impact::before {
+  animation: pieceImpactRing 520ms var(--ease-out) both;
+}
+
+.piece.is-impact .piece-face {
+  animation: pieceImpactSquash 320ms var(--ease-land) both;
+}
+
+.piece.is-impact::after {
+  animation: pieceImpactShadow 320ms var(--ease-land) both;
+}
+
+/* 涟漪：一圈极淡的环从棋子底下散开。只动 transform 与 opacity ——
+   这两个属性在合成器上跑，落子这一下不占主线程。 */
+@keyframes pieceImpactRing {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.7;
+  }
+  55% {
+    opacity: 0.28;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* 触盘：一次极短的压实 + 一次微回弹。幅度压得很小 —— 棋子是稳重的东西，
+   回弹一大立刻变塑料球。 */
+@keyframes pieceImpactSquash {
+  0% {
+    transform: scale(1.035);
+  }
+  36% {
+    transform: scale(0.982);
+  }
+  66% {
+    transform: scale(1.01);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 阴影收束：落下的那一瞬影子收紧、贴地，再回到静止位。
+   同样只动 transform —— 以前这里连 blur 半径一起动，那是每帧一次重新光栅化。
+
+   0% 那一帧的位置必须和 .piece::after 的静止值一模一样（都是 4.6px × --light-x / 4.6px），
+   收的是 scale 而不是位移。以前 0% 写的是 3px —— 比静止值近了 1.6px，而动画是 both、
+   类一挂上就立刻按 0% 帧填样式，于是落子反馈一开始影子会先「啪」地缩一下再动。
+   现在起点就是终点位，只靠 scale 表达「收紧 → 摊开」。 */
+@keyframes pieceImpactShadow {
+  0% {
+    transform: translate(calc(var(--u) * 4.6px * var(--light-x)), calc(var(--u) * 4.6px)) scale(0.9);
+  }
+  40% {
+    transform: translate(calc(var(--u) * 5.6px * var(--light-x)), calc(var(--u) * 5.6px))
+      scale(1.05);
+  }
+  100% {
+    transform: translate(calc(var(--u) * 4.6px * var(--light-x)), calc(var(--u) * 4.6px)) scale(1);
+  }
+}
+
+/* 被判吃掉、但还站在盘上的那颗子（预判期间是它本尊，确认之后是替身 —— 同一个类、
+   同一个位置，见 Board.tsx 的 doomed / standIn 两段）。
+   它必须活到「落点」那一拍才被撞飞。以前预判一挂上就把它从 DOM 里摘掉，于是这颗子
+   在**还该被看见**的两百多毫秒里根本不存在，撞飞发生在一个看不见的子身上。
+   压到走子那颗（.is-gliding，21）底下：吃子的物理顺序是「先盖住、再把它撞出去」。
+   点不到它（这一颗已经是死子），颜色也压暗一点 —— 死子不跟活子争注意力。 */
+.piece.is-doomed {
+  z-index: 19;
+  pointer-events: none;
+  opacity: 0.88;
+}
+
+/* 正在滑的那一颗抬到静止子（20）之上。没有它，吃子时走子那颗与落点上的死子同格重叠，
+   谁盖谁只看 DOM 顺序 —— 而顺序是按棋子身份号排的（piecesInOrder），于是同一手棋
+   有时「活子压过死子」、有时「死子浮在活子上面」。 */
+.piece.is-gliding {
+  z-index: 25;
+}
+
+.piece.is-gliding .piece-face {
+  transform: translateY(calc(var(--u) * -3.2px)) scale(1.038);
+  box-shadow: var(--face-shadow),
+    0 calc(var(--u) * 2px) calc(var(--u) * 6px) rgba(44, 24, 8, 0.18);
+  transition: transform var(--glide-dur) cubic-bezier(0.2, 0.9, 0.35, 1);
+}
+
+.piece.is-gliding::after {
+  transform: translate(calc(var(--u) * 8.5px * var(--light-x)), calc(var(--u) * 8.5px)) scale(1.06);
+  opacity: 0.72;
+  transition: transform var(--glide-dur) cubic-bezier(0.2, 0.9, 0.35, 1),
+    opacity var(--glide-dur) var(--ease-out);
+}
+
+.piece.piece-ghost-knockback {
+  z-index: 18;
+  pointer-events: none;
+  animation: pieceKnockback 220ms cubic-bezier(0.18, 0.88, 0.32, 1) forwards;
+}
+
+.piece.piece-ghost-knockback .piece-face {
+  animation: victimStrikeFlash 220ms var(--ease-out) both;
+}
+
+@keyframes victimStrikeFlash {
+  0% {
+    filter: brightness(1.32) contrast(1.15);
+    box-shadow: var(--face-shadow), 0 0 calc(var(--u) * 12px) rgba(255, 235, 180, 0.65);
+  }
+  35% {
+    filter: brightness(1.08) contrast(1.05);
+    box-shadow: var(--face-shadow), 0 0 calc(var(--u) * 5px) rgba(255, 235, 180, 0.25);
+  }
+  100% {
+    filter: brightness(0.85);
+    box-shadow: var(--face-shadow);
+  }
+}
+
+@keyframes pieceKnockback {
+  0% {
+    transform: var(--piece-base) translate(0, 0) scale(1) rotate(0deg);
+    opacity: 0.98;
+  }
+  24% {
+    transform: var(--piece-base)
+      translate(calc(var(--kx, 0) * var(--u) * 11px), calc(var(--ky, 0) * var(--u) * 11px))
+      scale(1.08) rotate(calc(var(--kr, 5deg) * 1.2));
+    opacity: 0.96;
+  }
+  65% {
+    transform: var(--piece-base)
+      translate(calc(var(--kx, 0) * var(--u) * 31px), calc(var(--ky, 0) * var(--u) * 31px))
+      scale(0.92) rotate(calc(var(--kr, 6deg) * 2.4));
+    opacity: 0.62;
+  }
+  100% {
+    transform: var(--piece-base)
+      translate(calc(var(--kx, 0) * var(--u) * 44px), calc(var(--ky, 0) * var(--u) * 44px))
+      scale(0.7) rotate(calc(var(--kr, 6deg) * 3.6));
+    opacity: 0;
+  }
+}
+
+.capture-burst-ring {
+  position: absolute;
+  inset: -12%;
+  border-radius: 50%;
+  border: calc(var(--u) * 2.2px) solid rgba(220, 75, 45, 0.92);
+  box-shadow: 0 0 calc(var(--u) * 8px) rgba(220, 75, 45, 0.6),
+    inset 0 0 calc(var(--u) * 4px) rgba(255, 220, 160, 0.45);
+  pointer-events: none;
+  animation: captureRingPulse 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  z-index: 10;
+}
+
+.piece.black .capture-burst-ring {
+  border-color: rgba(200, 160, 90, 0.92);
+  box-shadow: 0 0 calc(var(--u) * 8px) rgba(200, 160, 90, 0.65),
+    inset 0 0 calc(var(--u) * 4px) rgba(255, 245, 200, 0.45);
+}
+
+@keyframes captureRingPulse {
+  0% {
+    transform: scale(0.72);
+    opacity: 0.98;
+  }
+  45% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.95);
+    opacity: 0;
+  }
+}
+
+.capture-spark-burst {
+  position: absolute;
+  inset: 10%;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 235, 170, 0.95) 0%,
+    rgba(220, 70, 40, 0.75) 45%,
+    transparent 75%
+  );
+  animation: captureSparksOut 300ms cubic-bezier(0.18, 0.9, 0.35, 1) both;
+  z-index: 9;
+}
+
+.piece.black .capture-spark-burst {
+  background: radial-gradient(
+    circle,
+    rgba(255, 248, 220, 0.95) 0%,
+    rgba(200, 157, 88, 0.8) 45%,
+    transparent 75%
+  );
+}
+
+@keyframes captureSparksOut {
+  0% {
+    transform: scale(0.65) translate(0, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.2)
+      translate(calc(var(--kx, 0) * var(--u) * 16px), calc(var(--ky, 0) * var(--u) * 16px));
+    opacity: 0;
+  }
+}
+
+.piece.is-impact.is-capture-impact::before {
+  animation: pieceCaptureImpactRing 540ms var(--ease-out) both;
+}
+
+@keyframes pieceCaptureImpactRing {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.42;
+  }
+  100% {
+    transform: scale(1.75);
+    opacity: 0;
+  }
+}
+
+/* ---- 标记 ---- */
+
+.target {
+  position: absolute;
+  width: calc(var(--u) * 20px);
+  height: calc(var(--u) * 20px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: calc(var(--u) * 1.2px) solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 0 calc(var(--u) * 4px) rgba(255, 255, 255, 0.55),
+    inset 0 0 calc(var(--u) * 3px) rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 15;
+  /* 可走点不是「唰」地一起冒出来：--i 是它在这一手里的序号（Board.tsx 给），
+     每颗晚 18ms 出现，从选中那颗向外一圈圈荡开 */
+  animation: pop 240ms var(--ease-spring) calc(var(--i, 0) * 18ms) both;
+  transition: opacity var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out);
+}
+
+.target::after {
+  content: '';
+  width: calc(var(--u) * 8px);
+  height: calc(var(--u) * 8px);
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow:
+    0 0 calc(var(--u) * 4px) rgba(255, 255, 255, 0.95),
+    0 0 calc(var(--u) * 8px) rgba(255, 255, 255, 0.65);
+}
+
+/* 退场：落子那一刻，可走点是「收回去」的，不是被剪刀剪掉的。
+   只做 opacity + scale —— 两个都归合成器管，不碰布局；比入场的 240ms 短一半，
+   收尾的那一程只负责让眼睛跟得上，拖长了就变成挡下一次点击。
+   这里必须重写整条 animation 简写：只改 animation-name 而把 --i 那条 delay 留着的话，
+   第 12 颗要点等 198ms 才开始收，而节点 170ms 就卸载了 —— 它不是淡出，是「啪」地没的。
+   110ms、比 Board 那个卸载定时器短 60ms：is-leaving 是随 React 提交挂上的，动画要到
+   下一次绘制才真正起步，天生晚一帧；而退场又常常正好打断在入场那波动画上（落子前刚点过
+   这颗子），同一元素换一条动画要多等第二帧才起步 —— 实测这种情形下 110ms 的动画要到
+   ~154ms 才跑完。配 --ease-exit（起步极平、末尾最快）时晚起步最要命 —— 截图量到最后一帧
+   还停在 opacity 0.72，正撞在最陡那一段上被摘掉。留够这 60ms，剪子才落在看不见的地方。 */
+.target.is-leaving {
+  animation: targetOut 110ms var(--ease-exit) both;
+}
+
+@keyframes targetOut {
+  from {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(0.55);
+    opacity: 0;
+  }
+}
+
+/* 键盘走子：棋盘可聚焦，焦点环收在内沿（inset 光晕纪律，不外溢） */
+.board-surface:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(180, 50, 42, 0.55),
+    inset 0 0 18px rgba(180, 50, 42, 0.16);
+}
+
+/* 键盘光标：取景框式的四角括号，墨色，和可走点的朱砂区分开。
+   位置同样走 transform（跟棋子一套规矩）：方向键连按时光标要连滑好几格，
+   走 left/top 就是每格一次重排。 */
+.kbd-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(var(--u) * 72px);
+  height: calc(var(--u) * 72px);
+  --cx: 0px;
+  --cy: 0px;
+  transform: translate3d(calc(var(--u) * var(--cx) - 50%), calc(var(--u) * var(--cy) - 50%), 0);
+  pointer-events: none;
+  z-index: 16;
+  background-image:
+    linear-gradient(var(--ink-1), var(--ink-1)),
+    linear-gradient(var(--ink-1), var(--ink-1)),
+    linear-gradient(var(--ink-1), var(--ink-1)),
+    linear-gradient(var(--ink-1), var(--ink-1)),
+    linear-gradient(var(--ink-1), var(--ink-1)),
+    linear-gradient(var(--ink-1), var(--ink-1)),
+    linear-gradient(var(--ink-1), var(--ink-1)),
+    linear-gradient(var(--ink-1), var(--ink-1));
+  background-repeat: no-repeat;
+  background-size:
+    calc(var(--u) * 16px) 2px, 2px calc(var(--u) * 16px),
+    calc(var(--u) * 16px) 2px, 2px calc(var(--u) * 16px),
+    calc(var(--u) * 16px) 2px, 2px calc(var(--u) * 16px),
+    calc(var(--u) * 16px) 2px, 2px calc(var(--u) * 16px);
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+  opacity: 0.85;
+  animation: cursorPop 200ms var(--ease-spring);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+/* 光标自己的入场缩放。为什么不复用 pop：pop 的 from 里那个写死的
+   translate(-50%,-50%) 是给 .target 用的（它还在 left/top 上），光标的位置
+   现在在 transform 里，套上去会让它先闪到棋盘左上角再蹦回来。
+
+   也**不加 fill** —— 带 fill 的话动画结束时会把它那一刻的 transform 冻住，
+   之后改 --cx 光标就走不动了。 */
+@keyframes cursorPop {
+  from {
+    transform: translate3d(calc(var(--u) * var(--cx) - 50%), calc(var(--u) * var(--cy) - 50%), 0)
+      scale(0.2);
+    opacity: 0;
+  }
+}
+
+.target-capture {
+  width: calc(var(--u) * 72px);
+  height: calc(var(--u) * 72px);
+  background: transparent;
+  border-radius: 50%;
+  border: calc(var(--u) * 2px) solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 0 calc(var(--u) * 12px) rgba(255, 255, 255, 0.85),
+    inset 0 0 calc(var(--u) * 10px) rgba(255, 255, 255, 0.45);
+  opacity: 0.92;
+  animation: targetCapturePulse 2s ease-in-out infinite alternate;
+}
+
+.target-capture::after {
+  display: none;
+}
+
+/* 脉冲只走 scale + opacity。原来 100% 那一档还顺手把 box-shadow 的模糊半径从
+   12px 推到 16px —— 一条 2s 无限往返的动画里改阴影半径，等于每一帧重算一次辉光，
+   而这一圈光是挂在**每一个**可吃落点上的（选中一颗炮能打三颗子就是三圈）。
+   辉光的呼吸本来就靠「整圈变大」传达，去掉半径这一维看不出来。 */
+@keyframes targetCapturePulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.96);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.03);
+    opacity: 1;
+  }
+}
+
+/* 拖着子掠过合法落点时，那个点亮一下 —— 不用松手就知道这儿能落 */
+.target.is-over {
+  opacity: 1;
+  filter: drop-shadow(0 0 calc(var(--u) * 8px) rgba(255, 255, 255, 1));
+}
+
+@keyframes pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0;
+  }
+}
+
+.last-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 12;
+  /* 这里原来挂着一条 `transition: left/top`。它是**死代码**：标记的 key 里带了
+     game.ply（见 Board.tsx），每走一手都是一个新元素，新元素直接以最终坐标挂载，
+     从来没有「坐标变化」这回事，那条过渡一次都没跑过。
+     真要让标记滑行，得把它改成跟棋子一样走 transform；既然现在是瞬移，
+     就把过渡删掉 —— 留着只会骗下一个读代码的人。 */
+}
+
+/* 起点：外层纤细白圆圈线 + 中心柔白发光圆点（严格还原参考图） */
+.last-from {
+  width: calc(var(--u) * 26px);
+  height: calc(var(--u) * 26px);
+  border-radius: 50%;
+  border: calc(var(--u) * 1.5px) solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 calc(var(--u) * 6px) rgba(255, 255, 255, 0.65),
+    inset 0 0 calc(var(--u) * 4px) rgba(255, 255, 255, 0.35);
+  display: grid;
+  place-items: center;
+  animation: fadeIn 240ms var(--ease-out) both;
+}
+
+.last-from::after {
+  content: '';
+  width: calc(var(--u) * 11px);
+  height: calc(var(--u) * 11px);
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 calc(var(--u) * 6px) rgba(255, 255, 255, 1),
+    0 0 calc(var(--u) * 14px) rgba(255, 255, 255, 0.7);
+}
+
+/* ---- 选中棋子背后的清透月牙高光圆环（精准对齐图一） ---- */
+
+.selected-crescent-ring {
+  position: absolute;
+  width: calc(var(--u) * 82px);
+  height: calc(var(--u) * 82px);
+  transform: translate(-50%, calc(-50% - var(--u) * 6px));
+  display: grid;
+  place-items: center;
+  z-index: 22; /* 浮于接触影上方，紧紧贴合棋子四周 */
+  pointer-events: none;
+  animation: crescentFade 200ms var(--ease-out) both;
+}
+
+.crescent-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: crescentBreathe 2.8s ease-in-out infinite alternate;
+  transform-origin: 50% 50%;
+}
+
+@keyframes crescentBreathe {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.015);
+  }
+}
+
+@keyframes crescentFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, calc(-50% - var(--u) * 6px)) scale(1);
+  }
+}
+
+/* 取消选中 / 落子那一刻，月牙环也得有一程收走，不许一帧剪掉（见 Board 的 MARK_OUT_MS）。
+   收的方向跟可走点相反 —— 往外散开再没：它是套在子外面的一圈光，往里缩会被看成
+   「被子吸进去」，而这一步那颗子正好在离开，两个动作撞在同一格上。
+   110ms 的理由同 targetOut：把尾巴留在卸载之前跑完。 */
+.selected-crescent-ring.is-leaving {
+  animation: crescentOut 110ms var(--ease-exit) both;
+}
+
+@keyframes crescentOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, calc(-50% - var(--u) * 6px)) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - var(--u) * 6px)) scale(1.12);
+  }
+}
+
+/* ---- 上一手落子终点：典雅微光取景落点框 ---- */
+
+/* ---- 上一步落子终点：三段柔和晶莹弧环 + 缓慢平稳旋转（贴合舒适，不闪烁，羽化柔边） ---- */
+
+.last-to {
+  width: calc(var(--u) * 87px);
+  height: calc(var(--u) * 87px);
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  z-index: 18;
+  pointer-events: none;
+  animation: fadeIn 220ms var(--ease-out) both;
+}
+
+/* 旋转挂在父元素的一条 CSS transform 上，不是 SVG 的 <animateTransform>。
+   SMIL 那一版每帧重画一次带高斯模糊的描边，而且绕开了减弱动效那段 —— 底部
+   `prefers-reduced-motion` 只压得动 CSS 动画，压不动 SMIL，偏好设置在这圈光上是失效的。
+   落点框从第一手挂到终局，是全站最久的常驻开销；换成 transform 之后整族弧环只栅格化
+   一次，之后每一帧只是把那张图转个角度。 */
+.last-to-rotator {
+  display: block;
+  width: 100%;
+  height: 100%;
+  animation: lastToSpin 8s linear infinite;
+}
+
+@keyframes lastToSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.last-to-spinner {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* 辉光是画出来的，不是滤出来的：原来这里叠了两层 drop-shadow，底下还有一个 SVG
+   feGaussianBlur，挂在一个**一直在转**的元素上，等于每帧重算一遍滤镜。改成同一条
+   dasharray 的第二道粗描边 —— 粗、淡、圆头，看着还是那圈羽化，成本是零。 */
+.last-to-spinner .spinner-halo {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 52 38;
+  opacity: 0.55;
+}
+
+.last-to-spinner .spinner-arcs {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 2.7;
+  stroke-linecap: round;
+  stroke-dasharray: 52 38;
+  opacity: 0.9;
+}
+
+.last-to-red .spinner-arcs {
+  stroke: rgba(255, 255, 255, 0.85);
+}
+
+.last-to-red .spinner-halo {
+  stroke: rgba(235, 110, 95, 0.45);
+}
+
+.last-to-black .spinner-arcs {
+  stroke: rgba(255, 255, 255, 0.85);
+}
+
+.last-to-black .spinner-halo {
+  stroke: rgba(150, 190, 240, 0.45);
+}
+
+.last-to-capture .spinner-arcs {
+  stroke: rgba(255, 255, 255, 0.98);
+}
+
+.last-to-capture .spinner-halo {
+  stroke: rgba(245, 90, 75, 0.7);
+  stroke-width: 8;
+  opacity: 0.7;
+}
+
+.pv-trace {
+  position: absolute;
+  height: calc(var(--u) * 3px);
+  border-radius: 2px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, rgba(180, 50, 42, 0.8), rgba(180, 50, 42, 0));
+  pointer-events: none;
+  z-index: 11;
+  animation: fadeIn 400ms var(--ease-out) both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- 移动轨迹（行棋直线 · 走完淡隐消失）----
+   走棋时起点到落点之间的直线，仅在起点与落点之间。
+   走子时显示，走完落子后自动淡出消失（650ms），盘面清爽不残留。 */
+
+.board-trajectories-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 13;
+}
+
+.move-line-group {
+  animation: moveLineFade 650ms var(--ease-out) forwards;
+}
+
+.move-line-path {
+  stroke-linecap: round;
+}
+
+.pv-arc-group {
+  animation: fadeIn 300ms var(--ease-out) both;
+}
+
+@keyframes moveLineFade {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.92;
+  }
+  45% {
+    opacity: 0.92;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* 减弱动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .move-arc-group,
+  .move-arc-path,
+  .move-arc-arrow,
+  .move-arc-bead {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+    opacity: 1 !important;
+  }
+}
+
+/* 引擎思考时，棋盘边缘有一圈很淡的呼吸光。
+   注意必须用 inset —— 这个伪元素的父级是 overflow:hidden 的，
+   外投影会被直接裁掉，动画再漂亮也看不见。 */
+/* 引擎思考时，棋盘不再整块呼吸。
+   之前这里挂了一层 2.1s 无限循环的 inset 光晕，引擎一算棋整块盘就在一亮一暗，
+   看起来就是「画面在抖」。is-thinking 这个类保留（自检脚本靠它判断状态），
+   但不再有任何视觉副作用 —— 机器算它的，盘面岿然不动。 */
+.board.is-thinking .board-surface::after {
+  content: none;
+}

@@ -1,0 +1,51 @@
+/* ==========================================================================
+   精训营（Drill Lab）专属样式 —— 已全面迁移至 Tailwind CSS 与 src/components/drill/
+   ========================================================================== */
+
+
+/* 盘面三阶法眼视觉点拨高光 */
+.master-weakness-marker {
+  position: absolute;
+  width: 10%;
+  height: 9%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 25;
+}
+
+.master-weakness-pulse {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px dashed var(--cinnabar);
+  background: rgba(184, 51, 42, 0.18);
+  box-shadow: 0 0 14px rgba(184, 51, 42, 0.45);
+  animation: weaknessBreathe 1.8s infinite ease-in-out;
+}
+
+@keyframes weaknessBreathe {
+  0%, 100% {
+    transform: scale(0.92);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.95;
+  }
+}
+
+/* 核心主攻子高光欠身呼吸 */
+.piece.is-master-key .piece-face {
+  box-shadow: 0 0 0 3px #d4af37, 0 0 16px rgba(212, 175, 55, 0.65) !important;
+  animation: masterKeyFloat 2s infinite ease-in-out;
+}
+
+@keyframes masterKeyFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}

@@ -1,3 +1,4 @@
+import type { ValidationResult } from '../../lib/setup'
 import type { GameSnapshot, PieceInfo, Side, XiangqiXRay } from '../../types'
 
 /** 正在被拖拽的一颗子。bx/by 是棋盘坐标系里的像素位置，
@@ -42,6 +43,9 @@ export interface BoardProps {
   onSetupPieceMove?: (from: string, to: string) => void
   onSetupPieceRemove?: (square: string) => void
   onSetupPickBoardSquare?: (square: string | null) => void
+  onSetupPieceDropFromTray?: (char: string, square: string) => void
+  onPoofTriggered?: (clientX: number, clientY: number) => void
+  setupValidation?: ValidationResult | null
   /** 正在翻转视角（「收窄 → 换 → 展开」这一段的头尾）。见 App 里的 turnBoard。 */
   flipping?: boolean
   /**

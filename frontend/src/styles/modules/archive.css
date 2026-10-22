@@ -1,0 +1,91 @@
+/* ==========================================================================
+   复盘架
+   --------------------------------------------------------------------------
+   错题本按局面问「这种局面你错过几次」，这一栏按局问「哪一局值得重看」。
+   两栏并排站在同一根轨里，读的还是同一份存档，所以头部那颗按钮与那行来源
+   直接共用 .mistake-reload / .mistake-source 的长相：同一把尺量出来的两种账，
+   长成一个有边框一个没有，会让人以为它们是两个系统。
+   ========================================================================== */
+
+.shelf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* 与错题本同一把尺：一栏装不下就自己滚，别把「引擎分析」和「棋谱」顶出画面 */
+  max-height: min(232px, 34vh);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* 整行都是按钮：一段点了没反应的空白，是这种列表最容易被当成「坏了」的地方。
+   于是长相全在 .shelf-pick 上，li 只负责排队。 */
+.shelf-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 7px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--paper-0);
+  font: inherit;
+  text-align: left;
+  color: var(--ink-2);
+  cursor: pointer;
+  /* 只碰颜色：border-width / padding 是布局属性，落在 motion.mjs 第 17 条帧预算的
+     黑名单里；这一栏虽然不进轮询，点开一局时整列会重挂，贵的仍是那一帧。 */
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.shelf-pick:hover {
+  border-color: var(--hairline-strong);
+  background: var(--paper-1);
+}
+
+.shelf-kind {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  color: var(--ink-1);
+}
+
+.shelf-count {
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.shelf-side,
+.shelf-when {
+  font-size: 10px;
+  color: var(--ink-4);
+}
+
+.shelf-when {
+  font-family: var(--font-num);
+}
+
+.shelf-over {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ink-mute);
+}
+
+/* 「有几手带着判分」这一句是玉色的：玉在这个界面里指认「你走过的那一手」
+   （见 .rank-row.is-played），而判分本来就只挂在人走的棋上。
+   不借朱砂 —— 朱砂只报危险与强调，一局棋下得坏不等于这一行危险。 */
+.shelf-pick.has-graded .shelf-count {
+  color: var(--jade);
+}
+
+.shelf-more {
+  margin: 8px 0 0;
+  font-size: 10px;
+  color: var(--ink-mute);
+}

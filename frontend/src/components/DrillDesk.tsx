@@ -746,6 +746,24 @@ export function DrillDesk(props?: DrillDeskProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [mounted, leaving, onClose, clearAnimTimer])
 
+  const categoryPuzzles = puzzles.filter((p) => p.category === activeCategory)
+  const motifPuzzles = useMemo(() => {
+    if (!focusMotif) return []
+    return puzzles.filter((p) => p.motif === focusMotif)
+  }, [focusMotif, puzzles])
+  const currentMotifIndex = useMemo(() => {
+    if (!focusMotif || !currentPuzzle) return -1
+    return motifPuzzles.findIndex((p) => p.id === currentPuzzle.id)
+  }, [focusMotif, motifPuzzles, currentPuzzle])
+  const masteredInMotifCount = useMemo(() => {
+    return motifPuzzles.filter((p) => p.status === 'mastered').length
+  }, [motifPuzzles])
+
+  const displayCatalogPuzzles = useMemo(() => {
+    if (focusMotif && motifPuzzles.length > 0) return motifPuzzles
+    return categoryPuzzles
+  }, [focusMotif, motifPuzzles, categoryPuzzles])
+
   if (!mounted) return null
 
   // 棋盘 HUD 字幕与漫画气泡
@@ -772,24 +790,6 @@ export function DrillDesk(props?: DrillDeskProps) {
       }
     : null
 
-  const categoryPuzzles = puzzles.filter((p) => p.category === activeCategory)
-  const motifPuzzles = useMemo(() => {
-    if (!focusMotif) return []
-    return puzzles.filter((p) => p.motif === focusMotif)
-  }, [focusMotif, puzzles])
-  const currentMotifIndex = useMemo(() => {
-    if (!focusMotif || !currentPuzzle) return -1
-    return motifPuzzles.findIndex((p) => p.id === currentPuzzle.id)
-  }, [focusMotif, motifPuzzles, currentPuzzle])
-  const masteredInMotifCount = useMemo(() => {
-    return motifPuzzles.filter((p) => p.status === 'mastered').length
-  }, [motifPuzzles])
-
-  const displayCatalogPuzzles = useMemo(() => {
-    if (focusMotif && motifPuzzles.length > 0) return motifPuzzles
-    return categoryPuzzles
-  }, [focusMotif, motifPuzzles, categoryPuzzles])
-
   const displayGame =
     animMode !== 'none' && animFrames.length > 0
       ? animFrames[Math.min(animStep, animFrames.length - 1)]
@@ -799,16 +799,16 @@ export function DrillDesk(props?: DrillDeskProps) {
 
   return (
     <div
-      className={`fixed inset-0 z-[300] bg-ink-0/65 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 transition-opacity duration-200 ${
+      className={`fixed inset-0 z-[300] bg-ink-0/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 transition-opacity duration-200 select-none ${
         leaving ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
       role="dialog"
       aria-modal="true"
-      aria-label="象棋实战闯关与优劣势动画实验室"
+      aria-label="象棋实战特训营"
       onClick={onClose}
     >
       <div
-        className={`w-[min(1140px,96vw)] h-[min(88vh,840px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-paper-0 rounded-xl shadow-2xl border border-hairline transition-all duration-200 ${
+        className={`w-[min(1140px,96vw)] h-[min(88vh,840px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-paper-0/98 rounded-2xl shadow-2xl border border-hairline transition-all duration-200 ${
           leaving ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -940,6 +940,8 @@ export function DrillDesk(props?: DrillDeskProps) {
               hasHistory={!!game && game.records.length > 0}
               thinking={thinking}
               sandbox={sandbox}
+              hintLevel={hintLevel}
+              onRequestHint={handleRequestHint}
               onStartBadAnim={() => startAnimation('bad')}
               onStartThreatAnim={() => startAnimation('threat')}
               onStopAnim={stopAnimationToPlay}
@@ -947,11 +949,38 @@ export function DrillDesk(props?: DrillDeskProps) {
               onReset={() => void handleReset()}
               onToggleSandbox={() => setSandbox((v) => !v)}
               onNextPuzzle={handleNextPuzzle}
+              animStep={animStep}
+              activeStepsCount={activeSteps.length}
+              animPlaying={animPlaying}
+              onResetAnimStep={() => {
+                clearAnimTimer()
+                setAnimPlaying(false)
+                setAnimStep(0)
+              }}
+              onPrevAnimStep={() => {
+                clearAnimTimer()
+                setAnimPlaying(false)
+                setAnimStep((s) => Math.max(0, s - 1))
+              }}
+              onTogglePlayAnim={() => {
+                if (animPlaying) {
+                  clearAnimTimer()
+                  setAnimPlaying(false)
+                } else {
+                  if (animStep >= activeSteps.length) setAnimStep(0)
+                  setAnimPlaying(true)
+                }
+              }}
+              onNextAnimStep={() => {
+                clearAnimTimer()
+                setAnimPlaying(false)
+                setAnimStep((s) => Math.min(activeSteps.length, s + 1))
+              }}
             />
           </div>
 
           {/* 右侧面板列 */}
-          <div className="flex flex-col gap-3 p-4 overflow-y-auto bg-paper-1 min-h-0">
+          <div className="flex flex-col gap-3 p-4 overflow-y-auto bg-paper-1/70 min-h-0">
             <DrillTacticsHUD
               currentPuzzle={currentPuzzle}
               feedback={feedback}
@@ -963,6 +992,8 @@ export function DrillDesk(props?: DrillDeskProps) {
               choiceOptions={choiceOptions}
               animMode={animMode}
               hoveredChoice={hoveredChoice}
+              hints={hints}
+              hintLevel={hintLevel}
               onUndo={handleUndo}
               onStartBadAnim={() => startAnimation('bad')}
               onStartGoodAnim={() => startAnimation('good')}

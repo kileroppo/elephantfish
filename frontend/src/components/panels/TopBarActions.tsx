@@ -1,142 +1,120 @@
 export interface TopBarActionsProps {
-  playMode: 'sparring' | 'relay'
+  theme: 'xuan' | 'wumu'
+  onCycleTheme?: () => void
   connected: boolean
   zenMode: boolean
-  drillMode: boolean
-  setupMode: boolean
   soundOn: boolean
-  onTogglePlayMode?: () => void
+  railR?: boolean
+  onToggleRailR?: () => void
   onRefresh: () => void
   onToggleZen?: () => void
-  onToggleDrill: () => void
-  onToggleSetup?: () => void
   onToggleSound: () => void
   onHelp: () => void
 }
 
 export function TopBarActions({
-  playMode,
+  theme,
+  onCycleTheme,
   connected,
   zenMode,
-  drillMode,
-  setupMode,
   soundOn,
-  onTogglePlayMode: _onTogglePlayMode,
+  railR,
+  onToggleRailR,
   onRefresh,
   onToggleZen,
-  onToggleDrill,
-  onToggleSetup,
   onToggleSound,
   onHelp,
 }: TopBarActionsProps) {
-  const isStandardSparring = !drillMode && !setupMode
-
   return (
-    <nav className="topbar-actions flex items-center gap-1.5 md:gap-3 ml-auto select-none" aria-label="功能导航">
-      {/* 1. 核心模式分段控件组（实战、精训营、排局补棋） */}
-      <div className="mode-segmented inline-flex items-center p-0.5 bg-paper-2/90 rounded-lg border border-hairline text-xs shrink-0">
+    <nav className="topbar-actions flex items-center gap-1.5 md:gap-2 ml-auto select-none shrink-0" aria-label="快捷工具">
+      {/* 1. 材质主题切换 (乌墨 / 宣纸) */}
+      {onCycleTheme && (
         <button
           type="button"
-          className={`h-6 md:h-7 px-2 md:px-3 rounded-[6px] text-[11px] md:text-xs font-medium tracking-wide transition-all cursor-pointer border-0 flex items-center justify-center ${
-            isStandardSparring
-              ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
-              : 'bg-transparent text-ink-3 hover:text-ink-1'
-          }`}
-          onClick={() => {
-            if (drillMode) onToggleDrill()
-            if (setupMode && onToggleSetup) onToggleSetup()
-          }}
-          title="标准对弈实战"
+          className="h-7 px-2.5 rounded-lg text-xs tracking-wide text-ink-2 hover:text-cinnabar hover:bg-paper-2 transition-all cursor-pointer border border-transparent flex items-center gap-1.5"
+          onClick={onCycleTheme}
+          title="切换棋盘材质主题 (快捷键 T)"
+          aria-label="切换材质主题"
         >
-          <span className="hidden sm:inline">{playMode === 'relay' ? '信使代打' : '实战陪练'}</span>
-          <span className="sm:hidden">{playMode === 'relay' ? '信使' : '实战'}</span>
+          <span className="text-[12px] opacity-80">🎨</span>
+          <span className="hidden md:inline font-medium">{theme === 'wumu' ? '乌墨' : '宣纸'}</span>
         </button>
+      )}
 
+      {/* 2. 专注模式切换 */}
+      {onToggleZen && (
         <button
           type="button"
-          className={`h-6 md:h-7 px-2 md:px-3 rounded-[6px] text-[11px] md:text-xs font-medium tracking-wide transition-all cursor-pointer border-0 flex items-center justify-center ${
-            drillMode
-              ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
-              : 'bg-transparent text-ink-3 hover:text-ink-1'
+          className={`h-7 px-2.5 rounded-lg text-xs tracking-wide transition-all cursor-pointer flex items-center gap-1.5 border ${
+            zenMode
+              ? 'text-cinnabar border-cinnabar/40 bg-cinnabar/5 font-semibold'
+              : 'text-ink-2 hover:text-cinnabar border-transparent hover:bg-paper-2'
           }`}
-          onClick={onToggleDrill}
-          title={drillMode ? '退出精训营' : '进入精训营残局实战专题'}
+          onClick={onToggleZen}
+          title={zenMode ? '退出沉浸专注 (快捷键 Z / Esc)' : '沉浸专注模式 (快捷键 Z)'}
+          aria-pressed={zenMode}
         >
-          <span className="hidden sm:inline">精训营</span>
-          <span className="sm:hidden">精训</span>
+          <span className="text-[12px]">🎯</span>
+          <span className="hidden md:inline font-medium">{zenMode ? '已专注' : '专注'}</span>
         </button>
+      )}
 
-        {onToggleSetup && (
-          <button
-            type="button"
-            className={`h-6 md:h-7 px-2 md:px-3 rounded-[6px] text-[11px] md:text-xs font-medium tracking-wide transition-all cursor-pointer border-0 flex items-center justify-center ${
-              setupMode
-                ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
-                : 'bg-transparent text-ink-3 hover:text-ink-1'
-            }`}
-            onClick={onToggleSetup}
-            title={setupMode ? '退出排局补棋' : '进入自定义排局与补棋'}
-          >
-            补棋
-          </button>
-        )}
-      </div>
+      {/* 3. 音效开关 */}
+      <button
+        type="button"
+        className={`h-7 px-2.5 rounded-lg text-xs tracking-wide transition-all cursor-pointer flex items-center gap-1.5 border ${
+          soundOn
+            ? 'text-ink-2 hover:text-cinnabar border-transparent hover:bg-paper-2'
+            : 'text-ink-4 border-dashed border-hairline hover:bg-paper-2'
+        }`}
+        onClick={onToggleSound}
+        title={soundOn ? '关闭落子与将军音效' : '开启落子音效'}
+        aria-pressed={soundOn}
+      >
+        <span className="text-[12px]">{soundOn ? '🔔' : '🔕'}</span>
+        <span className="hidden md:inline font-medium">{soundOn ? '音效' : '静音'}</span>
+      </button>
 
-      {/* 断线提示 */}
+      {/* 4. 右侧分析栏展开/收起开关 */}
+      {onToggleRailR && (
+        <button
+          type="button"
+          className={`h-7 px-2.5 rounded-lg text-xs tracking-wide transition-all cursor-pointer flex items-center gap-1.5 border ${
+            railR
+              ? 'text-cinnabar border-cinnabar/40 bg-cinnabar/5 font-semibold'
+              : 'text-ink-2 hover:text-cinnabar border-transparent hover:bg-paper-2'
+          }`}
+          onClick={onToggleRailR}
+          title={railR ? '收起右侧分析栏 (快捷键 ])' : '展开右侧分析栏 (快捷键 ])'}
+          aria-pressed={railR}
+        >
+          <span className="text-[12px]">📊</span>
+          <span className="hidden md:inline font-medium">{railR ? '收起侧栏' : '分析侧栏'}</span>
+        </button>
+      )}
+
+      {/* 5. 快捷键帮助 */}
+      <button
+        type="button"
+        className="h-7 w-7 rounded-lg text-xs tracking-wide text-ink-3 hover:text-ink-0 hover:bg-paper-2 transition-all cursor-pointer flex items-center justify-center border border-transparent font-medium"
+        onClick={onHelp}
+        title="帮助与对弈快捷键说明 (?)"
+        aria-label="帮助与快捷键说明"
+      >
+        ?
+      </button>
+
+      {/* 断线提示重连 */}
       {!connected && (
         <button
           type="button"
-          className="h-6 md:h-7 px-2 md:px-2.5 rounded-md text-[11px] md:text-xs tracking-wide text-cinnabar bg-cinnabar/10 border border-cinnabar/30 transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center font-medium"
+          className="h-7 px-2.5 rounded-lg text-xs tracking-wide text-cinnabar bg-cinnabar/10 border border-cinnabar/30 transition-colors cursor-pointer flex items-center font-medium animate-pulse ml-1"
           onClick={onRefresh}
-          title="服务未连接，点击重试"
+          title="引擎服务未连接，点击重试"
         >
           重连
         </button>
       )}
-
-      {/* 2. 右侧系统辅助与视听工具组 */}
-      <div className="tools-group inline-flex items-center gap-1 pl-1 md:pl-2 border-l border-hairline shrink-0">
-        {onToggleZen && (
-          <button
-            type="button"
-            className={`h-6 md:h-7 px-1.5 md:px-2 rounded-md text-[11px] md:text-xs tracking-wide transition-all whitespace-nowrap cursor-pointer hidden sm:flex items-center justify-center border ${
-              zenMode
-                ? 'text-cinnabar border-cinnabar/40 bg-cinnabar/5 font-medium'
-                : 'text-ink-2 hover:text-ink-0 border-transparent hover:bg-paper-2'
-            }`}
-            onClick={onToggleZen}
-            title={zenMode ? '退出专注 (Z / Esc)' : '专注模式 (快捷键 Z)'}
-            aria-pressed={zenMode}
-          >
-            {zenMode ? '退出专注' : '专注'}
-          </button>
-        )}
-
-        <button
-          type="button"
-          className={`h-6 md:h-7 px-1.5 md:px-2 rounded-md text-[11px] md:text-xs tracking-wide transition-all whitespace-nowrap cursor-pointer flex items-center justify-center border ${
-            soundOn
-              ? 'text-ink-2 hover:text-ink-0 border-transparent hover:bg-paper-2'
-              : 'text-ink-4 border-dashed border-hairline hover:bg-paper-2'
-          }`}
-          onClick={onToggleSound}
-          title={soundOn ? '静音' : '开启音效'}
-          aria-pressed={soundOn}
-        >
-          <span className="hidden sm:inline">{soundOn ? '音效' : '静音'}</span>
-          <span className="sm:hidden">{soundOn ? '🔔' : '🔕'}</span>
-        </button>
-
-        <button
-          type="button"
-          className="h-6 md:h-7 px-1.5 md:px-2 rounded-md text-[11px] md:text-xs tracking-wide text-ink-3 hover:text-ink-0 hover:bg-paper-2 transition-all whitespace-nowrap cursor-pointer flex items-center justify-center border border-transparent"
-          onClick={onHelp}
-          title="快捷键帮助 (?)"
-        >
-          <span className="hidden sm:inline">帮助</span>
-          <span className="sm:hidden">?</span>
-        </button>
-      </div>
     </nav>
   )
 }

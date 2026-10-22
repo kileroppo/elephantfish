@@ -23,6 +23,7 @@ import {
   type CurveTrajectory,
 } from '../../lib/board'
 import { useExitPhase } from '../../hooks/useExitPhase'
+import { play } from '../../lib/sound'
 import { BoardArtwork } from './BoardArtwork'
 import { BoardSvgLayer } from './BoardSvgLayer'
 import { BoardPiecesLayer } from './BoardPiecesLayer'
@@ -61,6 +62,9 @@ export function Board({
   onSetupPieceMove,
   onSetupPieceRemove,
   onSetupPickBoardSquare,
+  onSetupPieceDropFromTray,
+  onPoofTriggered,
+  setupValidation,
   boardCaption = null,
   moveBubble = null,
   xrayOverlay = null,
@@ -441,6 +445,7 @@ export function Board({
     if (setupMode) {
       if (selectedTrayPiece) {
         onSetupSquareTap?.(sq)
+        play('snap')
         return
       }
       const pieceOnSq = activePieces.find((p) => p.square === sq)
@@ -449,6 +454,7 @@ export function Board({
           onSetupPickBoardSquare?.(null)
         } else {
           onSetupPieceMove?.(pickedBoardSquare, sq)
+          play('snap')
           onSetupPickBoardSquare?.(null)
         }
       } else if (pieceOnSq) {
@@ -466,7 +472,11 @@ export function Board({
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (setupMode && e.button === 2) {
       const sq = squareAtPoint(e.clientX, e.clientY)
-      if (sq) onSetupPieceRemove?.(sq)
+      if (sq) {
+        onSetupPieceRemove?.(sq)
+        onPoofTriggered?.(e.clientX, e.clientY)
+        play('poof')
+      }
       return
     }
     if (e.button !== 0) return
@@ -519,8 +529,11 @@ export function Board({
       if (setupMode) {
         if (sq && sq !== fromSq) {
           onSetupPieceMove?.(fromSq, sq)
+          play('snap')
         } else if (!sq) {
           onSetupPieceRemove?.(fromSq)
+          onPoofTriggered?.(e.clientX, e.clientY)
+          play('poof')
         }
         return
       }
@@ -602,9 +615,6 @@ export function Board({
       {/* 棋盘物理比例占位体（常规文档流）：确保 WebKit / Safari 下即便子层全为 absolute 也绝不塌陷高度 */}
       <div className="w-full aspect-[720/800] pointer-events-none opacity-0 select-none" aria-hidden="true" />
 
-      {/* 棋盘顶部 HUD 战况字幕条 */}
-      {boardCaption && <BoardHudCaption caption={boardCaption} />}
-
       <div
         className={[
           'board-surface',
@@ -619,6 +629,23 @@ export function Board({
         onPointerMove={onPointerMove}
         onPointerUp={endPointer}
         onPointerCancel={cancelPointer}
+        onDragOver={(e) => {
+          if (setupMode) {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'copy'
+          }
+        }}
+        onDrop={(e) => {
+          if (setupMode) {
+            e.preventDefault()
+            const char = e.dataTransfer.getData('text/plain')
+            const sq = squareAtPoint(e.clientX, e.clientY)
+            if (sq && char) {
+              onSetupPieceDropFromTray?.(char, sq)
+              play('snap')
+            }
+          }
+        }}
         onContextMenu={(e) => {
           if (setupMode) e.preventDefault()
         }}
@@ -636,12 +663,14 @@ export function Board({
         {/* 1. 纯 SVG 底图与楚河汉界网格线 */}
         <BoardArtwork flipped={flipped} />
 
-        {/* 2. 走棋直线/曲线轨迹线与主变分支 */}
+        {/* 2. 走棋直线/曲线轨迹线与主变分支及排局就地诊断 */}
         <BoardSvgLayer
           setupMode={setupMode}
           pvArcs={pvArcs}
           lastMoveArc={lastMoveArc}
           ply={game.ply}
+          setupValidation={setupValidation}
+          flipped={flipped}
         />
 
         {/* 3. 核心棋子渲染、拖拽交互与落地动效 */}
@@ -677,7 +706,7 @@ export function Board({
           crescentLeaving={crescentLeaving}
         />
 
-        {/* 4. 浮层：HUD、气泡、空间暗线透视、坐标尺 */}
+        {/* 4. 浮层：气泡、空间暗线透视、坐标尺 */}
         <BoardOverlaysLayer
           flipped={flipped}
           visualClues={visualClues}
@@ -685,6 +714,9 @@ export function Board({
           xrayOverlay={xrayOverlay}
           ghostMove={ghostMove}
         />
+
+        {/* 5. 棋盘顶部动态 HUD 战况字幕条：挂载于盘面顶层内部，绝对定位居中，绝不挤压文档流 */}
+        {boardCaption && <BoardHudCaption caption={boardCaption} />}
       </div>
     </div>
   )

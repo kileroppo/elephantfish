@@ -1,0 +1,94 @@
+/* ==========================================================================
+   舞台头部
+   ========================================================================== */
+
+.stage-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  /* 高度必须**显式**给，尺寸取 --badge-h（就是药丸自己的高度）。
+     以前这里写的是 26px —— 那是更早一版更矮的回合条留下的值，而药丸后来长到了
+     32px。桌面档看不出问题（回合条是 flex 项，内容会把行撑到 32px）；窄屏
+     （≤1140px）下 .stage 变成 `display: contents`，回合条被上提进 .workspace 当栅格
+     的一行，内容不再参与行高计算 —— 行高就等于这里的 min-height，于是药丸上下各
+     溢出 3px，下沿随即被棋盘垫吃掉。详见 tokens.css 的 --badge-h。 */
+  min-height: var(--badge-h);
+}
+
+.turn-badge {
+  display: inline-flex;
+  align-items: center;
+  /* 左对齐 + 定宽：圆点钉在左侧不动，文字在右边长短变化，整块纹丝不动。
+     居中会让「轮到红方（对方）」和「轮到黑方（我方引擎）」把圆点推来推去。 */
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  letter-spacing: 0.05em;
+  color: var(--ink-2);
+  background: var(--paper-0);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-panel);
+  min-width: 232px;
+  transition: background var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+
+.turn-badge.is-engine {
+  border-color: var(--cinnabar-edge);
+}
+
+.turn-badge.is-over {
+  background: var(--paper-2);
+  color: var(--ink-3);
+}
+
+.turn-text {
+  animation: fadeIn 220ms var(--ease-out) both;
+}
+
+.turn-disc {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transition: background-color var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-spring);
+  /* key=game.turn（App.tsx）：每易手一次圆点重新挂载，从 .4 弹回 1 ——
+     「轮到你了」不靠颜色突变，靠这一下脉搏 */
+  animation: discPop 240ms var(--ease-spring-sm) both;
+}
+
+@keyframes discPop {
+  from {
+    transform: scale(0.4);
+  }
+}
+.turn-badge.side-red .turn-disc {
+  background: var(--piece-red);
+}
+.turn-badge.side-black .turn-disc {
+  background: var(--piece-black);
+}
+
+.check-flag {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: #fff8f2;
+  background: var(--cinnabar);
+  animation: breathe 1.6s var(--ease-out) infinite, stampIn 240ms var(--ease-spring) both;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(180, 50, 42, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(180, 50, 42, 0);
+  }
+}

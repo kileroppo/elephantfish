@@ -50,25 +50,30 @@ export function AdvancedSettingsDrawer({
   onSettings,
 }: AdvancedSettingsDrawerProps) {
   return (
-    <details className="panel advanced-settings bg-paper-0/80 rounded-md border border-hairline p-3 shadow-xs group">
-      <summary className="panel-head flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-3 flex items-center gap-1.5">
-          <span>⚙️ 引擎与判分高级参数</span>
-        </h2>
-        <span
-          className={`panel-count text-[11px] font-num px-2 py-0.5 rounded-full border ${
-            analyzeOn
-              ? 'bg-jade/10 text-jade border-jade/30 font-medium'
-              : 'bg-paper-2 text-ink-mute border-hairline'
-          }`}
-        >
-          {analyzeOn ? '判分开' : '判分关'}
-        </span>
+    <details className="pt-3 border-t border-hairline/80 group">
+      <summary className="flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden py-1 hover:text-cinnabar transition-colors">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-3 flex items-center gap-1.5 group-hover:text-cinnabar">
+          <span>⚙️ 引擎计算高级设置</span>
+        </h3>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`panel-count text-[10.5px] font-num px-2 py-0.5 rounded-full border ${
+              analyzeOn
+                ? 'bg-jade/10 text-jade border-jade/30 font-medium'
+                : 'bg-paper-2 text-ink-mute border-hairline'
+            }`}
+          >
+            {analyzeOn ? '分析开' : '分析关'}
+          </span>
+          <span className="text-[10px] text-ink-4 group-open:rotate-180 transition-transform duration-200">
+            ▼
+          </span>
+        </div>
       </summary>
 
-      <div className="advanced-settings-body mt-3 pt-2.5 border-t border-hairline/50 flex flex-col gap-3">
+      <div className="advanced-settings-body mt-2.5 pt-2.5 border-t border-hairline/50 flex flex-col gap-3">
         <div>
-          <h3 className="text-[11.5px] font-semibold text-ink-2 mb-1.5">思考时间</h3>
+          <h3 className="text-[11.5px] font-semibold text-ink-2 mb-1.5">单步思考时间</h3>
           <div className="preset-column grid grid-cols-2 gap-1.5">
             {THINK_PRESETS.map((p) => {
               const isOn = Math.abs(settings.think_ms - p.ms) < 150
@@ -91,7 +96,7 @@ export function AdvancedSettingsDrawer({
         </div>
 
         <div>
-          <h3 className="text-[11.5px] font-semibold text-ink-2 mb-1.5">判分提示</h3>
+          <h3 className="text-[11.5px] font-semibold text-ink-2 mb-1.5">走法质量分析</h3>
           <button
             type="button"
             className={`preset w-full h-8 px-2 rounded text-xs transition-all border flex items-center justify-center font-medium cursor-pointer ${
@@ -101,9 +106,9 @@ export function AdvancedSettingsDrawer({
             }`}
             aria-pressed={analyzeOn}
             onClick={() => onSettings({ analyze: !analyzeOn })}
-            title="轮到你走棋时，引擎在空档里算这个局面的前几名；你一走完就拿它给这一步打分"
+            title="轮到你走棋时，后台分析局面候选走法并评估着法质量"
           >
-            {analyzeOn ? '开着 · 轮到你时算前几名' : '关着 · 不给人这一步打分'}
+            {analyzeOn ? '已开启走法质量分析' : '已关闭走法分析'}
           </button>
 
           <div className="field-grid flex flex-col gap-1.5 mt-2">
@@ -122,12 +127,6 @@ export function AdvancedSettingsDrawer({
               />
             ))}
           </div>
-
-          <p className="hint text-[11px] text-ink-mute mt-2 leading-relaxed">
-            {analyzeOn
-              ? '判分用的是借来的算力：引擎一想棋就叫停。'
-              : '关掉判分后，棋谱里的人步显示「未判分」。'}
-          </p>
         </div>
       </div>
     </details>

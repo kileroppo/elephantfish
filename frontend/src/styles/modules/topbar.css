@@ -1,0 +1,61 @@
+/* ==========================================================================
+   顶栏
+   ========================================================================== */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--paper-0);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-text h1 {
+  font-size: 17px;
+  letter-spacing: 0.08em;
+}
+
+.topbar-setting {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.setting-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.setting-link:hover {
+  color: var(--ink-0);
+  background: var(--paper-2);
+  border-color: var(--hairline);
+}
+
+.setting-dot {
+  color: var(--ink-4);
+  font-size: 12px;
+  user-select: none;
+}

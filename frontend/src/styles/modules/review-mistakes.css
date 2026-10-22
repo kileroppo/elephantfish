@@ -1,0 +1,187 @@
+/* ==========================================================================
+   错题本
+   --------------------------------------------------------------------------
+   第三种读数：上面两块讲「眼下这一手」，这块讲「这种局面你在历次对局里错过几次」。
+   数据来自存档的只读投影，所以整块按「账目」排（一题一行、虚线收尾），不跟棋谱共用
+   表格 —— 棋谱按手数排，错题按局面排，两把尺画到一张表上必然有一边失真。
+   ========================================================================== */
+
+.mistakes .panel-head {
+  margin-bottom: 8px;
+}
+
+/* 「重读」只是把只读查询再做一次，不是对局动词，所以它比 .btn 安静一档。
+   点击目标照样撑到 32px（跟上面那些 pill 同一把尺，audit.mjs 四档视口都量这个）；
+   过渡只碰颜色：border-width / padding 是布局属性，落在 motion.mjs 第 17 条
+   帧预算的黑名单里，而这一颗按钮就长在轮询重渲染的栏里。 */
+.mistake-reload {
+  font: inherit;
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  background: var(--paper-1);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 3px 12px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.mistake-reload:hover:not(:disabled) {
+  color: var(--cinnabar);
+  border-color: var(--cinnabar-edge);
+}
+
+.mistake-reload:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.mistake-source {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+/* 整栏本来就在滚（.rail overflow-y:auto），题多时再套一层自己的滚动，
+   免得一本错题把「引擎分析」和「棋谱」顶出画面；高度用 vh 收着，
+   矮视口下不会压出一条只有一行可见的缝。 */
+.mistake-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(288px, 42vh);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.mistake-row {
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--paper-0);
+  padding: 7px 9px;
+}
+
+.mistake-top {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.mistake-side {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  color: var(--ink-1);
+}
+
+/* 谁走这题写在颜色里：同一批 FEN 里红与黑的功课是两道不同的题。 */
+.mistake-row.side-red .mistake-side {
+  color: var(--piece-red);
+}
+
+.mistake-row.side-black .mistake-side {
+  color: var(--piece-black);
+}
+
+.mistake-count {
+  font-family: var(--font-num);
+  font-size: 11px;
+  color: var(--cinnabar);
+}
+
+.mistake-games {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-size: 10px;
+  color: var(--ink-4);
+}
+
+.mistake-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.mistake-best {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.mistake-best b {
+  font-weight: 600;
+  color: var(--cinnabar);
+}
+
+.mistake-best em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  margin-left: 4px;
+}
+
+/* FEN 是这道题的身份证，也是唯一能把两局里的「同一个局面」核对上的字符串，
+   所以宁可写全不省略。它一行装不下：靠 overflow-wrap 硬拆，不许横向溢出
+   （audit.mjs 四档视口扫的就是这个）。 */
+.mistake-fen {
+  display: block;
+  margin-top: 6px;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--ink-4);
+  overflow-wrap: anywhere;
+}
+
+.mistake-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px dashed var(--hairline);
+  font-size: 10px;
+  color: var(--ink-4);
+}
+
+.mistake-blurred {
+  color: var(--ink-3);
+}
+
+/* 这句必须留在账本末尾：读题的人最容易得出的错误结论是「这里没列我那一手，
+   就是下对了」，而 blurred 说的是**证不出**，不是下对。 */
+.mistake-caveat {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+/* 「没题」「存档关着」「库里一局都没有」是三种不同的空，共用这一档字号：
+   它们都比题目本身轻，但都要说出口。 */
+.mistake-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* 「摆到盘上」是这一行里唯一动手的动词，但它开的是只读的复盘台、不是再走一局，
+   所以长相跟着 .btn-ghost 退到页脚同一档字号，只有高度不让步 ——
+   .btn-sm 那 34px 是 audit.mjs 逐颗量的点击目标，压小它换来的省不值。 */
+.mistake-replay {
+  font-size: 10.5px;
+  padding: 0 10px;
+}

@@ -3,7 +3,6 @@ import type { AnalysisTask, GameSnapshot, SearchTask } from '../types'
 import { scoreRatio } from '../lib/format'
 import { useGameContext } from '../context/GameContext'
 import { EvalBlock } from './panels/EvalBlock'
-import { StatCompactBar } from './panels/StatCompactBar'
 import { PvBlock } from './panels/PvBlock'
 import { LearnBlock } from './panels/LearnBlock'
 
@@ -34,8 +33,6 @@ export function AnalysisPanel(props: AnalysisPanelProps) {
 
   const evalRed = progress?.eval_red ?? lastEngineRecord?.eval ?? null
   const mateIn = progress?.mate_in ?? lastEngineRecord?.mate_in ?? null
-  const depth = progress?.depth ?? lastEngineRecord?.depth ?? 0
-  const rawTime = progress?.time ?? lastEngineRecord?.time
 
   // 棋势走势：评分条讲「此刻」，这条线讲「这一局」。
   const trend = useMemo(() => {
@@ -66,23 +63,24 @@ export function AnalysisPanel(props: AnalysisPanelProps) {
 
   return (
     <section
-      className="panel analysis flex flex-col gap-2.5 pt-3 pb-1 border-t border-hairline"
-      aria-label="引擎分析"
+      className="analysis flex flex-col gap-2.5 select-none"
+      aria-label="局势分析与推荐"
       data-analysis=""
     >
-      <header className="panel-head flex items-center justify-between px-1">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-3">引擎分析</h2>
+      <header className="flex items-center justify-between px-1">
+        <h2 className="text-xs font-bold text-ink-1">局势分析与推荐</h2>
         {thinking && (
-          <span
-            className="live-dot w-2 h-2 rounded-full bg-cinnabar animate-ping"
-            title="实时思考中"
-          />
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+            <span
+              className="live-dot w-2 h-2 rounded-full bg-cinnabar animate-ping"
+              title="实时思考中"
+            />
+            <span className="text-[10px] font-semibold">思考中</span>
+          </div>
         )}
       </header>
 
       <EvalBlock evalRed={evalRed} mateIn={mateIn} trend={trend} />
-
-      <StatCompactBar progress={progress} depth={depth} rawTime={rawTime} />
 
       <PvBlock pvText={pvText} />
 

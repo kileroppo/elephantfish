@@ -4,6 +4,7 @@ import {
   type BoardMap,
   INITIAL_FEN,
   PIECE_SPECS,
+  type ValidationResult,
   boardMapToPieces,
   boardMapToFen,
   fenToBoardMap,
@@ -27,12 +28,18 @@ export interface SetupAPI {
   turn: 'red' | 'black'
   /** 引擎执子 */
   engineSide: 'red' | 'black'
-  /** 当前选中的托盘棋子（正在准备放子） */
+  /** 当前选中的托盘棋子（正在准备放子/连盖印章） */
   selectedTrayPiece: string | null
   /** 当前选中的盘上棋子格（正在准备挪位/移除） */
   pickedBoardSquare: string | null
   /** boardMap 对应的 PieceInfo[] 用于渲染 */
   pieces: PieceInfo[]
+  /** 剩余棋子数统计 */
+  remaining: Record<string, number>
+  /** 盘面合法性校验结果 */
+  validation: ValidationResult
+  /** 当前盘面的 FEN 串 */
+  currentFen: string
 
   enter: () => void
   exit: () => void
@@ -41,12 +48,13 @@ export interface SetupAPI {
   pickSquare: (sq: string | null) => void
   clearSelection: () => void
   tapSquare: (sq: string) => void
+  dropPieceToSquare: (char: string, sq: string) => boolean
   movePiece: (from: string, to: string) => void
   removePiece: (sq: string) => void
   clearBoard: () => void
   resetStandard: () => void
   revertOriginal: () => void
-  importFen: (fen: string) => void
+  importFen: (fen: string) => boolean
   setTurn: (turn: 'red' | 'black') => void
   setEngineSide: (side: 'red' | 'black') => void
   startGame: () => Promise<void>
@@ -70,6 +78,9 @@ export function useSetupMode({ game, pushToast, loadPosition }: SetupDeps): Setu
   const [originalEngineSide, setOriginalEngineSide] = useState<'red' | 'black'>('black')
 
   const pieces = useMemo(() => boardMapToPieces(boardMap), [boardMap])
+  const remaining = useMemo(() => getRemainingCounts(boardMap), [boardMap])
+  const validation = useMemo(() => validateSetupBoard(boardMap, turn), [boardMap, turn])
+  const currentFen = useMemo(() => boardMapToFen(boardMap, turn), [boardMap, turn])
 
   const enter = useCallback(() => {
     if (!game) return
@@ -221,14 +232,32 @@ export function useSetupMode({ game, pushToast, loadPosition }: SetupDeps): Setu
     pushToast('已恢复进入前盘面', 'info')
   }, [originalBoardMap, originalTurn, originalEngineSide, pushToast])
 
-  const importFen = useCallback((fen: string) => {
+  const dropPieceToSquare = useCallback(
+    (char: string, sq: string): boolean => {
+      if (!PIECE_SPECS[char]) return false
+      const rem = getRemainingCounts(boardMap)[char] ?? 0
+      const currentOnSq = boardMap[sq]
+      if (currentOnSq === char) return true
+      if (rem <= 0 && currentOnSq !== char) {
+        pushToast(`${PIECE_SPECS[char].name} 数量已达上限`, 'warn')
+        return false
+      }
+      setBoardMap((prev) => ({ ...prev, [sq]: char }))
+      return true
+    },
+    [boardMap, pushToast],
+  )
+
+  const importFen = useCallback((fen: string): boolean => {
     const res = fenToBoardMap(fen)
     if (res && !res.error) {
       setBoardMap(res.map)
       setTurn(res.turn)
       setPickedBoardSquare(null)
       setSelectedTrayPiece(null)
+      return true
     }
+    return false
   }, [])
 
   const startGame = useCallback(async () => {
@@ -253,6 +282,9 @@ export function useSetupMode({ game, pushToast, loadPosition }: SetupDeps): Setu
     selectedTrayPiece,
     pickedBoardSquare,
     pieces,
+    remaining,
+    validation,
+    currentFen,
     enter,
     exit,
     toggle,
@@ -260,6 +292,7 @@ export function useSetupMode({ game, pushToast, loadPosition }: SetupDeps): Setu
     pickSquare,
     clearSelection,
     tapSquare,
+    dropPieceToSquare,
     movePiece,
     removePiece,
     clearBoard,

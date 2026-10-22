@@ -1,0 +1,260 @@
+/* ==========================================================================
+   骨架
+   ========================================================================== */
+
+.app {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.workspace {
+  /* 侧栏宽度与栏缝。桌面两栏书页黄金排版，屏幕中央优雅居中 */
+  --rail-l: 262px;
+  --rail-r: 360px;
+  --rail-gap: 20px;
+  /* 抽屉曲线：利落轻盈的东方极简交互 */
+  --drawer: 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  grid-template-columns:
+    calc(var(--rail-l) + var(--rail-gap))
+    minmax(0, 1fr)
+    calc(var(--rail-r) + var(--rail-gap));
+  column-gap: 0;
+  padding: 8px 24px 18px;
+  transition: grid-template-columns var(--drawer);
+}
+
+/* 核心对弈主态：左侧设置栏收起，棋盘与右侧分析棋谱组成两栏书页黄金视觉 */
+.workspace.no-left {
+  grid-template-columns: 0px minmax(0, 1fr) calc(var(--rail-r) + var(--rail-gap));
+}
+
+.workspace.no-right {
+  grid-template-columns: calc(var(--rail-l) + var(--rail-gap)) minmax(0, 1fr) 0px;
+}
+
+.workspace.no-left.no-right {
+  grid-template-columns: 0px minmax(0, 1fr) 0px;
+  max-width: 960px;
+}
+
+/* 栏把手：收起时贴在屏幕边缘，竖排两个字；展开时跟着抽屉滑到栏缝正中，
+   变成一枚完整的小签。它不该有存在感 —— 只有需要它的人找过去时才刚好在那儿。 */
+/* 桌面两栏书页模式下，右侧栏常驻呈现，彻底隐藏悬浮在半空的抽屉耳片，消除对主变列表的遮挡 */
+@media (min-width: 1141px) {
+  .rail-tab,
+  .rail-tab-left,
+  .rail-tab-right {
+    display: none !important;
+  }
+}
+
+.rail-tab {
+  position: fixed;
+  top: 50%;
+  z-index: 70;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  writing-mode: vertical-rl;
+  letter-spacing: 0.35em;
+  font: inherit;
+  font-size: 12px;
+  padding: 14px 6px 12px 8px;
+  border: 1px solid var(--hairline);
+  background: linear-gradient(180deg, var(--paper-0), var(--paper-2));
+  color: var(--ink-mute);
+  cursor: pointer;
+  transition: transform var(--drawer), color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), border-radius var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+
+.rail-tab:hover {
+  color: var(--ink-1);
+  border-color: var(--hairline-strong);
+  box-shadow: var(--shadow-panel);
+}
+
+.rail-tab-chev {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--paper-2);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.rail-tab:hover .rail-tab-chev {
+  background: var(--paper-3);
+}
+
+.rail-tab-chev svg {
+  transition: transform var(--drawer);
+}
+
+.rail-tab.is-open .rail-tab-chev svg {
+  transform: rotate(180deg);
+}
+
+.rail-tab-left {
+  left: 0;
+  border-left-color: transparent;
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  transform: translate(0, -50%);
+}
+
+/* 未展开时悬停：把手往外探 3px，像在说「拉我」 */
+.rail-tab-left:not(.is-open):hover {
+  transform: translate(3px, -50%);
+}
+
+.rail-tab-right {
+  right: 0;
+  border-right-color: transparent;
+  border-radius: var(--r-md) 0 0 var(--r-md);
+  transform: translate(0, -50%);
+}
+
+.rail-tab-right:not(.is-open):hover {
+  transform: translate(-3px, -50%);
+}
+
+/* 展开：贴紧侧栏外缘缝隙，紧凑舒适 */
+.rail-tab-left.is-open {
+  border-color: var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-panel);
+  transform: translate(calc(18px + var(--rail-l) - 6px), -50%);
+}
+
+.rail-tab-right.is-open {
+  border-color: var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-panel);
+  transform: translate(calc(-18px - var(--rail-r) + 6px), -50%);
+}
+
+.rail-tab.is-open {
+  color: var(--cinnabar);
+  background: var(--paper-0);
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  /* 栏轨收到 0 时，栏本身也得能收到 0 —— 默认的 min-width:auto 会被内容撑住 */
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  visibility: hidden;
+  /* 收起：等抽屉合上再隐藏，免得内容在半路突然消失。
+     content-visibility 跟 visibility 一起延后，是为了连**布局**一起省掉：两侧栏轨默认
+     都收着（App.tsx 读 localStorage，没开过就是关的），可里面住着棋谱与解析面板 ——
+     每一次轮询、每一手棋都在重排几百个格子，而它们一个像素都没画出来。visibility 只
+     跳过绘制，不跳过布局；content-visibility: hidden 两个都跳。 */
+  content-visibility: hidden;
+  transition: visibility 0s linear 420ms, content-visibility 0s linear 420ms;
+}
+
+.rail.is-open {
+  visibility: visible;
+  content-visibility: visible;
+  transition-delay: 0s;
+}
+
+.rail-left {
+  margin-right: var(--rail-gap);
+  --rail-slide: -20px;
+}
+
+/* 右栏内容右对齐：栏轨变窄时裁掉的是左边，看起来就是从屏幕右缘滑进来的 */
+.rail-right {
+  margin-left: var(--rail-gap);
+  align-items: flex-end;
+  --rail-slide: 20px;
+}
+
+/* 栏内面板定宽：抽屉开合时内容只被裁切，不被挤压重排 */
+.rail-left > * {
+  width: calc(var(--rail-l) - 2px);
+  flex-shrink: 0;
+}
+
+.rail-right > * {
+  width: calc(var(--rail-r) - 2px);
+  flex-shrink: 0;
+}
+
+/* 面板逐个跟进：抽屉先动，面板晚 40ms 一张地滑入就位 */
+.rail > * {
+  opacity: 0;
+  transform: translateX(var(--rail-slide));
+  transition: opacity 200ms var(--ease-out), transform var(--drawer);
+}
+
+.rail.is-open > * {
+  opacity: 1;
+  transform: none;
+  transition: opacity 320ms var(--ease-out), transform var(--drawer);
+}
+
+.rail.is-open > :nth-child(1) { transition-delay: 60ms; }
+.rail.is-open > :nth-child(2) { transition-delay: 100ms; }
+.rail.is-open > :nth-child(3) { transition-delay: 140ms; }
+.rail.is-open > :nth-child(4) { transition-delay: 180ms; }
+
+/* 常驻挂载后，面板自带的 rise 入场会在页面加载时对着看不见的栏白放一遍 */
+.rail .panel {
+  animation: none;
+}
+
+.rail::-webkit-scrollbar {
+  width: 8px;
+}
+.rail::-webkit-scrollbar-thumb {
+  background: var(--paper-4);
+  border-radius: 4px;
+}
+.rail::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* 净距不能小于棋盘垫的探出量，否则垫子会把回合条下半截盖掉 ——
+     原委见 tokens.css 的 --board-clearance。 */
+  gap: var(--board-clearance);
+  min-height: 0;
+  width: 100%;
+}
+
+/* 棋盘立柱黄金对齐：上方状态、棋盘本体、下方操作 Dock 最大宽度锁定一致 */
+.stage-head,
+.stage > .relay-compact,
+.stage > .setup-panel {
+  width: 100%;
+  max-width: min(calc((100vh - 180px) * 720 / 800), 660px);
+  box-sizing: border-box;
+}
+
+.stage > .board-wrap {
+  width: 100%;
+  max-width: min(calc((100vh - 180px) * 720 / 800), 660px);
+}

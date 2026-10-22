@@ -9,7 +9,7 @@
  * 5. 吃子双碰撞（Double-impact）：攻击子砸落 + 被吃子侧向被撞弹开的双重硬木脆裂音。
  */
 
-type Voice = 'move' | 'capture' | 'check' | 'ready' | 'win' | 'lose'
+type Voice = 'move' | 'capture' | 'check' | 'ready' | 'win' | 'lose' | 'snap' | 'poof'
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
@@ -171,6 +171,29 @@ const RECIPES: Record<Voice, (c: AudioContext) => void> = {
     ;[392, 329.63, 261.63].forEach((f, i) => {
       window.setTimeout(() => tone(c, f, 0.6, 0.085, 'triangle'), i * 140)
     })
+  },
+  // 摆子吸附：轻快脆实的硬木敲击
+  snap: (c) => {
+    woodStrike(c, c.currentTime, { gainScale: 0.85, pitchScale: 1.16 })
+  },
+  // 离盘化烟消散（Poof）：带通滤波柔和空气爆散风声
+  poof: (c) => {
+    const buf = noise(c)
+    const src = c.createBufferSource()
+    src.buffer = buf
+    const filter = c.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.setValueAtTime(850, c.currentTime)
+    filter.frequency.exponentialRampToValueAtTime(180, c.currentTime + 0.16)
+    filter.Q.value = 1.3
+    const gain = c.createGain()
+    gain.gain.setValueAtTime(0.38, c.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.16)
+    src.connect(filter)
+    filter.connect(gain)
+    gain.connect(master!)
+    src.start(c.currentTime)
+    src.stop(c.currentTime + 0.17)
   },
 }
 

@@ -10,12 +10,12 @@ export function BoardHudCaption({ caption }: BoardHudCaptionProps) {
   const tone = caption.tone || 'info'
   const toneContainer =
     tone === 'bad'
-      ? 'is-bad bg-red-600/12 border border-red-600/35 text-red-700'
+      ? 'is-bad bg-paper-0/95 border border-red-500/40 text-red-700 shadow-md ring-1 ring-red-500/20'
       : tone === 'good'
-        ? 'is-good bg-emerald-600/12 border border-emerald-600/35 text-emerald-800'
+        ? 'is-good bg-paper-0/95 border border-emerald-500/40 text-emerald-800 shadow-md ring-1 ring-emerald-500/20'
         : tone === 'threat'
-          ? 'is-threat bg-amber-500/15 border border-amber-500/35 text-amber-800'
-          : 'is-info bg-blue-600/12 border border-blue-600/30 text-blue-800'
+          ? 'is-threat bg-paper-0/95 border border-amber-500/40 text-amber-800 shadow-md ring-1 ring-amber-500/20'
+          : 'is-info bg-paper-0/95 border border-blue-500/40 text-blue-800 shadow-md ring-1 ring-blue-500/20'
 
   const badgeBg =
     tone === 'bad'
@@ -28,12 +28,12 @@ export function BoardHudCaption({ caption }: BoardHudCaptionProps) {
 
   return (
     <div
-      className={`board-hud-caption flex items-center gap-2 px-3 py-1.5 mb-1.5 rounded-[var(--r-sm)] text-[12.5px] leading-[1.4] font-medium animate-[hudSlideDown_240ms_cubic-bezier(0.22,0.61,0.36,1)_both] ${toneContainer}`}
+      className={`board-hud-caption absolute top-2.5 left-3 right-3 z-40 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs leading-snug font-medium animate-[hudSlideDown_240ms_cubic-bezier(0.22,0.61,0.36,1)_both] ${toneContainer}`}
     >
-      <span className={`hud-badge text-[11px] font-bold px-[7px] py-[2px] rounded-full whitespace-nowrap text-white ${badgeBg}`}>
+      <span className={`hud-badge text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap text-white shrink-0 ${badgeBg}`}>
         {caption.badge}
       </span>
-      <span className="hud-text">{caption.text}</span>
+      <span className="hud-text truncate">{caption.text}</span>
     </div>
   )
 }

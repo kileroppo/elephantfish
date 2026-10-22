@@ -1,0 +1,476 @@
+/* ==========================================================================
+   精简应手台 (Relay Compact)
+   ========================================================================== */
+
+.relay-compact {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 6px auto 0;
+  width: 100%;
+  max-width: min(100%, 720px);
+  box-sizing: border-box;
+}
+
+
+
+/* 浮层面板：算路动画 / 失误卡片 / 键盘录入 / 排队（绝对定位，绝不挤压或改变主舞台棋盘高度） */
+.relay-compact .live-helper-drawer {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(92vw, 680px);
+  max-height: min(65vh, 460px);
+  overflow-y: auto;
+  z-index: 50;
+  background: var(--paper-0);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  padding: 12px 16px;
+  margin: 0;
+  animation: floatIn 180ms var(--ease-out) both;
+}
+
+/* .relay-compact .coach-interrupt-card 已重构为左下角独立悬浮卡片，不再绝对定位于棋盘之上 */
+
+.relay-compact .queued-strip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  white-space: nowrap;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--hairline-strong);
+  animation: floatIn 180ms var(--ease-out) both;
+}
+
+.relay-compact .type-inline-floating {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  background: var(--paper-0);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  padding: 6px 10px;
+  width: min(92vw, 420px);
+  animation: floatIn 180ms var(--ease-out) both;
+}
+
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+
+
+.queued-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  border-radius: var(--r-sm);
+  background: var(--paper-2);
+  font-size: 12px;
+  color: var(--ink-2);
+  /* 排队条从应手区下面「长」出来，不是闪现 */
+  animation: rise 200ms var(--ease-out) both;
+}
+
+.type-toggle-bar {
+  display: flex;
+  justify-content: center;
+}
+
+.type-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: 999px;
+  color: var(--ink-mute);
+  font-size: 11.5px;
+  cursor: pointer;
+  /* 同上：点击目标撑到 32px */
+  min-height: 32px;
+  padding: 3px 12px;
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+  /* 收起录入栏时这个按钮会重新挂载 —— 回来也得是淡入，不能闪回来 */
+  animation: fadeIn 180ms var(--ease-out) both;
+}
+
+.type-toggle-btn kbd {
+  background: var(--paper-2);
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.type-toggle-btn:hover {
+  color: var(--ink-1);
+  border-color: var(--ink-4);
+  background: var(--paper-0);
+}
+
+.type-inline-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 420px;
+  animation: rise 200ms var(--ease-out) both;
+}
+
+.type-inline-box.is-rejected {
+  animation: shakeX 320ms var(--ease-out) both;
+}
+
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.type-inline-box input {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper-0);
+  font-size: 13px;
+  color: var(--ink-1);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.type-inline-box.is-rejected input {
+  border-color: var(--cinnabar);
+}
+
+.preset-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--cinnabar);
+  background: linear-gradient(160deg, var(--paper-0), var(--paper-3));
+  box-shadow: inset 0 0 0 1px var(--hairline-strong), var(--shadow-panel);
+  font-family: var(--font-kai);
+}
+
+.brand-text h1 {
+  font-size: 19px;
+  line-height: 1.15;
+  letter-spacing: 0.14em;
+}
+
+.brand-text p {
+  margin: 1px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+}
+
+.engine-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  /* 这是给手指点的按钮，不是标签：撑到和 .icon-btn 一样高 */
+  min-height: 32px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-left: 6px;
+  background: rgba(120, 120, 120, 0.1);
+  color: var(--ink-2);
+  border: 1px solid var(--hairline-strong);
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
+  animation: fadeIn 220ms var(--ease-out) both;
+}
+
+.engine-badge.is-clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.engine-badge.is-clickable:hover {
+  transform: translateY(-1px);
+  background: var(--paper-2);
+  border-color: var(--ink-4);
+  color: var(--ink-0);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(43, 35, 26, 0.12);
+}
+
+.engine-badge.is-clickable:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.engine-badge-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.engine-badge-switch {
+  display: inline-block;
+  font-size: 11px;
+  opacity: 0.6;
+  margin-left: 2px;
+  transition: transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast) var(--ease-out);
+}
+
+.engine-badge.is-clickable:hover .engine-badge-switch {
+  opacity: 0.95;
+  transform: rotate(180deg);
+}
+
+.engine-badge.is-pikafish {
+  background: var(--cinnabar-wash);
+  color: var(--cinnabar);
+  border-color: var(--cinnabar-edge);
+}
+
+.engine-badge.is-pikafish.is-clickable:hover {
+  background: rgba(180, 50, 42, 0.16);
+  border-color: var(--cinnabar);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(180, 50, 42, 0.22);
+}
+
+.engine-side-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  min-height: 32px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-left: 6px;
+  background: rgba(120, 120, 120, 0.08);
+  color: var(--ink-2);
+  border: 1px solid var(--hairline-strong);
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
+  cursor: pointer;
+  user-select: none;
+  animation: fadeIn 220ms var(--ease-out) both;
+}
+
+.engine-side-badge:hover {
+  transform: translateY(-1px);
+  background: var(--paper-2);
+  border-color: var(--ink-4);
+  color: var(--ink-0);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(43, 35, 26, 0.12);
+}
+
+.engine-side-badge:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.engine-side-disc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  font-family: var(--font-kai);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.engine-side-disc.side-red {
+  background: var(--cinnabar);
+  color: #fffbf3;
+  box-shadow: 0 1px 2px rgba(180, 50, 42, 0.35);
+}
+
+.engine-side-disc.side-black {
+  background: var(--ink-0);
+  color: #fffbf3;
+  box-shadow: 0 1px 2px rgba(22, 19, 15, 0.4);
+}
+
+.engine-side-badge.side-red {
+  border-color: var(--cinnabar-edge);
+}
+
+.engine-side-badge.side-red:hover {
+  border-color: var(--cinnabar);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(180, 50, 42, 0.18);
+}
+
+.engine-side-badge.side-black {
+  border-color: var(--hairline-strong);
+}
+
+.engine-side-badge.side-black:hover {
+  border-color: var(--ink-2);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(22, 19, 15, 0.2);
+}
+
+.engine-side-switch {
+  display: inline-block;
+  font-size: 11px;
+  opacity: 0.6;
+  margin-left: 2px;
+  transition: transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast) var(--ease-out);
+}
+
+.engine-side-badge:hover .engine-side-switch {
+  opacity: 0.95;
+  transform: rotate(180deg);
+}
+
+
+
+
+
+
+
+
+/* 这一段以前是个坑，记一笔：上面原本挂着一个悬空的选择器片段（`.pill-lose,`），
+   结尾那个逗号让选择器列表一直往后续，把紧跟着的 @keyframes spin 整条吞了进去 ——
+   @keyframes 不是合法选择器，于是整条规则连同关键帧一起被丢弃，vite 构建时
+   minifier 会报 Unexpected "@keyframes"。删规则体的时候，记得把选择器的逗号一起删。 */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.side-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.side-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.side-dot.red {
+  background: var(--piece-red);
+}
+.side-dot.black {
+  background: var(--piece-black);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
+}
+
+.icon-btn:hover {
+  color: var(--ink-0);
+  background: var(--paper-2);
+  border-color: var(--hairline);
+}
+
+/* 按下去要「陷」一下：90ms 内缩到 .93，松手由同一条过渡弹回 */
+.icon-btn:active {
+  transform: scale(0.93);
+}
+
+.icon-btn.warn {
+  color: var(--cinnabar);
+}
+
+.warn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  animation: breathe 1.4s var(--ease-out) infinite;
+}
+
+.icon-flip svg {
+  transition: transform 380ms var(--ease-spring);
+}
+
+.icon-flip:hover svg {
+  transform: rotate(180deg);
+}
+
+.icon-sound .sound-wave {
+  opacity: 0;
+  transform-origin: 10px 10px;
+  transition: opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
+}
+
+.icon-sound.is-on .sound-wave {
+  opacity: 1;
+}
+
+.icon-sound.is-on .sound-mute {
+  display: none;
+}
+
+.icon-sound:not(.is-on) .sound-mute {
+  color: var(--ink-mute);
+}

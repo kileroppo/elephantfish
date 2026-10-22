@@ -291,6 +291,11 @@ function isKingCheckedBy(
 export interface ValidationResult {
   valid: boolean
   errors: string[]
+  redKingSq: string | null
+  blackKingSq: string | null
+  facingKings: boolean
+  missingRedKing: boolean
+  missingBlackKing: boolean
 }
 
 /**
@@ -394,6 +399,7 @@ export function validateSetupBoard(
   }
 
   // 双帅照面（王不见王）检查
+  let facingKings = false
   if (redKingSq && blackKingSq) {
     const pRed = parseSquare(redKingSq)
     const pBlack = parseSquare(blackKingSq)
@@ -406,6 +412,7 @@ export function validateSetupBoard(
         }
       }
       if (!blocked) {
+        facingKings = true
         errors.push('帅将不可直接对射照面（王不见王）')
       }
     }
@@ -424,5 +431,10 @@ export function validateSetupBoard(
   return {
     valid: errors.length === 0,
     errors,
+    redKingSq,
+    blackKingSq,
+    facingKings,
+    missingRedKing: counts['K'] === 0,
+    missingBlackKing: counts['k'] === 0,
   }
 }

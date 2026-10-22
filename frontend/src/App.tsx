@@ -7,7 +7,7 @@ import { ReplayDesk } from './components/ReplayDesk'
 import { DrillDesk } from './components/DrillDesk'
 import { ControlRail } from './components/ControlRail'
 import { TopBar } from './components/TopBar'
-import { SetupPanel } from './components/SetupPanel'
+import { SetupStudio } from './components/setup/SetupStudio'
 import { HelpOverlay, Toasts } from './components/Overlays'
 import { BootScreen } from './components/app/BootScreen'
 import { ZenHud } from './components/app/ZenHud'
@@ -164,6 +164,14 @@ function AppContent() {
         ui.cycleTheme()
         return
       }
+      if (e.key === ']' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b')) {
+        e.preventDefault()
+        if (ui.railR) {
+          ui.closeCoachLive()
+        }
+        ui.toggleRailR()
+        return
+      }
       if (e.key === 'Escape' && ui.zenMode) {
         e.preventDefault()
         ui.setZenMode(false)
@@ -223,11 +231,13 @@ function AppContent() {
 
   return (
     <div className={`app${g.thinking ? ' is-thinking' : ''}${ui.zenMode ? ' is-zen-mode' : ''}`}>
-      <TopBar
-        setupMode={setup.active}
-        onToggleSetup={setup.toggle}
-        onToggleEngineSide={onToggleEngineSide}
-      />
+      {!setup.active && (
+        <TopBar
+          setupMode={setup.active}
+          onToggleSetup={setup.toggle}
+          onToggleEngineSide={onToggleEngineSide}
+        />
+      )}
 
       {ui.zenMode && (
         <ZenHud
@@ -238,108 +248,109 @@ function AppContent() {
         />
       )}
 
-      <main className={`workspace${ui.railL && !ui.zenMode ? '' : ' no-left'}${ui.railR && !ui.zenMode ? '' : ' no-right'}`}>
-        {!ui.zenMode && (
-          <RailTabs
-            railL={ui.railL}
-            railR={ui.railR}
-            onToggleL={ui.toggleRailL}
-            onToggleR={ui.toggleRailR}
+      {setup.active ? (
+        <main className="workspace workspace-setup-studio">
+          <SetupStudio
+            game={game}
+            boardMap={setup.boardMap}
+            pieces={setup.pieces}
+            remaining={setup.remaining}
+            validation={setup.validation}
+            currentFen={setup.currentFen}
+            turn={setup.turn}
+            engineSide={setup.engineSide}
+            flipped={ui.flipped}
+            selectedTrayPiece={setup.selectedTrayPiece}
+            pickedBoardSquare={setup.pickedBoardSquare}
+            onSelectTrayPiece={setup.selectTrayPiece}
+            onClearBoard={setup.clearBoard}
+            onResetStandard={setup.resetStandard}
+            onRevertOriginal={setup.revertOriginal}
+            onSetupSquareTap={setup.tapSquare}
+            onSetupPieceMove={setup.movePiece}
+            onSetupPieceRemove={setup.removePiece}
+            onSetupPickBoardSquare={setup.pickSquare}
+            onSetupPieceDropFromTray={setup.dropPieceToSquare}
+            onTurnChange={setup.setTurn}
+            onEngineSideChange={(side) => {
+              setup.setEngineSide(side)
+              ui.setFlipOverride(ui.playMode === 'sparring' ? side === 'red' : side === 'black')
+            }}
+            onImportFen={setup.importFen}
+            onStartGame={() => {
+              ui.setFlipOverride(ui.playMode === 'sparring' ? setup.engineSide === 'red' : setup.engineSide === 'black')
+              void setup.startGame()
+            }}
+            onExitSetup={setup.exit}
+            onToast={g.pushToast}
           />
-        )}
+        </main>
+      ) : (
+        <main className={`workspace${ui.railL && !ui.zenMode ? '' : ' no-left'}${ui.railR && !ui.zenMode ? '' : ' no-right'}`}>
+          {!ui.zenMode && (
+            <RailTabs
+              railL={ui.railL}
+              railR={ui.railR}
+              onToggleL={ui.toggleRailL}
+              onToggleR={ui.toggleRailR}
+            />
+          )}
 
-        <ControlRail
-          setupMode={setup.active}
-          onToggleSetup={setup.toggle}
-          onNewGame={handleNewGame}
-        />
-
-        <div className="stage">
-          <StageHead
-            turn={game.turn}
-            turnText={turnText}
-            isPlaying={isPlaying}
-            isEngineTurn={isPlaying && game.turn === game.engine_side}
-            inCheck={game.in_check}
-            setupActive={setup.active}
-            ply={game.ply}
+          <ControlRail
+            setupMode={setup.active}
+            onToggleSetup={setup.toggle}
+            onNewGame={handleNewGame}
           />
 
-          <div className={`board-wrap relative ${showOverModal && !setup.active ? 'is-over' : ''}`}>
-            <Board
-              game={!setup.active && ui.previewGame ? ui.previewGame : game}
-              flipped={ui.flipped}
-              flipping={ui.flipping}
-              thinking={g.thinking}
-              pv={
-                !setup.active && ui.previewPv.length > 0
-                  ? ui.previewPv
-                  : g.thinking && !setup.active
-                    ? (g.task?.progress?.pv ?? [])
-                    : []
-              }
-              visualClues={!setup.active ? (ui.liveClues ?? undefined) : undefined}
-              readOnly={!setup.active && ui.previewGame !== null}
-              onMove={onBoardMove}
-              setupMode={setup.active}
-              setupPieces={setup.pieces}
-              selectedTrayPiece={setup.selectedTrayPiece}
-              pickedBoardSquare={setup.pickedBoardSquare}
-              onSetupSquareTap={setup.tapSquare}
-              onSetupPieceMove={setup.movePiece}
-              onSetupPieceRemove={setup.removePiece}
-              onSetupPickBoardSquare={setup.pickSquare}
+          <div className="stage">
+            <StageHead
+              turn={game.turn}
+              turnText={turnText}
+              isPlaying={isPlaying}
+              isEngineTurn={isPlaying && game.turn === game.engine_side}
+              inCheck={game.in_check}
+              setupActive={setup.active}
+              ply={game.ply}
             />
 
-            {overMounted && (
-              <ResultModal
-                game={game}
-                overLeaving={overLeaving}
-                engineMoves={g.state.stats.moves}
-                onClose={() => setDismissedOver(true)}
-                onNewGame={() => handleNewGame(game.engine_side)}
-                onReplayCurrent={() => void handleReplayCurrent()}
-                onUndoRound={() => void g.undoRound()}
-                onOpenDrillAt={(motif, gameId) => ui.openDrillAt(motif, gameId)}
+            <div className={`board-wrap relative ${showOverModal ? 'is-over' : ''}`}>
+              <Board
+                game={ui.previewGame ? ui.previewGame : game}
+                flipped={ui.flipped}
+                flipping={ui.flipping}
+                thinking={g.thinking}
+                pv={
+                  ui.previewPv.length > 0
+                    ? ui.previewPv
+                    : g.thinking
+                      ? (g.task?.progress?.pv ?? [])
+                      : []
+                }
+                visualClues={ui.liveClues ?? undefined}
+                readOnly={ui.previewGame !== null}
+                onMove={onBoardMove}
               />
-            )}
+
+              {overMounted && (
+                <ResultModal
+                  game={game}
+                  overLeaving={overLeaving}
+                  engineMoves={g.state.stats.moves}
+                  onClose={() => setDismissedOver(true)}
+                  onNewGame={() => handleNewGame(game.engine_side)}
+                  onReplayCurrent={() => void handleReplayCurrent()}
+                  onUndoRound={() => void g.undoRound()}
+                  onOpenDrillAt={(motif, gameId) => ui.openDrillAt(motif, gameId)}
+                />
+              )}
+            </div>
+
+            <RelayConsole />
           </div>
 
-          {setup.active ? (
-            <SetupPanel
-              boardMap={setup.boardMap}
-              turn={setup.turn}
-              engineSide={setup.engineSide}
-              selectedTrayPiece={setup.selectedTrayPiece}
-              pickedBoardSquare={setup.pickedBoardSquare}
-              onSelectTrayPiece={setup.selectTrayPiece}
-              onClearBoard={setup.clearBoard}
-              onResetStandard={setup.resetStandard}
-              onRevertOriginal={setup.revertOriginal}
-              onRemovePickedPiece={() =>
-                setup.pickedBoardSquare && setup.removePiece(setup.pickedBoardSquare)
-              }
-              onCancelPick={setup.clearSelection}
-              onTurnChange={setup.setTurn}
-              onEngineSideChange={(side) => {
-                setup.setEngineSide(side)
-                ui.setFlipOverride(ui.playMode === 'sparring' ? side === 'red' : side === 'black')
-              }}
-              onImportFen={setup.importFen}
-              onStartGame={() => {
-                ui.setFlipOverride(ui.playMode === 'sparring' ? setup.engineSide === 'red' : setup.engineSide === 'black')
-                void setup.startGame()
-              }}
-              onExitSetup={setup.exit}
-              onToast={g.pushToast}
-            />
-          ) : (
-            <RelayConsole />
-          )}
-        </div>
-
-        <RightRail open={ui.railR} />
-      </main>
+          <RightRail open={ui.railR} />
+        </main>
+      )}
 
       <ReplayDesk />
       <DrillDesk />

@@ -1,0 +1,352 @@
+/* ==========================================================================
+   Awwwards / Webby / FWA 东方美学奢华材质与微交互增强 (Aesthetic Elevation)
+   ========================================================================== */
+
+/* 1. 美学材质主题背景光晕 */
+[data-theme="wumu"] body::before {
+  background-image: radial-gradient(
+      120% 80% at 12% -10%,
+      rgba(215, 175, 120, 0.08),
+      rgba(0, 0, 0, 0) 65%
+    ),
+    radial-gradient(
+      80% 60% at 88% 90%,
+      rgba(200, 157, 88, 0.04),
+      rgba(0, 0, 0, 0) 50%
+    );
+}
+
+[data-theme="ruyao"] body::before {
+  background-image: radial-gradient(
+      120% 80% at 12% -10%,
+      rgba(255, 255, 255, 0.95),
+      rgba(255, 255, 255, 0) 60%
+    ),
+    repeating-linear-gradient(
+      45deg,
+      rgba(39, 112, 92, 0.02) 0 1px,
+      rgba(255, 255, 255, 0) 1px 4px
+    );
+}
+
+[data-theme="zhuqi"] body::before {
+  background-image: radial-gradient(
+      120% 80% at 12% -10%,
+      rgba(255, 230, 210, 0.6),
+      rgba(255, 255, 255, 0) 60%
+    ),
+    repeating-linear-gradient(
+      45deg,
+      rgba(141, 38, 30, 0.02) 0 1px,
+      rgba(255, 255, 255, 0) 1px 4px
+    );
+}
+
+/* 2. 顶栏美学材质切换胶囊 (Theme Switcher Pill) */
+.theme-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  min-height: 32px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-left: 6px;
+  background: var(--paper-2);
+  color: var(--ink-2);
+  border: 1px solid var(--hairline-strong);
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.theme-badge:hover {
+  transform: translateY(-1px);
+  background: var(--paper-3);
+  border-color: var(--ink-3);
+  color: var(--ink-0);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(43, 35, 26, 0.12);
+}
+
+.theme-badge:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.theme-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  box-shadow: 0 0 5px var(--cinnabar);
+}
+
+.theme-badge.theme-wumu .theme-badge-dot {
+  background: #c89d58;
+  box-shadow: 0 0 6px rgba(200, 157, 88, 0.8);
+}
+
+.theme-badge.theme-ruyao .theme-badge-dot {
+  background: #27705c;
+  box-shadow: 0 0 6px rgba(39, 112, 92, 0.6);
+}
+
+.theme-badge.theme-zhuqi .theme-badge-dot {
+  background: #e3bd6e;
+  box-shadow: 0 0 6px rgba(227, 189, 110, 0.8);
+}
+
+.theme-badge-switch {
+  display: inline-block;
+  font-size: 11px;
+  opacity: 0.75;
+  transition: transform var(--dur-fast) var(--ease-spring);
+}
+
+.theme-badge:hover .theme-badge-switch {
+  transform: scale(1.18);
+}
+
+/* 3. 禅意专注模式按钮与印章标记 */
+.icon-zen .zen-seal-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 3px;
+  border: 1px solid var(--cinnabar);
+  color: var(--cinnabar);
+  font-family: var(--font-kai);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform var(--dur-fast) var(--ease-spring),
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.icon-zen.is-on {
+  background: var(--cinnabar-wash);
+  border-color: var(--cinnabar-edge);
+  color: var(--cinnabar);
+}
+
+.icon-zen.is-on .zen-seal-glyph {
+  background: var(--cinnabar);
+  color: #fff;
+  transform: rotate(-6deg);
+}
+
+/* 4. 禅意沉浸视界 (Zen Focus Arena) */
+.app.is-zen-mode .rail-tab {
+  opacity: 0.15;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.app.is-zen-mode .rail-tab:hover {
+  opacity: 0.95;
+}
+
+.zen-hud {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  pointer-events: auto;
+  animation: zenHudIn var(--dur-slow) var(--ease-spring) both;
+}
+
+@keyframes zenHudIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.zen-hud-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 10px;
+  background: var(--paper-0);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  box-shadow: var(--shadow-float);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--ink-1);
+}
+
+.zen-hud-seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--cinnabar);
+  color: #fff;
+  font-family: var(--font-kai);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(180, 50, 42, 0.4);
+}
+
+.zen-hud-title {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-0);
+}
+
+.zen-hud-turn {
+  font-size: 12px;
+  color: var(--ink-3);
+  padding-left: 4px;
+  border-left: 1px solid var(--hairline);
+}
+
+.zen-hud-thinking {
+  color: var(--cinnabar);
+  font-weight: 500;
+  animation: zenPulse 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes zenPulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.zen-hud-exit {
+  font: inherit;
+  font-size: 11px;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--paper-2);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.zen-hud-exit:hover {
+  background: var(--cinnabar-wash);
+  color: var(--cinnabar);
+  border-color: var(--cinnabar-edge);
+}
+
+/* 5. 棋盘触感追光层 (Ambient Specular Sheen) */
+.board-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle 520px at var(--mouse-x, 35%) var(--mouse-y, 30%),
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0) 65%
+  );
+  opacity: 0.85;
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+
+[data-theme="wumu"] .board-surface::after {
+  background: radial-gradient(
+    circle 520px at var(--mouse-x, 35%) var(--mouse-y, 30%),
+    rgba(225, 185, 110, 0.12) 0%,
+    rgba(225, 185, 110, 0) 65%
+  );
+}
+
+[data-theme="ruyao"] .board-surface::after {
+  background: radial-gradient(
+    circle 520px at var(--mouse-x, 35%) var(--mouse-y, 30%),
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0) 65%
+  );
+}
+
+[data-theme="zhuqi"] .board-surface::after {
+  background: radial-gradient(
+    circle 520px at var(--mouse-x, 35%) var(--mouse-y, 30%),
+    rgba(255, 230, 160, 0.14) 0%,
+    rgba(255, 230, 160, 0) 65%
+  );
+}
+
+/* 6. 国手大成朱砂金石通关印章 (Grandmaster Cinnabar Seal Stamp) */
+.drill-victory-seal-stamp {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 14px auto 8px;
+  padding: 12px 20px;
+  animation: sealStampIn 480ms var(--ease-spring) both;
+}
+
+@keyframes sealStampIn {
+  0% {
+    opacity: 0;
+    transform: scale(1.6) rotate(-14deg);
+  }
+  70% {
+    transform: scale(0.96) rotate(-5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-6deg);
+  }
+}
+
+.seal-stamp-border {
+  display: inline-flex;
+  padding: 8px 12px;
+  border: 3.5px double var(--cinnabar);
+  border-radius: 6px;
+  background: var(--cinnabar-wash);
+  box-shadow: inset 0 0 8px rgba(180, 50, 42, 0.2), 0 2px 8px rgba(180, 50, 42, 0.18);
+}
+
+.seal-stamp-chars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 8px;
+  font-family: var(--font-kai);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--cinnabar);
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 1px rgba(180, 50, 42, 0.6);
+}
+
+.seal-stamp-ribbon {
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--cinnabar);
+  text-transform: uppercase;
+}

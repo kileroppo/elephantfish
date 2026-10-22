@@ -1,0 +1,213 @@
+/* ==========================================================================
+   判分块：轮到人的那次搜索，加上刚刚那一步的判分
+   --------------------------------------------------------------------------
+   它跟上面那些是两种读数：「引擎现在怎么看这个局面」与「你刚才那一手排在第几」，
+   所以自己起一段，用一条虚线跟主变隔开，而不是再往 stat-grid 里塞一格。
+   ========================================================================== */
+
+.learn-block {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--hairline-strong);
+  animation: rise var(--dur) var(--ease-out) both;
+}
+
+.learn-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.learn-head h3 {
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink-mute);
+  font-weight: 500;
+}
+
+.learn-state {
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  color: var(--ink-4);
+  text-align: right;
+}
+
+.learn-state.is-live {
+  color: var(--cinnabar);
+}
+
+.learn-state.is-warn {
+  color: var(--ink-2);
+}
+
+.learn-state.is-bad {
+  color: var(--cinnabar);
+}
+
+.learn-review {
+  margin-bottom: 4px;
+}
+
+.learn-verdict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+/* 面板里这枚 chip 是主角（棋谱里那枚只是批注），大一档 */
+.learn-verdict .grade-chip {
+  font-size: 11px;
+  padding: 3px 9px;
+}
+
+.learn-played {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  color: var(--ink-0);
+}
+
+.learn-played em {
+  font-style: normal;
+  font-family: var(--font-num);
+  font-size: 10px;
+  color: var(--ink-mute);
+  margin-left: 5px;
+}
+
+.learn-sub {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+
+.learn-sub b {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--cinnabar);
+}
+
+/* 一句「为什么」：判分那块与错题本共用（措辞全站只有一个出口，样式也不该两套）。
+   左边一道朱砂细线把它与上面那些读数分开 —— 它不是又一个数字，是主变里盘上真会
+   发生的一件事。
+   不动画：它长在 130ms 轮询的栏里，而父块（.learn-block / 整张错题表）已经各自
+   入过一次场，再叠一层只会让同一句话反复入场。 */
+.learn-why,
+.mistake-why {
+  margin: 8px 0 0;
+  padding: 6px 9px;
+  border-left: 2px solid var(--cinnabar-wash);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  background: var(--paper-1);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.learn-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+
+.live-lines {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--hairline);
+}
+
+/* 前几名的表 */
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rank-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  padding: 4px 7px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  font-size: 12px;
+  /* 入场用同一句 rise（与主变条目、面板同一种语言），只播一次 */
+  animation: rise 260ms var(--ease-out) both;
+}
+
+.rank-row.is-best {
+  border-color: var(--cinnabar-edge);
+  background: linear-gradient(180deg, var(--paper-0), #fbf3e8);
+}
+
+/* 你走的那一手：玉色描边。它不是「好」，只是「在这块表里指认得出你」，
+   所以不用朱砂 —— 朱砂在整个界面里只表示危险与强调。 */
+.rank-row.is-played {
+  border-color: var(--jade);
+  background: var(--jade-wash);
+}
+
+.rank-no {
+  font-family: var(--font-num);
+  font-size: 10px;
+  color: var(--ink-mute);
+}
+
+.rank-cn {
+  font-family: var(--font-display);
+  color: var(--ink-0);
+}
+
+.rank-row.is-best .rank-cn {
+  color: var(--cinnabar);
+}
+
+.rank-score {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.rank-depth {
+  font-family: var(--font-num);
+  font-size: 10px;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+.rank-flag {
+  font-size: 9.5px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: var(--jade);
+  background: rgba(44, 106, 86, 0.14);
+}
+
+.rank-pv {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 1px;
+}
+
+.rank-pv em {
+  font-style: normal;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--paper-1);
+}
