@@ -33,99 +33,117 @@ export const DrillStageBar: React.FC<DrillStageBarProps> = ({
 }) => {
   return (
     <div className="flex items-center justify-between gap-2 w-full mb-1 select-none flex-wrap">
-      {/* 核心学习阶段：iOS 分段控制器 */}
-      <div className="flex items-center p-0.5 bg-paper-1/90 rounded-xl border border-hairline shadow-inner">
+      {/* 核心学习阶段：iOS Segmented Control 质感分段器 */}
+      <div className="flex items-center p-1 bg-paper-1/90 backdrop-blur-md rounded-2xl border border-hairline/70 shadow-3xs">
         <button
           type="button"
-          className={`h-7 px-3 rounded-lg text-xs font-medium transition cursor-pointer border-0 flex items-center gap-1 ${
+          className={`h-7 px-3.5 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border-0 flex items-center gap-1.5 ${
             stage === 'drill' && animMode === 'none'
-              ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
+              ? 'bg-paper-0 text-cinnabar shadow-xs scale-[1.02]'
               : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={onSwitchToDrill}
         >
-          <span>①</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-cinnabar/80" />
           <span>动手实训</span>
         </button>
         <button
           type="button"
-          className={`h-7 px-3 rounded-lg text-xs font-medium transition cursor-pointer border-0 flex items-center gap-1 ${
+          className={`h-7 px-3.5 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border-0 flex items-center gap-1.5 ${
             stage === 'exam'
-              ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
+              ? 'bg-paper-0 text-cinnabar shadow-xs scale-[1.02]'
               : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={() => onReset('exam')}
         >
-          <span>②</span>
+          <span>🎯</span>
           <span>实战检验</span>
         </button>
         <button
           type="button"
-          className={`h-7 px-3 rounded-lg text-xs font-medium transition cursor-pointer border-0 flex items-center gap-1 ${
+          className={`h-7 px-3.5 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border-0 flex items-center gap-1.5 ${
             stage === 'demo' || animMode === 'good'
-              ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
+              ? 'bg-paper-0 text-cinnabar shadow-xs scale-[1.02]'
               : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={onStartGoodAnim}
         >
-          <span>③</span>
+          <span>🎬</span>
           <span>正着演示</span>
         </button>
 
         {(solved || stage === 'mirror') && (
           <button
             type="button"
-            className={`h-7 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer border-0 flex items-center gap-1 ${
+            className={`h-7 px-3 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer border-0 flex items-center gap-1.5 ${
               stage === 'mirror'
-                ? 'bg-purple-600 text-white shadow-xs'
-                : 'text-purple-700 hover:bg-purple-50'
+                ? 'bg-purple-600 text-white shadow-xs scale-[1.02]'
+                : 'text-purple-700 hover:bg-purple-500/10'
             }`}
             onClick={onMirrorDrill}
-            title="左右镜像对称测试，检验是否真正理解棋理"
+            title="左右对称镜像测试，检验是否真正掌握第一性原理"
           >
             <span>🔄</span>
-            <span>镜像测</span>
+            <span>镜像挑战</span>
           </button>
         )}
       </div>
 
-      {/* 辅助开关条：紧凑胶囊组 */}
-      <div className="flex items-center p-0.5 bg-paper-1/80 rounded-xl border border-hairline">
+      {/* 辅助开关条：Apple Glass 风格胶囊开关 */}
+      <div className="flex items-center p-0.5 bg-paper-1/80 backdrop-blur-md rounded-2xl border border-hairline/70 shadow-3xs">
         <button
           type="button"
-          className={`h-6.5 px-2.5 text-[11px] font-medium rounded-lg transition cursor-pointer border-0 ${
+          className={`h-7 px-2.5 text-xs font-medium rounded-xl transition cursor-pointer border-0 flex items-center gap-1 ${
             choiceMode
-              ? 'bg-paper-0 text-ink-0 font-semibold shadow-xs'
+              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
               : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={onToggleChoiceMode}
-          title="三选一模式：提供三种备选着法供直观对比"
+          title="备选项推演模式：直观对比备选走法"
         >
-          🎯 选项{choiceMode ? '·开' : ''}
+          <span>🎯</span>
+          <span>选项</span>
+          <span
+            className={`w-1.5 h-1.5 rounded-full ml-0.5 ${
+              choiceMode ? 'bg-primary-500' : 'bg-transparent'
+            }`}
+          />
         </button>
         <button
           type="button"
-          className={`h-6.5 px-2 text-[11px] font-medium rounded-lg transition cursor-pointer border-0 ${
+          className={`h-7 px-2.5 text-xs font-medium rounded-xl transition cursor-pointer border-0 flex items-center gap-1 ${
             spotlightActive
-              ? 'bg-paper-0 text-ink-0 font-semibold shadow-xs'
+              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
               : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={onToggleSpotlight}
-          title="聚焦核心攻防子力"
+          title="聚焦核心攻防子力，暗化无关棋子"
         >
-          🔦 聚光
+          <span>🔦</span>
+          <span>聚光</span>
+          <span
+            className={`w-1.5 h-1.5 rounded-full ml-0.5 ${
+              spotlightActive ? 'bg-amber-500' : 'bg-transparent'
+            }`}
+          />
         </button>
         <button
           type="button"
-          className={`h-6.5 px-2 text-[11px] font-medium rounded-lg transition cursor-pointer border-0 ${
+          className={`h-7 px-2.5 text-xs font-medium rounded-xl transition cursor-pointer border-0 flex items-center gap-1 ${
             xrayActive
-              ? 'bg-paper-0 text-ink-0 font-semibold shadow-xs'
+              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
               : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={onToggleXray}
-          title="透视炮架与线路"
+          title="透视炮架、别马腿与无根大子暗线"
         >
-          👁️ 射线
+          <span>👁️</span>
+          <span>透视</span>
+          <span
+            className={`w-1.5 h-1.5 rounded-full ml-0.5 ${
+              xrayActive ? 'bg-emerald-500' : 'bg-transparent'
+            }`}
+          />
         </button>
       </div>
     </div>
@@ -186,65 +204,74 @@ export const DrillActionDock: React.FC<DrillActionDockProps> = ({
   onTogglePlayAnim,
   onNextAnimStep,
 }) => {
-  // 1. 如果当前处于动画演示模式：展示媒体播放器控制坞
+  // 1. 如果处于动画推演模式：展示优雅的 Apple Timeline 控制坞
   if (animMode !== 'none') {
     return (
       <div
-        className="flex items-center justify-between flex-wrap gap-2 px-3 py-1.5 bg-paper-1/90 border border-hairline rounded-xl mt-1.5 w-full select-none"
-        aria-label="动画播放控制"
+        className="flex items-center justify-between flex-wrap gap-2 px-4 py-2 bg-paper-1/90 backdrop-blur-xl border border-hairline/80 rounded-2xl mt-1.5 w-full select-none shadow-2xs"
+        aria-label="动画推演控制"
       >
-        <div className="flex items-center gap-1">
-          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-paper-0 text-ink-1 border border-hairline">
-            {animMode === 'bad' ? '❌ 连锁吃亏演示' : animMode === 'good' ? '✅ 最佳正着演示' : '👁️ 对手企图演示'}
+        <div className="flex items-center gap-2">
+          <span
+            className={`text-xs font-bold px-2.5 py-0.8 rounded-full border ${
+              animMode === 'bad'
+                ? 'bg-rose-500/15 text-rose-700 border-rose-400/40'
+                : animMode === 'good'
+                ? 'bg-emerald-500/15 text-emerald-800 border-emerald-400/40'
+                : 'bg-amber-500/15 text-amber-800 border-amber-400/40'
+            }`}
+          >
+            {animMode === 'bad' ? '❌ 走错后果' : animMode === 'good' ? '✅ 正解推演' : '👁️ 敌方企图'}
           </span>
-          <span className="text-[11px] text-ink-3 font-num ml-1">
-            第 {animStep} / {activeStepsCount} 步
+          <span className="text-xs text-ink-2 font-num">
+            第 <b className="text-ink-0">{animStep}</b> / {activeStepsCount} 步
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
-            className="h-7 px-2 text-xs font-medium rounded-lg border border-hairline bg-paper-0 hover:bg-paper-2 text-ink-2 hover:text-ink-0 transition cursor-pointer disabled:opacity-40"
+            className="w-7.5 h-7.5 flex items-center justify-center text-xs font-medium rounded-xl border border-hairline/80 bg-paper-0 hover:bg-paper-2 text-ink-2 hover:text-ink-0 transition cursor-pointer disabled:opacity-30 active:scale-95 shadow-3xs"
             onClick={onResetAnimStep}
             disabled={animStep === 0}
-            title="回到演示前初始盘面"
+            title="回到初始起点"
           >
             ⏮
           </button>
           <button
             type="button"
-            className="h-7 px-2 text-xs font-medium rounded-lg border border-hairline bg-paper-0 hover:bg-paper-2 text-ink-2 hover:text-ink-0 transition cursor-pointer disabled:opacity-40"
+            className="w-7.5 h-7.5 flex items-center justify-center text-xs font-medium rounded-xl border border-hairline/80 bg-paper-0 hover:bg-paper-2 text-ink-2 hover:text-ink-0 transition cursor-pointer disabled:opacity-30 active:scale-95 shadow-3xs"
             onClick={onPrevAnimStep}
             disabled={animStep <= 0}
-            title="上一动"
+            title="后退一动"
           >
             ◀
           </button>
           <button
             type="button"
-            className="h-7 px-3 text-xs font-semibold rounded-lg bg-cinnabar hover:bg-cinnabar-bright text-white transition cursor-pointer shadow-xs"
+            className="h-7.5 px-3.5 text-xs font-semibold rounded-xl bg-cinnabar hover:bg-cinnabar-bright text-white transition cursor-pointer shadow-xs active:scale-95 flex items-center gap-1"
             onClick={onTogglePlayAnim}
-            title={animPlaying ? '暂停连播' : '自动连播'}
+            title={animPlaying ? '暂停播放' : '自动播放'}
           >
-            {animPlaying ? '⏸ 暂停' : '▶ 播放'}
+            <span>{animPlaying ? '⏸' : '▶'}</span>
+            <span>{animPlaying ? '暂停' : '连播'}</span>
           </button>
           <button
             type="button"
-            className="h-7 px-2 text-xs font-medium rounded-lg border border-hairline bg-paper-0 hover:bg-paper-2 text-ink-2 hover:text-ink-0 transition cursor-pointer disabled:opacity-40"
+            className="w-7.5 h-7.5 flex items-center justify-center text-xs font-medium rounded-xl border border-hairline/80 bg-paper-0 hover:bg-paper-2 text-ink-2 hover:text-ink-0 transition cursor-pointer disabled:opacity-30 active:scale-95 shadow-3xs"
             onClick={onNextAnimStep}
             disabled={animStep >= activeStepsCount}
-            title="下一动"
+            title="前进一动"
           >
             ▶
           </button>
           <button
             type="button"
-            className="h-7 px-2.5 text-xs font-medium text-ink-3 hover:text-ink-0 bg-paper-0 hover:bg-paper-2 rounded-lg border border-hairline transition cursor-pointer ml-1"
+            className="h-7.5 px-3 text-xs font-medium text-ink-2 hover:text-ink-0 bg-paper-0 hover:bg-paper-2 rounded-xl border border-hairline/80 transition cursor-pointer ml-1 active:scale-95 shadow-3xs"
             onClick={onStopAnim}
-            title="退出动画演示，回到自己动手试走"
+            title="退出动画演示，回到动手试走"
           >
-            ✕ 退出
+            换我走
           </button>
         </div>
       </div>
@@ -254,32 +281,49 @@ export const DrillActionDock: React.FC<DrillActionDockProps> = ({
   // 2. 正常实战与动手试走模式
   return (
     <div
-      className="flex items-center justify-between flex-wrap gap-2 px-3 py-1.5 bg-paper-1/80 border border-hairline rounded-xl mt-1.5 w-full select-none"
-      aria-label="实训控制"
+      className="flex items-center justify-between flex-wrap gap-2 px-3.5 py-2 bg-paper-1/85 backdrop-blur-xl border border-hairline/80 rounded-2xl mt-1.5 w-full select-none shadow-2xs"
+      aria-label="实战动作坞"
     >
-      {/* 左侧：启发提示 */}
-      <div className="flex items-center gap-1.5 flex-wrap">
+      {/* 左侧：法眼三阶提示与战术视听 */}
+      <div className="flex items-center gap-2 flex-wrap">
         {onRequestHint && (
           <button
             type="button"
-            className={`h-7 px-2.5 text-xs font-medium rounded-lg border transition cursor-pointer ${
+            className={`h-7.5 px-3 text-xs font-medium rounded-xl border transition-all duration-200 cursor-pointer flex items-center gap-2 active:scale-95 ${
               hintLevel > 0
-                ? 'bg-amber-500/10 text-amber-800 border-amber-500/30 font-semibold'
-                : 'bg-paper-0 border-hairline text-ink-2 hover:text-ink-0 hover:bg-paper-2'
+                ? 'bg-amber-500/15 text-amber-900 border-amber-400/50 font-bold shadow-3xs'
+                : 'bg-paper-0 border-hairline/80 text-ink-2 hover:text-ink-0 hover:bg-paper-2 shadow-3xs'
             }`}
             onClick={onRequestHint}
-            title="渐进式分步提示：第1级看破绽，第2级看关键子，第3级看路线"
+            title="三阶法眼提示：第1级看破绽，第2级看关键子，第3级看路线"
           >
-            💡 提示{hintLevel > 0 ? ` (${hintLevel}/3)` : ''}
+            <span>💡 提示</span>
+            <div className="flex items-center gap-1">
+              <span
+                className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                  hintLevel >= 1 ? 'bg-amber-500 shadow-xs' : 'bg-ink-0/15'
+                }`}
+              />
+              <span
+                className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                  hintLevel >= 2 ? 'bg-amber-500 shadow-xs' : 'bg-ink-0/15'
+                }`}
+              />
+              <span
+                className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                  hintLevel >= 3 ? 'bg-amber-500 shadow-xs' : 'bg-ink-0/15'
+                }`}
+              />
+            </div>
           </button>
         )}
 
         {threatStepsCount > 0 && !inRebuttal && (
           <button
             type="button"
-            className="h-7 px-2 text-xs font-medium rounded-lg text-ink-2 hover:text-ink-0 bg-paper-0 hover:bg-paper-2 border border-hairline transition cursor-pointer"
+            className="h-7.5 px-2.5 text-xs font-medium rounded-xl text-ink-2 hover:text-ink-0 bg-paper-0 hover:bg-paper-2 border border-hairline/80 transition cursor-pointer active:scale-95 shadow-3xs"
             onClick={onStartThreatAnim}
-            title="看若我不设防，对手接下来的致命企图"
+            title="推演若我不设防，对手接下来的致命图谋"
           >
             👁️ 敌方企图
           </button>
@@ -290,16 +334,17 @@ export const DrillActionDock: React.FC<DrillActionDockProps> = ({
           <>
             <button
               type="button"
-              className="h-7 px-2.5 text-xs font-bold rounded-lg bg-cinnabar hover:bg-cinnabar-bright text-white border border-cinnabar transition cursor-pointer shadow-xs animate-pulse"
+              className="h-7.5 px-3 text-xs font-bold rounded-xl bg-cinnabar hover:bg-cinnabar-bright text-white border border-cinnabar transition cursor-pointer shadow-xs active:scale-95 animate-pulse flex items-center gap-1"
               onClick={onUndo}
               title="退回到走错之前重走"
             >
-              ↩ 退回重走
+              <span>↩</span>
+              <span>退回重走</span>
             </button>
             {badStepsCount > 0 && (
               <button
                 type="button"
-                className="h-7 px-2 text-xs font-semibold rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-300 transition cursor-pointer"
+                className="h-7.5 px-2.5 text-xs font-semibold rounded-xl text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-300 transition cursor-pointer active:scale-95 shadow-3xs"
                 onClick={onStartBadAnim}
                 title="观看走错后对手的反制杀招"
               >
@@ -315,7 +360,7 @@ export const DrillActionDock: React.FC<DrillActionDockProps> = ({
         {!inRebuttal && (
           <button
             type="button"
-            className="h-7 px-2.5 text-xs font-medium text-ink-2 hover:text-ink-0 bg-paper-0 hover:bg-paper-2 rounded-lg border border-hairline transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-7.5 px-2.5 text-xs font-medium text-ink-2 hover:text-ink-0 bg-paper-0 hover:bg-paper-2 rounded-xl border border-hairline/80 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-3xs"
             onClick={onUndo}
             disabled={!hasGame || !hasHistory || thinking}
             title="撤回上一步走子"
@@ -326,7 +371,7 @@ export const DrillActionDock: React.FC<DrillActionDockProps> = ({
 
         <button
           type="button"
-          className="h-7 px-2.5 text-xs font-medium text-ink-2 hover:text-ink-0 bg-paper-0 hover:bg-paper-2 rounded-lg border border-hairline transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          className="h-7.5 px-2.5 text-xs font-medium text-ink-2 hover:text-ink-0 bg-paper-0 hover:bg-paper-2 rounded-xl border border-hairline/80 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-3xs"
           onClick={onReset}
           disabled={!hasGame || thinking}
           title="恢复到本题初始局面"
@@ -336,24 +381,25 @@ export const DrillActionDock: React.FC<DrillActionDockProps> = ({
 
         <button
           type="button"
-          className={`h-7 px-2 text-xs font-medium rounded-lg border transition cursor-pointer ${
+          className={`h-7.5 px-2.5 text-xs font-medium rounded-xl border transition cursor-pointer active:scale-95 ${
             sandbox
               ? 'bg-blue-600 text-white border-blue-600 shadow-xs font-semibold'
-              : 'text-ink-3 hover:text-ink-1 bg-paper-0 hover:bg-paper-2 border-hairline'
+              : 'text-ink-3 hover:text-ink-1 bg-paper-0 hover:bg-paper-2 border-hairline/80 shadow-3xs'
           }`}
           onClick={onToggleSandbox}
-          title="开启自由试走模式，不计入失误统计"
+          title="开启沙盒自由试走模式，不计入失误统计"
         >
-          🧪 试走{sandbox ? '·开' : ''}
+          🧪 自由试走
         </button>
 
         <button
           type="button"
-          className="h-7 px-3 text-xs font-semibold text-white bg-cinnabar hover:bg-cinnabar-bright rounded-lg border border-cinnabar transition cursor-pointer shadow-xs active:scale-95"
+          className="h-7.5 px-3.5 text-xs font-semibold text-white bg-cinnabar hover:bg-cinnabar-bright rounded-xl border border-cinnabar transition cursor-pointer shadow-xs active:scale-95 flex items-center gap-1"
           onClick={onNextPuzzle}
           title="进入下一道精训题"
         >
-          下一题 ⏭
+          <span>下一题</span>
+          <span>⏭</span>
         </button>
       </div>
     </div>

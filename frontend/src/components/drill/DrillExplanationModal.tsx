@@ -78,27 +78,30 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
   return (
     <div className="flex flex-col gap-3 select-none">
       {/* 右侧分栏 iOS Segmented Control */}
-      <div className="flex items-center p-0.5 bg-paper-1/90 rounded-xl border border-hairline shrink-0" role="tablist">
+      <div
+        className="flex items-center p-1 bg-paper-1/85 backdrop-blur-xl rounded-2xl border border-hairline/80 shadow-2xs shrink-0"
+        role="tablist"
+      >
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === 'pros_cons'}
-          className={`flex-1 py-1 px-2 text-xs font-medium rounded-lg text-center transition cursor-pointer border-0 ${
+          className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-center transition-all duration-200 cursor-pointer border-0 ${
             activeTab === 'pros_cons'
-              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
+              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs scale-[1.02]'
               : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={() => onTabChange('pros_cons')}
         >
-          📊 优劣详析
+          📊 得失详析
         </button>
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === 'thinking'}
-          className={`flex-1 py-1 px-2 text-xs font-medium rounded-lg text-center transition cursor-pointer border-0 ${
+          className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-center transition-all duration-200 cursor-pointer border-0 ${
             activeTab === 'thinking'
-              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
+              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs scale-[1.02]'
               : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={() => onTabChange('thinking')}
@@ -110,9 +113,9 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
             type="button"
             role="tab"
             aria-selected={activeTab === 'breakdown'}
-            className={`flex-1 py-1 px-2 text-xs font-medium rounded-lg text-center transition cursor-pointer border-0 ${
+            className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-center transition-all duration-200 cursor-pointer border-0 ${
               activeTab === 'breakdown'
-                ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
+                ? 'bg-paper-0 text-ink-0 font-bold shadow-xs scale-[1.02]'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
             }`}
             onClick={() => onTabChange('breakdown')}
@@ -124,14 +127,14 @@ export const DrillExplanationModal: React.FC<DrillExplanationModalProps> = ({
           type="button"
           role="tab"
           aria-selected={activeTab === 'catalog'}
-          className={`flex-1 py-1 px-2 text-xs font-medium rounded-lg text-center transition cursor-pointer border-0 ${
+          className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-center transition-all duration-200 cursor-pointer border-0 ${
             activeTab === 'catalog'
-              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs'
+              ? 'bg-paper-0 text-ink-0 font-bold shadow-xs scale-[1.02]'
               : 'bg-transparent text-ink-3 hover:text-ink-1'
           }`}
           onClick={() => onTabChange('catalog')}
         >
-          🗂️ 题库 ({categoryPuzzles.length})
+          🗂️ 课程题库 ({categoryPuzzles.length})
         </button>
       </div>
 

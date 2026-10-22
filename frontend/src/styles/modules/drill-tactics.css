@@ -1,99 +1,132 @@
 /* ==========================================================================
-   精训营 Phase 1~4 全面升级样式
+   精训营（Drill Lab）苹果级产品设计系统 (Apple HIG & Fluid Experience)
    ========================================================================== */
 
-/* 1. 棋盘顶部动态 HUD 战况字幕条 (Phase 1) */
-.board-hud-caption {
+:root {
+  --apple-ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --apple-ease-snappy: cubic-bezier(0.2, 0.9, 0.2, 1);
+  --apple-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 1. 战术灵动岛（Dynamic Tactical Island）—— 自适应棋盘胶囊 */
+.tactical-island-wrapper {
   position: absolute;
-  top: 10px;
-  left: 12px;
-  right: 12px;
-  z-index: 40;
-  pointer-events: none;
+  top: 12px;
+  left: 0;
+  right: 0;
   display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 45;
+}
+
+.tactical-island {
+  pointer-events: auto;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-radius: var(--r-md);
-  font-size: 12.5px;
-  line-height: 1.4;
-  font-weight: 500;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  animation: hudSlideDown 240ms var(--ease-out) both;
+  gap: 10px;
+  padding: 6px 14px;
+  max-width: 90%;
+  border-radius: 9999px;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  transition: all 420ms var(--apple-ease-spring);
+  transform-origin: center top;
+  animation: islandDrop 380ms var(--apple-ease-spring) both;
 }
 
-@keyframes hudSlideDown {
-  from {
+@keyframes islandDrop {
+  0% {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(-12px) scale(0.92);
   }
-  to {
+  100% {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
-.board-hud-caption .hud-badge {
+.tactical-island.is-bad {
+  background: rgba(254, 242, 242, 0.94);
+  border-color: rgba(239, 68, 68, 0.35);
+  box-shadow: 0 8px 32px rgba(220, 38, 38, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+.tactical-island.is-good {
+  background: rgba(236, 253, 245, 0.94);
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 8px 32px rgba(5, 150, 105, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+.tactical-island.is-threat {
+  background: rgba(255, 251, 235, 0.94);
+  border-color: rgba(245, 158, 11, 0.38);
+  box-shadow: 0 8px 32px rgba(217, 119, 6, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+.tactical-island-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 9999px;
   font-size: 11px;
   font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 999px;
+  letter-spacing: 0.02em;
   white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.board-hud-caption.is-bad {
-  background: rgba(220, 38, 38, 0.12);
-  border: 1px solid rgba(220, 38, 38, 0.35);
-  color: #b91c1c;
+.tactical-island-badge.badge-neutral {
+  background: #f1f5f9;
+  color: #475569;
 }
-.board-hud-caption.is-bad .hud-badge {
-  background: #dc2626;
+
+.tactical-island-badge.badge-bad {
+  background: #ef4444;
   color: #ffffff;
 }
 
-.board-hud-caption.is-good {
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  color: #047857;
-}
-.board-hud-caption.is-good .hud-badge {
-  background: #059669;
+.tactical-island-badge.badge-good {
+  background: #10b981;
   color: #ffffff;
 }
 
-.board-hud-caption.is-threat {
-  background: rgba(245, 158, 11, 0.14);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  color: #b45309;
-}
-.board-hud-caption.is-threat .hud-badge {
-  background: #d97706;
+.tactical-island-badge.badge-threat {
+  background: #f59e0b;
   color: #ffffff;
 }
 
-.board-hud-caption.is-info {
-  background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #1d4ed8;
-}
-.board-hud-caption.is-info .hud-badge {
-  background: #2563eb;
-  color: #ffffff;
+.tactical-island-text {
+  font-size: 12.5px;
+  line-height: 1.35;
+  font-weight: 500;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 380px;
 }
 
-/* 2. 战术落点漫画对白气泡 (Phase 1) */
+/* 2. 战术落点气泡（Apple Fluid Pop Bubble） */
 .board-move-bubble {
   position: absolute;
   transform: translate(-50%, -128%);
   z-index: 38;
   pointer-events: none;
-  animation: bubblePop 220ms cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+  animation: bubbleApplePop 320ms var(--apple-ease-bounce) both;
 }
 
-@keyframes bubblePop {
+@keyframes bubbleApplePop {
   0% {
     opacity: 0;
-    transform: translate(-50%, -90%) scale(0.65);
+    transform: translate(-50%, -85%) scale(0.6);
   }
   100% {
     opacity: 1;
@@ -102,12 +135,13 @@
 }
 
 .board-move-bubble .bubble-body {
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 11.5px;
+  padding: 5px 11px;
+  border-radius: 12px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+  letter-spacing: 0.02em;
 }
 
 .board-move-bubble .bubble-tail {
@@ -153,7 +187,7 @@
   border-top: 6px solid #2563eb;
 }
 
-/* 3. 空间暗线透视（炮架金环、别马腿锁、无根大子） (Phase 1) */
+/* 3. 空间暗线透视（炮架金环、别马腿锁、无根大子） */
 .xray-cannon-mount {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -163,13 +197,13 @@
   pointer-events: none;
   z-index: 22;
   border: 2.2px dashed #f59e0b;
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.65), inset 0 0 8px rgba(245, 158, 11, 0.35);
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.65), inset 0 0 8px rgba(245, 158, 11, 0.35);
   animation: xrayPulse 1800ms infinite ease-in-out;
 }
 
 .xray-cannon-mount.is-check-mount {
   border-color: #ef4444;
-  box-shadow: 0 0 14px rgba(239, 68, 68, 0.75), inset 0 0 10px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.75), inset 0 0 10px rgba(239, 68, 68, 0.4);
 }
 
 @keyframes xrayPulse {
@@ -194,19 +228,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #ef4444;
   color: #fff;
   font-size: 11px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-  animation: lockShake 1200ms infinite ease-in-out;
+  font-weight: 700;
+  box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
+  animation: lockShake 1400ms infinite ease-in-out;
 }
 
 @keyframes lockShake {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); }
+  50% { transform: scale(1.16); }
 }
 
 .xray-hanging-badge {
@@ -220,13 +255,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: #f97316;
   color: #fff;
-  font-size: 11px;
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.45);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 3px 10px rgba(249, 115, 22, 0.45);
   animation: badgeBlink 1400ms infinite;
 }
 
@@ -235,19 +271,19 @@
   50% { opacity: 1; transform: scale(1.18); }
 }
 
-/* 4. 战区聚光灯：非核心子力降噪半透明 (Phase 1) */
+/* 4. 战区聚光灯 */
 .piece.is-spotlight-dimmed {
   opacity: 0.22 !important;
   filter: grayscale(0.7) !important;
-  transition: opacity 300ms ease, filter 300ms ease;
+  transition: opacity 320ms var(--apple-ease-spring), filter 320ms var(--apple-ease-spring);
 }
 
-/* 5. What-If 试探残影与反扑轨迹 (Phase 2) */
+/* 5. What-If 试探残影与反扑轨迹 */
 .piece-ghost {
-  opacity: 0.65;
+  opacity: 0.68;
   pointer-events: none;
   z-index: 28;
-  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+  filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.65));
   animation: ghostHover 1400ms infinite alternate ease-in-out;
 }
 
@@ -262,20 +298,20 @@
 
 .ghost-move-trace {
   position: absolute;
-  height: calc(var(--u) * 3.2px);
-  border-radius: 2px;
+  height: calc(var(--u) * 3.4px);
+  border-radius: 3px;
   transform-origin: 0 50%;
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.9), rgba(59, 130, 246, 0.1));
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.95), rgba(59, 130, 246, 0.15));
   pointer-events: none;
   z-index: 12;
 }
 
 .ghost-counter-trace {
   position: absolute;
-  height: calc(var(--u) * 3.5px);
-  border-radius: 2px;
+  height: calc(var(--u) * 3.6px);
+  border-radius: 3px;
   transform-origin: 0 50%;
-  background: linear-gradient(90deg, rgba(220, 38, 38, 0.95), rgba(239, 68, 68, 0.15));
+  background: linear-gradient(90deg, rgba(220, 38, 38, 0.95), rgba(239, 68, 68, 0.18));
   pointer-events: none;
   z-index: 13;
   animation: counterPulse 800ms infinite alternate;
@@ -285,6 +321,100 @@
   from { opacity: 0.6; }
   to { opacity: 1; }
 }
+
+/* 6. Apple Card 风格的选择肢卡片 */
+.apple-choice-card {
+  position: relative;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 260ms var(--apple-ease-spring);
+  overflow: hidden;
+}
+
+.apple-choice-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 0, 0, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.apple-choice-card.is-active {
+  border-color: #2563eb;
+  background: rgba(239, 246, 255, 0.9);
+  box-shadow: 0 0 0 1px #2563eb, 0 8px 20px rgba(37, 99, 235, 0.15);
+}
+
+/* 7. Apple Activity Rings（三环进度条） */
+.apple-ring-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.apple-ring-svg {
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+
+.apple-ring-track {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.06);
+}
+
+.apple-ring-indicator {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 900ms var(--apple-ease-spring);
+}
+
+/* 8. 破局印章与压印质感 (Apple Stamp / Seal) */
+.stamp-seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1.5px solid #059669;
+  color: #047857;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+  animation: stampImpact 450ms var(--apple-ease-bounce) both;
+}
+
+@keyframes stampImpact {
+  0% {
+    opacity: 0;
+    transform: scale(2.2) rotate(12deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-3deg);
+  }
+}
+
+/* 9. 沉浸演示进度条 (Timeline Playhead) */
+.timeline-scrubber {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.timeline-scrubber-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #6366f1);
+  border-radius: 9999px;
+  transition: width 240ms var(--apple-ease-spring);
+}
+
 
 
 

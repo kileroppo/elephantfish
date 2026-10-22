@@ -5,35 +5,38 @@ interface BoardHudCaptionProps {
   caption: { badge: string; text: string; tone?: 'bad' | 'good' | 'threat' | 'info' }
 }
 
-/** 棋盘顶部动态 HUD 战况字幕条 */
+/** 棋盘顶部战术灵动岛（Dynamic Tactical Island） */
 export function BoardHudCaption({ caption }: BoardHudCaptionProps) {
   const tone = caption.tone || 'info'
-  const toneContainer =
+  const toneClasses =
     tone === 'bad'
-      ? 'is-bad bg-paper-0/95 border border-red-500/40 text-red-700 shadow-md ring-1 ring-red-500/20'
+      ? 'is-bad bg-rose-50/92 border-rose-400/40 text-rose-900 shadow-rose-500/10'
       : tone === 'good'
-        ? 'is-good bg-paper-0/95 border border-emerald-500/40 text-emerald-800 shadow-md ring-1 ring-emerald-500/20'
+        ? 'is-good bg-emerald-50/92 border-emerald-400/40 text-emerald-900 shadow-emerald-500/10'
         : tone === 'threat'
-          ? 'is-threat bg-paper-0/95 border border-amber-500/40 text-amber-800 shadow-md ring-1 ring-amber-500/20'
-          : 'is-info bg-paper-0/95 border border-blue-500/40 text-blue-800 shadow-md ring-1 ring-blue-500/20'
+          ? 'is-threat bg-amber-50/92 border-amber-400/40 text-amber-950 shadow-amber-500/10'
+          : 'bg-paper-0/92 border-hairline/80 text-ink-0 shadow-black/5'
 
   const badgeBg =
     tone === 'bad'
-      ? 'bg-red-600'
+      ? 'bg-rose-600 text-white'
       : tone === 'good'
-        ? 'bg-emerald-600'
+        ? 'bg-emerald-600 text-white'
         : tone === 'threat'
-          ? 'bg-amber-600'
-          : 'bg-blue-600'
+          ? 'bg-amber-500 text-white'
+          : 'bg-primary-600 text-white'
 
   return (
-    <div
-      className={`board-hud-caption absolute top-2.5 left-3 right-3 z-40 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs leading-snug font-medium animate-[hudSlideDown_240ms_cubic-bezier(0.22,0.61,0.36,1)_both] ${toneContainer}`}
-    >
-      <span className={`hud-badge text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap text-white shrink-0 ${badgeBg}`}>
-        {caption.badge}
-      </span>
-      <span className="hud-text truncate">{caption.text}</span>
+    <div className="absolute top-2.5 left-0 right-0 z-40 pointer-events-none flex justify-center px-4">
+      <div
+        className={`pointer-events-auto max-w-[92%] backdrop-blur-2xl border px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 shadow-lg transition-all duration-300 animate-[islandDrop_320ms_cubic-bezier(0.16,1,0.3,1)_both] ${toneClasses}`}
+        title={caption.text}
+      >
+        <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 shadow-2xs ${badgeBg}`}>
+          {caption.badge}
+        </span>
+        <span className="truncate leading-tight font-display tracking-wide">{caption.text}</span>
+      </div>
     </div>
   )
 }

@@ -799,7 +799,7 @@ export function DrillDesk(props?: DrillDeskProps) {
 
   return (
     <div
-      className={`fixed inset-0 z-[300] bg-ink-0/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 transition-opacity duration-200 select-none ${
+      className={`fixed inset-0 z-[300] bg-ink-0/35 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 transition-all duration-300 select-none ${
         leaving ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
       role="dialog"
@@ -808,7 +808,7 @@ export function DrillDesk(props?: DrillDeskProps) {
       onClick={onClose}
     >
       <div
-        className={`w-[min(1140px,96vw)] h-[min(88vh,840px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-paper-0/98 rounded-2xl shadow-2xl border border-hairline transition-all duration-200 ${
+        className={`w-[min(1160px,96vw)] h-[min(90vh,860px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-paper-0/95 backdrop-blur-2xl rounded-3xl shadow-[0_24px_80px_rgba(0,0,0,0.22)] border border-hairline/80 ring-1 ring-black/5 transition-all duration-300 ${
           leaving ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -844,18 +844,19 @@ export function DrillDesk(props?: DrillDeskProps) {
           onClose={onClose}
         />
 
-        {/* 顶部病因专项集训 HUD 状态条 */}
+        {/* 顶部病因专项集训 HUD 状态条 (Apple Sub-Ribbon) */}
         {focusMotif && (
-          <div className="flex items-center justify-between px-3 sm:px-5 py-2 bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-transparent border-b border-amber-300/40 text-xs text-ink-1 shrink-0 animate-fadeIn">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-950 font-semibold border border-amber-400/50">
-                🎯 专项强化：#{MOTIF_LABELS[focusMotif] || focusMotif}
+          <div className="flex items-center justify-between px-4 sm:px-6 py-2.5 bg-gradient-to-r from-amber-500/12 via-rose-500/8 to-transparent border-b border-amber-300/35 text-xs text-ink-1 shrink-0 animate-fadeIn backdrop-blur-md">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-0.8 rounded-full bg-amber-500/20 text-amber-950 font-bold border border-amber-400/40 shadow-3xs">
+                <span>🎯</span>
+                <span>心魔攻坚：#{MOTIF_LABELS[focusMotif] || focusMotif}</span>
               </span>
               <span className="text-ink-2">
-                当前第 <b className="text-ink-0 font-bold">{currentMotifIndex >= 0 ? currentMotifIndex + 1 : 1}</b> / {motifPuzzles.length} 题
+                当前第 <b className="text-ink-0 font-bold font-num">{currentMotifIndex >= 0 ? currentMotifIndex + 1 : 1}</b> / {motifPuzzles.length} 题
                 {masteredInMotifCount > 0 && (
-                  <span className="text-emerald-700 ml-1 font-medium">
-                    （已攻破 {masteredInMotifCount} 题）
+                  <span className="text-emerald-700 ml-1.5 font-semibold">
+                    （已击破 {masteredInMotifCount} 题）
                   </span>
                 )}
               </span>
@@ -863,19 +864,20 @@ export function DrillDesk(props?: DrillDeskProps) {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
-                className="btn btn-ghost btn-xs px-2.5 py-1 text-primary-800 bg-paper-0 border border-primary-300/80 hover:bg-paper-2 rounded font-medium transition cursor-pointer shadow-xs active:scale-95"
+                className="h-7 px-3 text-xs font-semibold text-primary-800 bg-paper-0 border border-primary-300/80 hover:bg-paper-2 rounded-xl transition cursor-pointer shadow-3xs active:scale-95 flex items-center gap-1"
                 onClick={handleNextPuzzle}
                 title="切换到同病因下一道题（优先挑未攻克题目）"
               >
-                🎲 换一题 / 下一题
+                <span>🎲</span>
+                <span>换一题</span>
               </button>
               <button
                 type="button"
-                className="btn btn-ghost btn-xs px-2 py-1 text-ink-3 hover:text-ink-1 hover:bg-paper-2 rounded transition cursor-pointer"
+                className="h-7 px-2.5 text-xs text-ink-3 hover:text-ink-1 hover:bg-paper-2 rounded-xl transition cursor-pointer"
                 onClick={() => setFocusMotif(null)}
                 title="退出专项训练模式，浏览全部课程分类"
               >
-                ✕ 退出专题看全部
+                ✕ 退出专题
               </button>
             </div>
           </div>
