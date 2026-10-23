@@ -3,19 +3,20 @@ import { BOARD_H, BOARD_W, parseSquare, toPercent } from '../../lib/board'
 
 interface BoardHudCaptionProps {
   caption: { badge: string; text: string; tone?: 'bad' | 'good' | 'threat' | 'info' }
+  onClick?: () => void
 }
 
-/** 棋盘顶部战术灵动岛（Dynamic Tactical Island） */
-export function BoardHudCaption({ caption }: BoardHudCaptionProps) {
+/** 棋盘战术灵动战况横幅（置于棋盘上方独立展示，绝不遮挡棋子） */
+export function BoardHudCaption({ caption, onClick }: BoardHudCaptionProps) {
   const tone = caption.tone || 'info'
   const toneClasses =
     tone === 'bad'
-      ? 'is-bad bg-rose-50/92 border-rose-400/40 text-rose-900 shadow-rose-500/10'
+      ? 'is-bad bg-rose-50/95 border-rose-400/50 text-rose-950 shadow-rose-500/10 hover:border-rose-500'
       : tone === 'good'
-        ? 'is-good bg-emerald-50/92 border-emerald-400/40 text-emerald-900 shadow-emerald-500/10'
+        ? 'is-good bg-emerald-50/95 border-emerald-400/50 text-emerald-950 shadow-emerald-500/10 hover:border-emerald-500'
         : tone === 'threat'
-          ? 'is-threat bg-amber-50/92 border-amber-400/40 text-amber-950 shadow-amber-500/10'
-          : 'bg-paper-0/92 border-hairline/80 text-ink-0 shadow-black/5'
+          ? 'is-threat bg-amber-50/95 border-amber-400/50 text-amber-950 shadow-amber-500/10 hover:border-amber-500'
+          : 'bg-paper-0/95 border-hairline-strong text-ink-0 shadow-black/5 hover:border-ink-2'
 
   const badgeBg =
     tone === 'bad'
@@ -23,20 +24,24 @@ export function BoardHudCaption({ caption }: BoardHudCaptionProps) {
       : tone === 'good'
         ? 'bg-emerald-600 text-white'
         : tone === 'threat'
-          ? 'bg-amber-500 text-white'
+          ? 'bg-amber-600 text-white'
           : 'bg-primary-600 text-white'
 
   return (
-    <div className="absolute top-2.5 left-0 right-0 z-40 pointer-events-none flex justify-center px-4">
-      <div
-        className={`pointer-events-auto max-w-[92%] backdrop-blur-2xl border px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 shadow-lg transition-all duration-300 animate-[islandDrop_320ms_cubic-bezier(0.16,1,0.3,1)_both] ${toneClasses}`}
-        title={caption.text}
-      >
+    <div
+      className={`w-full max-w-[min(100%,480px)] backdrop-blur-md border px-3 py-1.5 rounded-xl text-xs font-medium flex items-center justify-between gap-2.5 shadow-sm transition-all duration-200 select-none cursor-pointer group ${toneClasses}`}
+      onClick={onClick}
+      title={`${caption.text}（点击联动查看右侧棋理分析）`}
+    >
+      <div className="flex items-center gap-2 min-w-0 flex-1">
         <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 shadow-2xs ${badgeBg}`}>
           {caption.badge}
         </span>
         <span className="truncate leading-tight font-display tracking-wide">{caption.text}</span>
       </div>
+      <span className="text-[10.5px] text-ink-mute whitespace-nowrap shrink-0 opacity-70 group-hover:opacity-100 group-hover:text-cinnabar transition-colors">
+        棋理详情 →
+      </span>
     </div>
   )
 }
@@ -63,7 +68,6 @@ export function BoardOverlaysLayer({
 }: BoardOverlaysLayerProps) {
   return (
     <>
-
       {/* 战术关键落点漫画气泡 / 标语 */}
       {moveBubble && (() => {
         const { file, rank } = parseSquare(moveBubble.square)

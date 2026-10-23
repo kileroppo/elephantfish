@@ -36,11 +36,8 @@ function AppContent() {
 
   const handleNewGame = useCallback(
     (side: 'red' | 'black') => {
-      if (ui.playMode === 'sparring') {
-        ui.setFlipOverride(side === 'red')
-      } else {
-        ui.setFlipped(side === 'black')
-      }
+      // side 为 engine_side：引擎执红则我方执黑 (flipped = true)；引擎执黑则我方执红 (flipped = false)
+      ui.setFlipOverride(side === 'red')
       void g.newGame(side)
     },
     [g, ui],
@@ -198,9 +195,9 @@ function AppContent() {
     if (setup.active) {
       const nextSide = setup.engineSide === 'red' ? 'black' : 'red'
       setup.setEngineSide(nextSide)
-      ui.setFlipOverride(nextSide === 'black')
+      ui.setFlipOverride(nextSide === 'red')
       g.pushToast(
-        `排局设定：引擎执${nextSide === 'red' ? '红' : '黑'}（${nextSide === 'red' ? '红' : '黑'}方朝下）`,
+        `排局设定：引擎执${nextSide === 'red' ? '红' : '黑'}（我方执${nextSide === 'red' ? '黑' : '红'}朝下）`,
         'info',
       )
     } else if (game) {
@@ -274,11 +271,11 @@ function AppContent() {
             onTurnChange={setup.setTurn}
             onEngineSideChange={(side) => {
               setup.setEngineSide(side)
-              ui.setFlipOverride(ui.playMode === 'sparring' ? side === 'red' : side === 'black')
+              ui.setFlipOverride(side === 'red')
             }}
             onImportFen={setup.importFen}
             onStartGame={() => {
-              ui.setFlipOverride(ui.playMode === 'sparring' ? setup.engineSide === 'red' : setup.engineSide === 'black')
+              ui.setFlipOverride(setup.engineSide === 'red')
               void setup.startGame()
             }}
             onExitSetup={setup.exit}

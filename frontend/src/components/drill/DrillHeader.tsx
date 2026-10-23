@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import type { PuzzleCategory, TrainingPuzzle, TrainingSummary } from '../../types'
 
 export interface DrillHeaderProps {
@@ -15,187 +15,144 @@ export interface DrillHeaderProps {
 }
 
 /**
- * 苹果风格微型同心环 (Apple Micro Activity Ring)
+ * 现代冷精密一体化遥测带 (Precision Light Telemetry Strip 42px)
+ * 冷白与浅石板灰基调，极细线框，高科技与工整秩序感
  */
-const MiniActivityRing: React.FC<{
-  progress: number // 0 ~ 100
-  color: string
-  trackColor: string
-  size?: number
-  strokeWidth?: number
-}> = ({ progress, color, trackColor, size = 26, strokeWidth = 3 }) => {
-  const radius = (size - strokeWidth) / 2
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference - (Math.min(Math.max(progress, 0), 100) / 100) * circumference
-
-  return (
-    <svg width={size} height={size} className="apple-ring-svg shrink-0">
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        className="apple-ring-track"
-        stroke={trackColor}
-        strokeWidth={strokeWidth}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        className="apple-ring-indicator"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-      />
-    </svg>
-  )
-}
-
 export const DrillHeader: React.FC<DrillHeaderProps> = ({
   summary,
   categories,
   puzzles,
   activeCategory,
-  currentGameId,
   onSelectCategory,
-  onSelectGame,
   onFlip,
   onClose,
 }) => {
-  const getShortCatName = (name: string) => {
-    return name.replace(/^第[一二三四五]篇\s*·\s*/, '')
-  }
+  const [dropdownOpen, setDropdownOpen] = useState(false)
 
   const accuracy = summary?.first_try_accuracy ?? 0
   const totalMastered = summary?.mastered ?? 0
   const totalCount = Math.max(puzzles.length, 1)
   const masterProgress = Math.round((totalMastered / totalCount) * 100)
 
+  const activeCategoryObj = categories.find((c) => c.id === activeCategory)
+  const categoryTitle = activeCategoryObj
+    ? activeCategoryObj.name.replace(/^第[一二三四五]篇\s*·\s*/, '')
+    : '专项题库'
+
   return (
-    <header className="flex flex-col border-b border-hairline/80 bg-paper-0/80 backdrop-blur-2xl shrink-0 select-none transition-colors">
-      {/* 顶部主工具栏：左品牌 + Apple 闭环三态指示器，右快捷操作 */}
-      <div className="flex items-center justify-between px-4 sm:px-6 h-14">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className="flex items-center gap-2.5 shrink-0">
-            <span className="w-8 h-8 rounded-2xl bg-gradient-to-tr from-cinnabar via-[#e04332] to-[#ff6b57] text-white font-kai text-sm font-bold flex items-center justify-center shadow-sm shadow-cinnabar/20">
-              营
-            </span>
-            <div className="flex flex-col">
-              <h2 className="text-sm sm:text-base font-bold text-ink-0 m-0 whitespace-nowrap font-display tracking-tight flex items-center gap-1.5">
-                <span>象棋实战特训营</span>
-                <span className="text-[10px] font-mono tracking-widest text-cinnabar/90 uppercase px-1.5 py-0.2 bg-cinnabar/10 rounded-full font-bold">
-                  PRO
-                </span>
-              </h2>
-              <span className="text-[10px] text-ink-3 hidden sm:inline-block">
-                基于国手实战与引擎法眼拆解
-              </span>
-            </div>
-          </div>
+    <header className="relative flex items-center justify-between px-3 sm:px-4 h-[42px] bg-white/95 backdrop-blur-md border-b border-slate-200/90 text-slate-700 select-none font-mono text-xs z-30 shrink-0">
+      {/* 1. 左侧：品牌与战术分类快速选择器 */}
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="w-5.5 h-5.5 rounded bg-red-600 text-white font-kai text-xs font-bold flex items-center justify-center shadow-xs">
+            营
+          </span>
+          <span className="font-bold text-slate-900 tracking-tight hidden sm:inline-block font-sans">
+            象棋实战特训营
+          </span>
+          <span className="text-[10px] tracking-wider text-red-600 bg-red-50 px-1.5 py-0.2 rounded border border-red-200 uppercase font-bold">
+            PRO
+          </span>
+        </div>
 
-          {/* Apple Fitness+ 风格的环形进度胶囊 */}
-          {summary && (
-            <div className="hidden md:flex items-center gap-3 px-3.5 py-1 rounded-2xl bg-paper-1/90 border border-hairline/70 shadow-3xs backdrop-blur-md">
-              <div className="flex items-center gap-2">
-                <MiniActivityRing
-                  progress={masterProgress}
-                  color="#10b981"
-                  trackColor="rgba(16, 185, 129, 0.18)"
-                  size={24}
-                  strokeWidth={2.8}
-                />
-                <div className="flex flex-col text-[11px] leading-tight">
-                  <span className="text-ink-3 text-[10px]">精通进度</span>
-                  <span className="text-ink-0 font-bold font-num">
-                    {totalMastered} <small className="text-ink-3 font-normal">/ {totalCount} 题</small>
-                  </span>
-                </div>
+        <div className="h-3.5 w-px bg-slate-200 hidden sm:block" />
+
+        {/* 分类下拉切换器 (Precision Switcher) */}
+        <div className="relative">
+          <button
+            type="button"
+            className="h-7 px-2.5 rounded bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-800 flex items-center gap-1.5 transition cursor-pointer text-xs font-sans font-medium"
+            onClick={() => setDropdownOpen((v) => !v)}
+            title="切换课程分类"
+          >
+            <span className="text-amber-500">❖</span>
+            <span>{categoryTitle}</span>
+            <span className="text-[9px] text-slate-400">▼</span>
+          </button>
+
+          {/* 下拉浮层 */}
+          {dropdownOpen && (
+            <div
+              className="absolute left-0 top-8.5 w-60 bg-white border border-slate-200 rounded-lg shadow-xl p-1.5 flex flex-col gap-1 z-50 animate-fadeIn"
+              onMouseLeave={() => setDropdownOpen(false)}
+            >
+              <div className="text-[10px] text-slate-400 px-2 py-1 font-mono uppercase border-b border-slate-100">
+                SELECT CATEGORY
               </div>
-
-              <div className="w-[1px] h-5 bg-hairline/80" />
-
-              <div className="flex items-center gap-2">
-                <MiniActivityRing
-                  progress={accuracy}
-                  color="#3b82f6"
-                  trackColor="rgba(59, 130, 246, 0.18)"
-                  size={24}
-                  strokeWidth={2.8}
-                />
-                <div className="flex flex-col text-[11px] leading-tight">
-                  <span className="text-ink-3 text-[10px]">初试精准度</span>
-                  <span className="text-ink-0 font-bold font-num">{accuracy}%</span>
-                </div>
-              </div>
+              {categories.map((cat) => {
+                const isSelected = cat.id === activeCategory
+                const count = puzzles.filter((p) => p.category === cat.id).length
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className={`px-2.5 py-1.5 rounded text-left text-xs transition cursor-pointer flex items-center justify-between font-sans ${
+                      isSelected
+                        ? 'bg-sky-50 text-sky-700 font-semibold border border-sky-200'
+                        : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                    onClick={() => {
+                      onSelectCategory(cat.id)
+                      setDropdownOpen(false)
+                    }}
+                  >
+                    <span>{cat.name.replace(/^第[一二三四五]篇\s*·\s*/, '')}</span>
+                    {count > 0 && (
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {count} 题
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
+      </div>
 
-        {/* 右侧动作按钮 */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            className="h-8 px-3 rounded-xl text-xs font-medium text-ink-1 hover:text-ink-0 bg-paper-1/90 hover:bg-paper-2 border border-hairline/80 transition cursor-pointer active:scale-95 shadow-3xs flex items-center gap-1.5"
-            onClick={onFlip}
-            title="翻转棋盘视角 (快捷键 F)"
-          >
-            <span>⇄</span>
-            <span>翻转</span>
-          </button>
-          <button
-            type="button"
-            className="w-8 h-8 flex items-center justify-center text-ink-2 hover:text-ink-0 hover:bg-paper-2 rounded-full text-xs transition cursor-pointer active:scale-90 border border-hairline/60 bg-paper-1/80"
-            onClick={onClose}
-            aria-label="退出训练营"
-            title="返回下棋主界面 (Esc)"
-          >
-            ✕
-          </button>
+      {/* 2. 中间：高科技微型遥测指标 (Micro Telemetry Indicators) */}
+      <div className="hidden md:flex items-center gap-4 text-xs font-mono">
+        <div className="flex items-center gap-1.5">
+          <span className="text-slate-400">MASTERED:</span>
+          <span className="text-emerald-600 font-bold">{totalMastered} / {totalCount}</span>
+          <div className="w-14 h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+              style={{ width: `${masterProgress}%` }}
+            />
+          </div>
+          <span className="text-slate-400 text-[10px]">({masterProgress}%)</span>
+        </div>
+
+        <div className="h-3.5 w-px bg-slate-200" />
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-slate-400">FIRST-TRY ACC:</span>
+          <span className="text-sky-600 font-bold">{accuracy}%</span>
         </div>
       </div>
 
-      {/* iOS Segmented Control 风格分类切换胶囊 */}
-      <div className="flex items-center px-4 sm:px-6 pb-2.5 pt-0 overflow-x-auto scrollbar-none gap-2">
-        <div className="flex items-center p-1 bg-paper-1/85 backdrop-blur-xl rounded-2xl border border-hairline/80 shadow-2xs shrink-0">
-          {categories.map((cat) => {
-            const count = puzzles.filter((p) => p.category === cat.id).length
-            const isCurrent = activeCategory === cat.id
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 cursor-pointer border-0 ${
-                  isCurrent
-                    ? 'bg-paper-0 text-cinnabar font-bold shadow-xs scale-[1.02]'
-                    : 'bg-transparent text-ink-3 hover:text-ink-1'
-                }`}
-                onClick={() => onSelectCategory(cat.id)}
-              >
-                <span className="text-sm">{cat.icon}</span>
-                <span>{getShortCatName(cat.name)}</span>
-                <span className="text-[10px] opacity-60 font-num tabular-nums px-1 py-0.2 bg-ink-0/5 rounded-full">
-                  {count}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+      {/* 3. 右侧：翻转盘面与退出 (Controls) */}
+      <div className="flex items-center gap-1.5 font-sans">
+        <button
+          type="button"
+          className="h-7 px-2.5 text-xs rounded bg-slate-100 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 border border-slate-200 transition cursor-pointer flex items-center gap-1 active:scale-95"
+          onClick={onFlip}
+          title="翻转棋盘红黑视角"
+        >
+          <span>⇄</span>
+          <span className="hidden sm:inline font-mono">翻转</span>
+        </button>
 
-        {activeCategory === 'game_breakdown' && currentGameId && (
-          <span
-            className={`text-[11px] px-3 py-1.5 rounded-xl bg-paper-1/90 border border-hairline text-ink-2 font-medium shrink-0 ml-auto shadow-3xs flex items-center gap-1.5 ${
-              onSelectGame ? 'cursor-pointer hover:bg-paper-2' : ''
-            }`}
-            onClick={() => onSelectGame?.(currentGameId)}
-            title="点击刷新当前对局拆解"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse" />
-            <span>实战拆解：{currentGameId.slice(0, 10)}…</span>
-          </span>
-        )}
+        <button
+          type="button"
+          className="w-7 h-7 rounded bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-500 border border-slate-200 hover:border-rose-200 transition cursor-pointer flex items-center justify-center text-xs active:scale-95"
+          onClick={onClose}
+          title="关闭特训营"
+        >
+          ✕
+        </button>
       </div>
     </header>
   )
 }
-

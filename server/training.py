@@ -231,8 +231,12 @@ class TrainingController:
 
         base_snap = sess.game.snapshot()
         good_steps = self._build_good_steps(sess.start_fen, sess.user_side, pz_data)
-        opp_threat_data = self._analyze_opponent_threat(sess.start_fen, sess.user_side)
-        opp_threat_steps = opp_threat_data['steps']
+        opp_threat_steps: List[Dict[str, Any]] = []
+        try:
+            opp_threat_data = self._analyze_opponent_threat(sess.start_fen, sess.user_side, pz_data=pz_data)
+            opp_threat_steps = opp_threat_data.get('steps', [])
+        except Exception as e:
+            logger.warning("分析对手威胁异常，安全降级：%s", e)
 
         # 如果题目自带典型错着（如实战心魔题的 wrong_iccs 或定式题的第一个 trap），预生成错着分步动画与优劣对比
         default_wrong_iccs = pz_data.get('wrong_iccs') or ''
@@ -727,6 +731,9 @@ class TrainingController:
         eval_score = 0
         pv_moves: List[Tuple[int, int]] = []
         if self.engines:
+            # 若非走棋方老将被将军（如试探换边等假想局面），Pikafish UCI 判定非法，跳过引擎直搜
+            if core.is_in_check(game.board, not game.red_to_move):
+                return None, 0, []
             active = getattr(self.engines, 'active_engine', None) or self.engines.choose()
             req = SearchRequest(
                 board=game.board,
@@ -734,12 +741,15 @@ class TrainingController:
                 time_limit=time_limit,
                 max_depth=max_depth,
             )
-            for info in active.search(req):
-                if info.move:
-                    engine_move = info.move
-                    eval_score = info.eval_red if info.eval_red is not None else 0
-                if getattr(info, 'pv', None):
-                    pv_moves = list(info.pv)
+            try:
+                for info in active.search(req):
+                    if info.move:
+                        engine_move = info.move
+                        eval_score = info.eval_red if info.eval_red is not None else 0
+                    if getattr(info, 'pv', None):
+                        pv_moves = list(info.pv)
+            except Exception as e:
+                logger.warning("引擎搜索异常，安全降级：%s", e)
         if engine_move and (not pv_moves or pv_moves[0] != engine_move):
             pv_moves = [engine_move] + [m for m in pv_moves if m != engine_move]
         return engine_move, eval_score, pv_moves
@@ -985,6 +995,7 @@ class TrainingController:
         self,
         fen_now: str,
         user_side: str,
+        pz_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """判定对手是否存在实质威胁并生成客观预警数据。"""
         empty_res: Dict[str, Any] = {
@@ -1011,13 +1022,28 @@ class TrainingController:
         if temp.status()['state'] in ('checkmate', 'stalemate'):
             return empty_res
 
-        _, _, pv_moves = self._search_line(temp, max_depth=6, time_limit=0.22)
+        pv_moves: List[Tuple[int, int]] = []
+        if not core.is_in_check(temp.board, not temp.red_to_move):
+            try:
+                _, _, pv_moves = self._search_line(temp, max_depth=6, time_limit=0.22)
+            except Exception:
+                pv_moves = []
+
         if not pv_moves:
             legals = temp.legal_moves()
-            if legals:
-                pv_moves = [legals[0]]
-            else:
+            if not legals:
                 return empty_res
+            punish_mv = None
+            traps = pz_data.get('traps') if isinstance(pz_data, dict) else {}
+            if isinstance(traps, dict):
+                for t in traps.values():
+                    pm = t.get('punish_move')
+                    if pm:
+                        parsed = nt.from_iccs(pm)
+                        if parsed and parsed in legals:
+                            punish_mv = parsed
+                            break
+            pv_moves = [punish_mv or legals[0]]
 
         mv0 = pv_moves[0]
         if mv0 is None or not temp.is_legal(mv0):

@@ -226,8 +226,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'side': 'red',
         'target': '红先二步卧槽马绝杀',
         'goal_type': 'checkmate',
-        'fen': '4ka3/4a4/3P2b2/1N7/9/9/9/R8/9/5K3 w - - 0 1',
-        'exam_fen': '4ka1b1/4a4/3P2b2/1N7/9/9/7p1/R8/9/5K3 w - - 0 1',
+        'fen': '4ka3/4a4/3P5/1N7/9/9/9/R8/9/5K3 w - - 0 1',
+        'exam_fen': '4ka3/4a4/3P5/1N7/9/9/7p1/R8/9/5K3 w - - 0 1',
         'master_quote': '“卧槽一跃九宫寒，车马联袂破关山。” 卧槽马控死将门中枢，逼将出宫后长车沉底一剑封喉。',
         'demo_line': [
             {'move': 'b6c8', 'chinese': '马八进七', 'comment': '跳马卧槽！直接叫将并锁死黑将回中路径！'},
@@ -371,7 +371,7 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'target': '红先一步钓鱼马成杀',
         'goal_type': 'checkmate',
         'fen': '4ka3/9/2N1b4/9/9/9/9/1R7/9/4K4 w - - 0 1',
-        'exam_fen': '4ka3/9/2N1b1b2/9/9/9/7p1/1R7/9/4K4 w - - 0 1',
+        'exam_fen': '4ka3/9/2N1b4/9/9/9/7p1/1R7/9/4K4 w - - 0 1',
         'master_quote': '“钓鱼马占三三位，横车直车任驱驰。” 钓鱼马锁住将门出宫与登楼两道命门，借车沉底即可封喉。',
         'demo_line': [
             {'move': 'b2b9', 'chinese': '车八进七', 'comment': '红车长驱沉底！钓鱼马（c7）牢牢控住d9与e8，黑将插翅难飞！'},
@@ -413,8 +413,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'side': 'red',
         'target': '红先一步借帅绝杀',
         'goal_type': 'checkmate',
-        'fen': '3k5/9/2b6/9/9/9/9/4R4/9/4K4 w - - 0 1',
-        'exam_fen': '3k5/9/2b6/9/9/9/7p1/4R4/9/4K4 w - - 0 1',
+        'fen': '3k5/9/9/9/9/9/9/4R4/9/4K4 w - - 0 1',
+        'exam_fen': '3k5/9/9/9/9/9/7p1/4R4/9/4K4 w - - 0 1',
         'master_quote': '“王不见王千古训，借帅助攻鬼神惊。” 老帅居中雄视敌宫，红车闪开中路直取肋道，帅车合力封门。',
         'demo_line': [
             {'move': 'e2d2', 'chinese': '车五平六', 'comment': '平车六路肋道照将！同时亮出五路红帅天威，黑将无法回中，绝杀！'},
@@ -427,10 +427,10 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         },
         'traps': {
             'e2e9': {
-                'punish_move': 'c7e9',
-                'comment': '鲁莽沉底！未察觉黑方三路高象正好护住中宫底线，白送一车！',
+                'punish_move': 'd9d8',
+                'comment': '鲁莽沉底！黑将进位（d9d8）从容脱离照将，红车失去肋道控制，痛失良机！',
                 'refute_line': [
-                    {'move': 'c7e9', 'chinese': '象3退5', 'comment': '黑象回退底线吃掉红车，攻势尽毁！'},
+                    {'move': 'd9d8', 'chinese': '将4进1', 'comment': '黑将进位脱离中车锋芒，红方失去一击必杀机会！'},
                 ],
             }
         },
@@ -656,8 +656,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'side': 'red',
         'target': '红先闪击净吃黑车',
         'goal_type': 'win_material',
-        'fen': '1r2ka3/9/6b2/4N4/9/9/9/4R4/9/3K5 w - - 0 1',
-        'exam_fen': '1r2ka3/9/6b2/4N4/9/9/7p1/4R4/9/3K5 w - - 0 1',
+        'fen': '1r1aka3/9/9/4N4/9/9/9/4R4/9/3K5 w - - 0 1',
+        'exam_fen': '1r1aka3/9/9/4N4/9/9/7p1/4R4/9/3K5 w - - 0 1',
         'master_quote': '“开门见将风雷动，暗度陈仓抽大子。” 前马跃开亮出中车锋芒，敌将忙于护驾，后蹄顺势踏车。',
         'demo_line': [
             {'move': 'e6d8', 'chinese': '马五进六', 'comment': '跃马挂角亮出五路红车开门见将，同时马蹄直指黑方b9底车！'},
@@ -676,7 +676,7 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'traps': {
             'e6g7': {
                 'punish_move': 'f9e8',
-                'comment': '贪小失大！闪击方向选错，贪吃三路黑象而放过了二路黑车，痛失赢棋良机！',
+                'comment': '闪击方向选错！跃马三路未能瞄准黑方b9大车，黑方从容撑士挡中，白白放走胜机！',
                 'refute_line': [
                     {'move': 'f9e8', 'chinese': '士6进5', 'comment': '黑方从容撑士应将，二路大车安然无恙！'},
                 ],
@@ -704,8 +704,8 @@ CLASSICAL_PUZZLES: List[Dict[str, Any]] = [
         'side': 'red',
         'target': '红先弃车引将绝杀',
         'goal_type': 'checkmate',
-        'fen': '3aka3/2P6/6b2/5N3/9/9/9/1R1R5/9/5K3 w - - 0 1',
-        'exam_fen': '3aka1b1/2P6/6b2/5N3/9/9/7p1/1R1R5/9/5K3 w - - 0 1',
+        'fen': '3aka3/2P6/9/5N3/9/9/9/1R1R5/9/5K3 w - - 0 1',
+        'exam_fen': '3aka3/2P6/9/5N3/9/9/7p1/1R1R5/9/5K3 w - - 0 1',
         'master_quote': '“舍车引将离金殿，八路长车定乾坤。” 不惜牺牲一车轰碎羊角士引蛇出洞，后车沉底一击绝杀。',
         'demo_line': [
             {'move': 'd2d9', 'chinese': '车六进七', 'comment': '气吞山河！悍然弃掉六路车强砍羊角士，将黑将引出中宫！'},

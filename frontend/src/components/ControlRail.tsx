@@ -34,7 +34,6 @@ export function ControlRail(props: ControlRailProps) {
   const onUndo = props.onUndo ?? (() => void g.undoRound())
   const onResign = props.onResign ?? (() => void g.resign())
   const onSettings = props.onSettings ?? ((patch) => void g.updateSettings(patch))
-  const playMode = props.playMode ?? ui.playMode
 
   const { game, settings } = state
   const over = game.status.state !== 'playing'
@@ -56,16 +55,13 @@ export function ControlRail(props: ControlRailProps) {
 
   const handleToggleSide = () => {
     const nextSide = isEngineRed ? 'black' : 'red'
-    if (playMode === 'sparring') {
-      ui.setFlipOverride(nextSide === 'red')
-    }
+    // nextSide 为新对局引擎执子：引擎执红 -> 玩家执黑 (flipped = true)；引擎执黑 -> 玩家执红 (flipped = false)
+    ui.setFlipOverride(nextSide === 'red')
     onNewGame(nextSide)
   }
 
   const handleNewGame = () => {
-    if (playMode === 'sparring') {
-      ui.setFlipOverride(isEngineRed)
-    }
+    ui.setFlipOverride(isEngineRed)
     onNewGame(game.engine_side)
   }
 

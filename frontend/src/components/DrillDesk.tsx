@@ -766,21 +766,8 @@ export function DrillDesk(props?: DrillDeskProps) {
 
   if (!mounted) return null
 
-  // 棋盘 HUD 字幕与漫画气泡
+  // 棋盘关键落点漫画气泡
   const currentStepInfo = animMode !== 'none' && animStep > 0 ? activeSteps[animStep - 1] : null
-  const boardCaption = currentStepInfo
-    ? {
-        badge: currentStepInfo.tag || (animMode === 'bad' ? '❌ 连锁后果' : animMode === 'good' ? '✅ 正着演示' : '👁️ 敌方企图'),
-        text: currentStepInfo.plain || currentStepInfo.comment || '',
-        tone: (animMode === 'bad' ? 'bad' : animMode === 'good' ? 'good' : 'threat') as 'bad' | 'good' | 'threat',
-      }
-    : inRebuttal
-    ? {
-        badge: '❌ 连锁后果',
-        text: feedback.text,
-        tone: 'bad' as const,
-      }
-    : null
 
   const moveBubble = currentStepInfo?.short_bubble && currentStepInfo.iccs
     ? {
@@ -808,7 +795,7 @@ export function DrillDesk(props?: DrillDeskProps) {
       onClick={onClose}
     >
       <div
-        className={`w-[min(1160px,96vw)] h-[min(90vh,860px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-paper-0/95 backdrop-blur-2xl rounded-3xl shadow-[0_24px_80px_rgba(0,0,0,0.22)] border border-hairline/80 ring-1 ring-black/5 transition-all duration-300 ${
+        className={`w-[min(1240px,96vw)] h-[min(92vh,900px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-slate-50 text-slate-900 rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.2)] border border-slate-200 transition-all duration-300 ${
           leaving ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -846,47 +833,45 @@ export function DrillDesk(props?: DrillDeskProps) {
 
         {/* 顶部病因专项集训 HUD 状态条 (Apple Sub-Ribbon) */}
         {focusMotif && (
-          <div className="flex items-center justify-between px-4 sm:px-6 py-2.5 bg-gradient-to-r from-amber-500/12 via-rose-500/8 to-transparent border-b border-amber-300/35 text-xs text-ink-1 shrink-0 animate-fadeIn backdrop-blur-md">
+          <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100/90 border-b border-slate-200 text-xs text-slate-700 shrink-0 font-mono">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-3 py-0.8 rounded-full bg-amber-500/20 text-amber-950 font-bold border border-amber-400/40 shadow-3xs">
-                <span>🎯</span>
-                <span>心魔攻坚：#{MOTIF_LABELS[focusMotif] || focusMotif}</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-red-50 text-red-700 font-bold border border-red-200 text-[11px]">
+                <span>🎯 攻坚靶向：#{MOTIF_LABELS[focusMotif] || focusMotif}</span>
               </span>
-              <span className="text-ink-2">
-                当前第 <b className="text-ink-0 font-bold font-num">{currentMotifIndex >= 0 ? currentMotifIndex + 1 : 1}</b> / {motifPuzzles.length} 题
+              <span className="text-slate-500 text-xs">
+                PUZZLE <b className="text-slate-800 font-bold font-mono">{currentMotifIndex >= 0 ? currentMotifIndex + 1 : 1}</b> / {motifPuzzles.length}
                 {masteredInMotifCount > 0 && (
-                  <span className="text-emerald-700 ml-1.5 font-semibold">
-                    （已击破 {masteredInMotifCount} 题）
+                  <span className="text-emerald-600 ml-1.5 font-semibold font-mono">
+                    (CLEARED {masteredInMotifCount})
                   </span>
                 )}
               </span>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                className="h-7 px-3 text-xs font-semibold text-primary-800 bg-paper-0 border border-primary-300/80 hover:bg-paper-2 rounded-xl transition cursor-pointer shadow-3xs active:scale-95 flex items-center gap-1"
+                className="h-6.5 px-2.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded transition cursor-pointer active:scale-95 flex items-center gap-1 shadow-3xs"
                 onClick={handleNextPuzzle}
-                title="切换到同病因下一道题（优先挑未攻克题目）"
+                title="切换到同病因下一题"
               >
-                <span>🎲</span>
-                <span>换一题</span>
+                <span>🎲 换一题</span>
               </button>
               <button
                 type="button"
-                className="h-7 px-2.5 text-xs text-ink-3 hover:text-ink-1 hover:bg-paper-2 rounded-xl transition cursor-pointer"
+                className="h-6.5 px-2 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-200 transition cursor-pointer"
                 onClick={() => setFocusMotif(null)}
-                title="退出专项训练模式，浏览全部课程分类"
+                title="退出专题"
               >
-                ✕ 退出专题
+                ✕
               </button>
             </div>
           </div>
         )}
 
         {/* 主体工作区：左棋盘 + 右侧通俗解说与动画推演面板 */}
-        <div className={`flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1.22fr)_minmax(340px,1fr)] min-h-0 overflow-hidden ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+        <div className={`flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1.24fr)_minmax(350px,1fr)] min-h-0 overflow-hidden bg-slate-100/40 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
           {/* 左侧棋盘列 */}
-          <div className="flex flex-col items-center p-3 border-b lg:border-b-0 lg:border-r border-hairline bg-paper-0 min-h-0 overflow-y-auto overflow-x-hidden gap-2">
+          <div className="flex flex-col items-center px-4 pt-2 pb-2 border-b lg:border-b-0 lg:border-r border-slate-200/90 bg-slate-50 min-h-0 overflow-y-auto overflow-x-hidden gap-1.5">
             <DrillStageBar
               stage={stage}
               animMode={animMode}
@@ -910,7 +895,7 @@ export function DrillDesk(props?: DrillDeskProps) {
             />
 
             {/* 棋盘包围盒 */}
-            <div className="w-full h-[clamp(380px,48vh,480px)] min-h-[380px] flex items-center justify-center relative">
+            <div className="w-full flex-1 min-h-[380px] max-h-[520px] flex items-center justify-center relative my-1">
               {displayGame ? (
                 <Board
                   game={displayGame}
@@ -921,7 +906,6 @@ export function DrillDesk(props?: DrillDeskProps) {
                   visualClues={visualClues}
                   readOnly={animMode !== 'none'}
                   onMove={handleMove}
-                  boardCaption={boardCaption}
                   moveBubble={moveBubble}
                   xrayOverlay={xrayActive ? xray : null}
                   spotlightSquares={spotlightSquares}
@@ -982,7 +966,7 @@ export function DrillDesk(props?: DrillDeskProps) {
           </div>
 
           {/* 右侧面板列 */}
-          <div className="flex flex-col gap-3 p-4 overflow-y-auto bg-paper-1/70 min-h-0">
+          <div className="flex flex-col gap-2.5 p-3.5 overflow-y-auto bg-slate-50/70 min-h-0">
             <DrillTacticsHUD
               currentPuzzle={currentPuzzle}
               feedback={feedback}

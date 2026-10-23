@@ -107,12 +107,8 @@ export function ReplayDesk(props?: ReplayDeskProps) {
         // 本来就错）就退回第 1 手 —— 摆一副对不上的盘比回到第一步更坏。
         const want = focusPly ?? 1
         setIndex(want >= 1 && want <= r.plies.length ? want : r.plies.length ? 1 : 0)
-        // 视角与「走进来的那一手」无关：**我方**（非引擎那一侧）朝下，跟现场那块盘
-        // 同一个朝向（App.tsx 那条约定：引擎执黑 → flipped = true）。
-        // 以前这里跟着 `focusPly` 那一手的行棋方走，于是引擎执红、从第 1 手跳进来时
-        // 摆的是「红方已经走了一步」却写着第 0 手 —— 数与像对不上，是同一件事的另一半。
-        // 想换个视角看这一局，有那颗「转」。
-        setFlipped(r.game.engine_side === 'black')
+        // 视角以我方（玩家视角）朝下：引擎执红 -> 我方执黑 (flipped = true)；引擎执黑 -> 我方执红 (flipped = false)
+        setFlipped(r.game.engine_side === 'red')
       })
       .catch((err: unknown) => {
         if (dead) return

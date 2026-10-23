@@ -27,7 +27,7 @@ import { play } from '../../lib/sound'
 import { BoardArtwork } from './BoardArtwork'
 import { BoardSvgLayer } from './BoardSvgLayer'
 import { BoardPiecesLayer } from './BoardPiecesLayer'
-import { BoardHudCaption, BoardOverlaysLayer } from './BoardOverlaysLayer'
+import { BoardOverlaysLayer } from './BoardOverlaysLayer'
 
 /** 落子反馈自身的时长。涟漪（520ms）比压实（320ms）长，两者错开收尾 */
 const IMPACT_MS = 520
@@ -65,7 +65,7 @@ export function Board({
   onSetupPieceDropFromTray,
   onPoofTriggered,
   setupValidation,
-  boardCaption = null,
+  boardCaption: _boardCaption = null,
   moveBubble = null,
   xrayOverlay = null,
   spotlightSquares = null,
@@ -715,8 +715,7 @@ export function Board({
           ghostMove={ghostMove}
         />
 
-        {/* 5. 棋盘顶部动态 HUD 战况字幕条：挂载于盘面顶层内部，绝对定位居中，绝不挤压文档流 */}
-        {boardCaption && <BoardHudCaption caption={boardCaption} />}
+
       </div>
     </div>
   )

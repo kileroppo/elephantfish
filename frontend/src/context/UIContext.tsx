@@ -480,13 +480,15 @@ export function UIProvider({ children }: { children: ReactNode }) {
     ],
   )
 
-  // 引擎执哪一边，这边的棋就朝下
+  // 玩家（我方）执哪一边，哪一边的棋就朝下
+  // 引擎执红 (game.engine_side === 'red') -> 玩家执黑 -> flipped = true (黑方朝下)
+  // 引擎执黑 (game.engine_side === 'black') -> 玩家执红 -> flipped = false (红方朝下)
   const prevEngineSide = useRef<string | null>(null)
   useEffect(() => {
     if (!game) return
     if (prevEngineSide.current !== game.engine_side) {
       prevEngineSide.current = game.engine_side
-      setFlipped(game.engine_side === 'black')
+      setFlipped(game.engine_side === 'red')
     }
   }, [game?.engine_side])
 
