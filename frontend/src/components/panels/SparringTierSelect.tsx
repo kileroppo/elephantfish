@@ -7,10 +7,10 @@ export interface SparringTier {
 }
 
 export const SPARRING_TIERS: SparringTier[] = [
-  { id: 'apprentice', label: '🌱 启蒙学徒', depth: 4, ms: 400, engine: 'builtin' },
-  { id: 'club', label: '🍵 街头棋摊', depth: 6, ms: 900, engine: 'builtin' },
-  { id: 'master', label: '⚔️ 省冠名手', depth: 12, ms: 1500, engine: 'pikafish' },
-  { id: 'god', label: '👑 绝顶宗师', depth: 20, ms: 3000, engine: 'pikafish' },
+  { id: 'apprentice', label: '🌱 启蒙学徒', depth: 4, ms: 400, engine: 'pikafish' },
+  { id: 'club', label: '🍵 街头棋摊', depth: 8, ms: 800, engine: 'pikafish' },
+  { id: 'master', label: '⚔️ 省冠名手', depth: 14, ms: 1500, engine: 'pikafish' },
+  { id: 'god', label: '👑 绝顶宗师', depth: 22, ms: 2500, engine: 'pikafish' },
 ]
 
 export interface SparringTierSelectProps {

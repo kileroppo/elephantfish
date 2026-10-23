@@ -19,9 +19,8 @@ import { useExitPhase } from '../hooks/useExitPhase'
 import { useGameContext } from '../context/GameContext'
 import { useUIContext } from '../context/UIContext'
 import { DrillHeader } from './drill/DrillHeader'
-import { DrillStageBar, DrillActionDock } from './drill/DrillControls'
-import { DrillTacticsHUD } from './drill/DrillTacticsHUD'
-import { DrillExplanationModal } from './drill/DrillExplanationModal'
+import { DrillActionDock } from './drill/DrillControls'
+import { CombatChronicle } from './drill/CombatChronicle'
 
 export interface DrillDeskProps {
   open?: boolean
@@ -80,10 +79,9 @@ export function DrillDesk(props?: DrillDeskProps) {
   const [thinking, setThinking] = useState(false)
   const [solved, setSolved] = useState(false)
   const [stage, setStage] = useState<'demo' | 'drill' | 'exam' | 'mirror'>('drill')
-  const [activeTab, setActiveTab] = useState<'pros_cons' | 'thinking' | 'breakdown' | 'catalog'>('pros_cons')
-  const [choiceMode, setChoiceMode] = useState<boolean>(true)
-  const [spotlightActive, setSpotlightActive] = useState<boolean>(false)
-  const [xrayActive, setXrayActive] = useState<boolean>(true)
+
+  const [spotlightActive] = useState<boolean>(false)
+  const [xrayActive] = useState<boolean>(true)
   const [choiceOptions, setChoiceOptions] = useState<ChoiceOption[]>([])
   const [xray, setXray] = useState<XiangqiXRay | null>(null)
   const [hoveredChoice, setHoveredChoice] = useState<ChoiceOption | null>(null)
@@ -103,6 +101,27 @@ export function DrillDesk(props?: DrillDeskProps) {
 
   // 反击惩罚态（Rebuttal）
   const [inRebuttal, setInRebuttal] = useState(false)
+
+  // 象弈神经对抗试炼舱状态：连续走子时序流与神经心律耗时
+  const [moveHistory, setMoveHistory] = useState<
+    Array<{
+      turn: 'user' | 'engine'
+      chinese: string
+      iccs: string
+      evalText?: string
+      isFault?: boolean
+      comment?: string
+    }>
+  >([])
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0)
+
+  useEffect(() => {
+    if (solved || inRebuttal || animMode !== 'none') return
+    const timer = setInterval(() => {
+      setElapsedSeconds((s) => s + 1)
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [solved, inRebuttal, animMode])
 
   const [feedback, setFeedback] = useState<{ text: string; tone: 'info' | 'success' | 'warn' | 'error' }>({
     text: '正在加载训练题…',
@@ -308,6 +327,8 @@ export function DrillDesk(props?: DrillDeskProps) {
     setAnimMode('none')
     setAnimStep(0)
     setAnimPlaying(false)
+    setMoveHistory([])
+    setElapsedSeconds(0)
 
     try {
       const res = await api.trainingStart(puzzleId, initialStage)
@@ -488,6 +509,17 @@ export function DrillDesk(props?: DrillDeskProps) {
         setInRebuttal(false)
         if (res.xray) setXray(res.xray)
         play('win')
+        setMoveHistory((prev) => [
+          ...prev,
+          {
+            turn: 'user',
+            chinese: res.user_move?.chinese || iccs,
+            iccs,
+            evalText: '绝杀入局',
+            isFault: false,
+            comment: res.explanation || '一击毙命！心魔彻底击碎！',
+          },
+        ])
 
         if (focusMotif && motifPuzzles.length > 0) {
           const remaining = motifPuzzles.filter((p) => p.id !== currentPuzzle.id && p.status !== 'mastered').length
@@ -514,6 +546,28 @@ export function DrillDesk(props?: DrillDeskProps) {
         void refreshCatalog()
       } else if (res.outcome === 'bad_move' && res.rebuttal) {
         setInRebuttal(true)
+        setMoveHistory((prev) => [
+          ...prev,
+          {
+            turn: 'user',
+            chinese: res.user_move?.chinese || iccs,
+            iccs,
+            evalText: '致命失着',
+            isFault: true,
+            comment: '偏离必杀主线，暴露致命空档',
+          },
+          ...(res.engine_move
+            ? [
+                {
+                  turn: 'engine' as const,
+                  chinese: res.engine_move.chinese,
+                  iccs: res.engine_move.iccs,
+                  isFault: true,
+                  comment: res.message,
+                },
+              ]
+            : []),
+        ])
         const bSteps = res.bad_steps || res.punish_detail?.bad_steps || []
         const gSteps = res.good_steps || res.punish_detail?.good_steps || goodSteps
         const pc = res.pros_cons || res.punish_detail?.pros_cons || prosCons
@@ -547,6 +601,27 @@ export function DrillDesk(props?: DrillDeskProps) {
           text: res.message,
           tone: 'info',
         })
+        setMoveHistory((prev) => [
+          ...prev,
+          {
+            turn: 'user',
+            chinese: res.user_move?.chinese || iccs,
+            iccs,
+            evalText: '+M 破局正手',
+            isFault: false,
+          },
+          ...(res.engine_move
+            ? [
+                {
+                  turn: 'engine' as const,
+                  chinese: res.engine_move.chinese,
+                  iccs: res.engine_move.iccs,
+                  comment: res.message,
+                },
+              ]
+            : []),
+        ])
+        play('move')
         void refreshCatalog()
       } else {
         setFeedback({
@@ -573,6 +648,7 @@ export function DrillDesk(props?: DrillDeskProps) {
     setAnimStep(0)
     try {
       const res = await api.trainingUndo(currentPuzzle.id)
+      setMoveHistory((prev) => (prev.length <= 2 ? [] : prev.slice(0, -2)))
       setGame(res.game)
       setBaseGame(res.game)
       setSolved(false)
@@ -600,6 +676,8 @@ export function DrillDesk(props?: DrillDeskProps) {
       setSolved(false)
       setInRebuttal(false)
       setStage(targetStage)
+      setMoveHistory([])
+      setElapsedSeconds(0)
       setAnimMode('none')
       setAnimStep(0)
       setAnimPlaying(false)
@@ -746,23 +824,13 @@ export function DrillDesk(props?: DrillDeskProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [mounted, leaving, onClose, clearAnimTimer])
 
-  const categoryPuzzles = puzzles.filter((p) => p.category === activeCategory)
   const motifPuzzles = useMemo(() => {
     if (!focusMotif) return []
     return puzzles.filter((p) => p.motif === focusMotif)
   }, [focusMotif, puzzles])
-  const currentMotifIndex = useMemo(() => {
-    if (!focusMotif || !currentPuzzle) return -1
-    return motifPuzzles.findIndex((p) => p.id === currentPuzzle.id)
-  }, [focusMotif, motifPuzzles, currentPuzzle])
-  const masteredInMotifCount = useMemo(() => {
-    return motifPuzzles.filter((p) => p.status === 'mastered').length
-  }, [motifPuzzles])
 
-  const displayCatalogPuzzles = useMemo(() => {
-    if (focusMotif && motifPuzzles.length > 0) return motifPuzzles
-    return categoryPuzzles
-  }, [focusMotif, motifPuzzles, categoryPuzzles])
+
+
 
   if (!mounted) return null
 
@@ -811,7 +879,6 @@ export function DrillDesk(props?: DrillDeskProps) {
             setFocusMotif(null)
             setActiveCategory(catId)
             if (catId === 'game_breakdown') {
-              setActiveTab('breakdown')
               if (!gameBreakdown) {
                 void loadGameBreakdown(activeGameId || undefined)
               }
@@ -831,68 +898,11 @@ export function DrillDesk(props?: DrillDeskProps) {
           onClose={onClose}
         />
 
-        {/* 顶部病因专项集训 HUD 状态条 (Apple Sub-Ribbon) */}
-        {focusMotif && (
-          <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100/90 border-b border-slate-200 text-xs text-slate-700 shrink-0 font-mono">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-red-50 text-red-700 font-bold border border-red-200 text-[11px]">
-                <span>🎯 攻坚靶向：#{MOTIF_LABELS[focusMotif] || focusMotif}</span>
-              </span>
-              <span className="text-slate-500 text-xs">
-                PUZZLE <b className="text-slate-800 font-bold font-mono">{currentMotifIndex >= 0 ? currentMotifIndex + 1 : 1}</b> / {motifPuzzles.length}
-                {masteredInMotifCount > 0 && (
-                  <span className="text-emerald-600 ml-1.5 font-semibold font-mono">
-                    (CLEARED {masteredInMotifCount})
-                  </span>
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                className="h-6.5 px-2.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded transition cursor-pointer active:scale-95 flex items-center gap-1 shadow-3xs"
-                onClick={handleNextPuzzle}
-                title="切换到同病因下一题"
-              >
-                <span>🎲 换一题</span>
-              </button>
-              <button
-                type="button"
-                className="h-6.5 px-2 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-200 transition cursor-pointer"
-                onClick={() => setFocusMotif(null)}
-                title="退出专题"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* 主体工作区：左棋盘 + 右侧通俗解说与动画推演面板 */}
-        <div className={`flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1.24fr)_minmax(350px,1fr)] min-h-0 overflow-hidden bg-slate-100/40 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
-          {/* 左侧棋盘列 */}
-          <div className="flex flex-col items-center px-4 pt-2 pb-2 border-b lg:border-b-0 lg:border-r border-slate-200/90 bg-slate-50 min-h-0 overflow-y-auto overflow-x-hidden gap-1.5">
-            <DrillStageBar
-              stage={stage}
-              animMode={animMode}
-              choiceMode={choiceMode}
-              spotlightActive={spotlightActive}
-              xrayActive={xrayActive}
-              solved={solved}
-              onStartGoodAnim={() => startAnimation('good')}
-              onSwitchToDrill={() => {
-                if (animMode !== 'none') {
-                  stopAnimationToPlay()
-                } else {
-                  void handleReset('drill')
-                }
-              }}
-              onReset={(s) => void handleReset(s)}
-              onMirrorDrill={handleMirrorDrill}
-              onToggleChoiceMode={() => setChoiceMode((v) => !v)}
-              onToggleSpotlight={() => setSpotlightActive((v) => !v)}
-              onToggleXray={() => setXrayActive((v) => !v)}
-            />
+        <div className={`flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)] min-h-0 overflow-hidden bg-white ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+          {/* 左侧棋盘列：特斯拉纯粹主控台 */}
+          <div className="flex flex-col items-center justify-between p-3 border-b lg:border-b-0 lg:border-r border-slate-100 bg-[#fafafa] min-h-0 overflow-hidden">
+
 
             {/* 棋盘包围盒 */}
             <div className="w-full flex-1 min-h-[380px] max-h-[520px] flex items-center justify-center relative my-1">
@@ -965,21 +975,23 @@ export function DrillDesk(props?: DrillDeskProps) {
             />
           </div>
 
-          {/* 右侧面板列 */}
-          <div className="flex flex-col gap-2.5 p-3.5 overflow-y-auto bg-slate-50/70 min-h-0">
-            <DrillTacticsHUD
+          {/* 右侧面板列：特斯拉流式战况屏 */}
+          <div className="flex flex-col p-4 overflow-y-auto bg-white min-h-0">
+            <CombatChronicle
               currentPuzzle={currentPuzzle}
-              feedback={feedback}
-              inRebuttal={inRebuttal}
-              badStepsCount={badSteps.length}
               solved={solved}
+              inRebuttal={inRebuttal}
               userSideLabel={userSideLabel}
-              choiceMode={choiceMode}
-              choiceOptions={choiceOptions}
+              feedback={feedback}
+              badStepsCount={badSteps.length}
               animMode={animMode}
               hoveredChoice={hoveredChoice}
+              choiceOptions={choiceOptions}
+              prosCons={prosCons}
               hints={hints}
               hintLevel={hintLevel}
+              moveHistory={moveHistory}
+              elapsedSeconds={elapsedSeconds}
               onUndo={handleUndo}
               onStartBadAnim={() => startAnimation('bad')}
               onStartGoodAnim={() => startAnimation('good')}
@@ -992,68 +1004,6 @@ export function DrillDesk(props?: DrillDeskProps) {
                 }
               }}
               onMakeMove={(iccs) => void handleMove(iccs)}
-            />
-
-            <DrillExplanationModal
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              animMode={animMode}
-              animStep={animStep}
-              animPlaying={animPlaying}
-              inRebuttal={inRebuttal}
-              activeSteps={activeSteps}
-              prosCons={prosCons}
-              badStepsCount={badSteps.length}
-              goodStepsCount={goodSteps.length}
-              hints={hints}
-              hintLevel={hintLevel}
-              solved={solved}
-              stage={stage}
-              onResetAnimStep={() => {
-                clearAnimTimer()
-                setAnimPlaying(false)
-                setAnimStep(0)
-              }}
-              onPrevAnimStep={() => {
-                clearAnimTimer()
-                setAnimPlaying(false)
-                setAnimStep((s) => Math.max(0, s - 1))
-              }}
-              onTogglePlayAnim={() => {
-                if (animPlaying) {
-                  clearAnimTimer()
-                  setAnimPlaying(false)
-                } else {
-                  if (animStep >= activeSteps.length) setAnimStep(0)
-                  setAnimPlaying(true)
-                }
-              }}
-              onNextAnimStep={() => {
-                clearAnimTimer()
-                setAnimPlaying(false)
-                setAnimStep((s) => Math.min(activeSteps.length, s + 1))
-              }}
-              onSelectAnimStep={(stepIndex) => {
-                clearAnimTimer()
-                setAnimPlaying(false)
-                setAnimStep(stepIndex)
-              }}
-              onStartBadAnim={() => startAnimation('bad')}
-              onStartGoodAnim={() => startAnimation('good')}
-              onRequestHint={handleRequestHint}
-              thinkingGuide={thinkingGuide}
-              threatStepsCount={threatSteps.length}
-              onStartThreatAnim={() => startAnimation('threat')}
-              onFocusWeakness={(square) => {
-                setVisualClues((prev) => ({
-                  ...prev,
-                  weakness_squares: [square],
-                }))
-              }}
-              gameBreakdown={gameBreakdown}
-              categoryPuzzles={displayCatalogPuzzles}
-              currentPuzzleId={currentPuzzle?.id}
-              onSelectPuzzle={(id) => void loadPuzzle(id, 'drill')}
             />
           </div>
         </div>

@@ -102,7 +102,7 @@ export function HelpOverlay(props?: { open?: boolean; onClose?: () => void }) {
 
         <h3>关于 AI 引擎</h3>
         <p className="hint">
-          XQ-Coach 象棋教练支持双引擎自由切换：可使用顶尖开源引擎 <strong>皮卡鱼 Pikafish (NNUE)</strong> 进行深度评估与顽强防守，也可选用纯 Python 内置引擎进行轻量对弈与算法实验。
+          XQ-Coach 象棋教练由顶尖开源象棋引擎 <strong>皮卡鱼 Pikafish (NNUE)</strong> 统一驱动全段位对弈实训与全局深度复盘，兼具拟人对弈呼吸感与大师级棋局评测。
         </p>
       </div>
     </div>

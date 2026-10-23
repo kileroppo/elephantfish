@@ -361,7 +361,14 @@ class EngineCoordinator:
                         if task.stop_event.is_set():
                             break
 
-                on_complete(task, last, start_board, red_to_move)
+                # 拟人呼吸节拍：避免浅层秒发导致子力弹射，保留真实对弈的落子呼吸感
+                target_pacing = min(settings.get('think_ms', 1500) / 1000.0, 3.0)
+                remaining = target_pacing - (time.time() - task.started)
+                if remaining > 0 and not task.stop_event.is_set():
+                    task.stop_event.wait(remaining)
+
+                if not task.stop_event.is_set():
+                    on_complete(task, last, start_board, red_to_move)
             except Exception as exc:
                 traceback.print_exc()
                 task.status = 'error'

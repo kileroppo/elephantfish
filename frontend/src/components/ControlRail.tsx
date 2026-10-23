@@ -3,7 +3,6 @@ import type { AppState, Side } from '../types'
 import { useGameContext } from '../context/GameContext'
 import { useUIContext } from '../context/UIContext'
 import { SPARRING_TIERS, type SparringTier } from './panels/SparringTierSelect'
-import { THINK_PRESETS } from './panels/AdvancedSettingsDrawer'
 
 export interface ControlRailProps {
   open?: boolean
@@ -39,9 +38,8 @@ export function ControlRail(props: ControlRailProps) {
   const over = game.status.state !== 'playing'
   const coachGuardOn = settings.coach_guard !== false
   const activeTier = settings.sparring_level ?? 'master'
-  const isEngineRed = game.engine_side === 'red'
+  const isEngineRed = game.engine_side === 'red' // 引擎执红 = 玩家执黑
 
-  const [moreOpen, setMoreOpen] = useState(false)
   const [confirmResign, setConfirmResign] = useState(false)
 
   const handleSelectTier = (t: SparringTier) => {
@@ -49,15 +47,18 @@ export function ControlRail(props: ControlRailProps) {
       sparring_level: t.id,
       max_depth: t.depth,
       think_ms: t.ms,
-      engine_type: t.engine,
+      engine_type: 'pikafish',
     })
   }
 
-  const handleToggleSide = () => {
-    const nextSide = isEngineRed ? 'black' : 'red'
-    // nextSide 为新对局引擎执子：引擎执红 -> 玩家执黑 (flipped = true)；引擎执黑 -> 玩家执红 (flipped = false)
-    ui.setFlipOverride(nextSide === 'red')
-    onNewGame(nextSide)
+  const handleSelectSide = (playerSide: 'red' | 'black') => {
+    const nextEngineSide: Side = playerSide === 'red' ? 'black' : 'red'
+    if (nextEngineSide === game.engine_side && !over) {
+      return
+    }
+    // 玩家执黑 -> 翻转棋盘让黑方在底；玩家执红 -> 正向红在底
+    ui.setFlipOverride(playerSide === 'black')
+    onNewGame(nextEngineSide)
   }
 
   const handleNewGame = () => {
@@ -84,7 +85,7 @@ export function ControlRail(props: ControlRailProps) {
       aria-hidden={!open}
       {...(open ? {} : { inert: '' })}
     >
-      {/* 极简 iOS 控制岛容器：高度 ~170px，优雅无遮挡 */}
+      {/* 极简 iOS 控制岛容器：极致轻薄，无折叠跳动 */}
       <div className="w-full flex flex-col bg-paper-0/95 backdrop-blur-md rounded-2xl border border-hairline shadow-[0_2px_12px_rgba(0,0,0,0.04)] overflow-hidden transition-all duration-300">
         {/* 顶部标题栏 */}
         <div className="flex items-center justify-between px-3.5 pt-3 pb-2 select-none">
@@ -107,7 +108,7 @@ export function ControlRail(props: ControlRailProps) {
 
         {/* 核心控件区 */}
         <div className="px-3 pb-3 flex flex-col gap-2.5">
-          {/* 1. iOS 原生风格分段控制器 (Segmented Control) */}
+          {/* 1. 对弈段位选择器 */}
           <div
             className="w-full inline-flex p-0.5 bg-paper-2/90 rounded-xl border border-hairline text-xs font-medium"
             role="tablist"
@@ -137,7 +138,7 @@ export function ControlRail(props: ControlRailProps) {
                       : 'bg-transparent text-ink-3 hover:text-ink-1'
                   }`}
                   onClick={() => handleSelectTier(t)}
-                  title={`${t.label}（${t.engine === 'pikafish' ? '皮卡鱼' : '纯Python'} · ${t.ms}ms）`}
+                  title={`${t.label}（拟人节奏约 ${t.ms}ms）`}
                 >
                   <span className="text-[10px]">{emoji}</span>
                   <span>{shortName}</span>
@@ -146,7 +147,45 @@ export function ControlRail(props: ControlRailProps) {
             })}
           </div>
 
-          {/* 2. iOS 风格列表项与平滑 Toggle Switch */}
+          {/* 2. 执子方选择器（直接在主屏，无需展开） */}
+          <div
+            className="w-full inline-flex p-0.5 bg-paper-2/70 rounded-lg border border-hairline text-xs font-medium"
+            role="radiogroup"
+            aria-label="执子选择"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!isEngineRed}
+              className={`flex-1 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+                !isEngineRed
+                  ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
+                  : 'bg-transparent text-ink-3 hover:text-ink-1'
+              }`}
+              onClick={() => handleSelectSide('red')}
+              title="切换为我执红方（红方先手开局）"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-cinnabar" />
+              <span>我执红 · 先手</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={isEngineRed}
+              className={`flex-1 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+                isEngineRed
+                  ? 'bg-paper-0 text-ink-0 shadow-xs font-semibold'
+                  : 'bg-transparent text-ink-3 hover:text-ink-1'
+              }`}
+              onClick={() => handleSelectSide('black')}
+              title="切换为我执黑方（对方先出招）"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-ink-0" />
+              <span>我执黑 · 后手</span>
+            </button>
+          </div>
+
+          {/* 3. 实时防走错提醒 Toggle Switch */}
           <div className="flex items-center justify-between px-1 py-0.5">
             <span className="text-xs font-medium text-ink-1">实时防走错提醒</span>
             <button
@@ -169,7 +208,7 @@ export function ControlRail(props: ControlRailProps) {
             </button>
           </div>
 
-          {/* 3. 核心高频双核操作：新开一局 (重点) + 悔一步 */}
+          {/* 4. 核心高频双核操作：新开一局 (重点) + 悔一步 */}
           <div className="grid grid-cols-2 gap-2 pt-0.5">
             <button
               type="button"
@@ -188,98 +227,36 @@ export function ControlRail(props: ControlRailProps) {
             </button>
           </div>
 
-          {/* 4. 情境化内嵌抽屉：低频设置与动作展开 */}
-          <div className="pt-1 border-t border-hairline/60">
+          {/* 5. 底部极简次要操作文字链：自由排局 · 认输 */}
+          <div className="flex items-center justify-between pt-1.5 border-t border-hairline/60 px-1 text-[11px] text-ink-3">
             <button
               type="button"
-              className="w-full flex items-center justify-between py-1 px-1 rounded-md text-[11px] font-medium text-ink-4 hover:text-ink-1 hover:bg-paper-2/60 transition-colors cursor-pointer border-0 bg-transparent"
-              onClick={() => setMoreOpen(!moreOpen)}
+              className={`bg-transparent border-0 cursor-pointer p-1 rounded transition-colors ${
+                setupMode
+                  ? 'text-amber-600 font-semibold'
+                  : 'hover:text-ink-1'
+              }`}
+              onClick={onToggleSetup}
+              title={setupMode ? '点击退出自由排局' : '进入自由补棋与排局'}
             >
-              <span>··· 更多对局设置</span>
-              <span
-                className={`text-[9px] transition-transform duration-200 ${
-                  moreOpen ? 'rotate-180' : ''
-                }`}
-              >
-                ▼
-              </span>
+              {setupMode ? '● 退出排局' : '自由排局'}
             </button>
 
-            {/* 展开区：执子、翻转、补棋、认输、高级参数 */}
-            {moreOpen && (
-              <div className="flex flex-col gap-2 mt-2 pt-1 border-t border-hairline/40 animate-fadeIn">
-                <button
-                  type="button"
-                  className="w-full h-7.5 px-2 rounded-lg text-xs font-medium bg-paper-2/70 hover:bg-paper-2 text-ink-1 border border-hairline transition-colors flex items-center justify-center cursor-pointer whitespace-nowrap"
-                  onClick={handleToggleSide}
-                >
-                  执子先手：{isEngineRed ? '我执黑 · 引擎红' : '我执红 · 引擎黑'}
-                </button>
+            <span className="text-hairline-strong select-none">·</span>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    className="h-7.5 px-2 rounded-lg text-xs font-medium bg-paper-2/70 hover:bg-paper-2 text-ink-1 border border-hairline transition-colors flex items-center justify-center cursor-pointer"
-                    onClick={() => ui.setFlipOverride(!ui.flipped)}
-                    title="翻转棋盘视角 (快捷键 F)"
-                  >
-                    ⇅ 翻转视角
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`h-7.5 px-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center cursor-pointer border ${
-                      setupMode
-                        ? 'bg-amber-600 text-white border-amber-700 font-semibold'
-                        : 'bg-paper-2/70 hover:bg-paper-2 text-ink-1 border-hairline'
-                    }`}
-                    onClick={onToggleSetup}
-                  >
-                    {setupMode ? '退出补棋' : '自由排局'}
-                  </button>
-                </div>
-
-                {/* 思考时限 */}
-                <div className="flex flex-col gap-1.5 pt-1.5 border-t border-hairline/40">
-                  <span className="text-[10.5px] font-medium text-ink-3">单步思考时间</span>
-                  <div className="grid grid-cols-2 gap-1">
-                    {THINK_PRESETS.map((p) => {
-                      const isOn = Math.abs(settings.think_ms - p.ms) < 150
-                      return (
-                        <button
-                          key={p.ms}
-                          type="button"
-                          className={`h-6.5 rounded-md text-[10.5px] border flex items-center justify-center font-medium cursor-pointer transition-colors ${
-                            isOn
-                              ? 'bg-cinnabar text-white border-cinnabar font-semibold shadow-xs'
-                              : 'bg-paper-1/60 hover:bg-paper-2 text-ink-2 border-hairline'
-                          }`}
-                          onClick={() => onSettings({ think_ms: p.ms })}
-                        >
-                          {p.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* 认输按钮（置底防误触） */}
-                <div className="pt-1.5 border-t border-hairline/40">
-                  <button
-                    type="button"
-                    className={`w-full h-7 px-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center cursor-pointer border ${
-                      confirmResign
-                        ? 'bg-rose-600 text-white border-rose-700 font-semibold shadow-xs animate-pulse'
-                        : 'bg-transparent hover:bg-paper-2 text-ink-4 hover:text-rose-600 border-hairline/60'
-                    }`}
-                    disabled={over}
-                    onClick={handleResignClick}
-                  >
-                    {confirmResign ? '再点一次确认认输' : '认输'}
-                  </button>
-                </div>
-              </div>
-            )}
+            <button
+              type="button"
+              className={`bg-transparent border-0 cursor-pointer p-1 rounded transition-colors ${
+                confirmResign
+                  ? 'text-rose-600 font-semibold animate-pulse'
+                  : 'hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed'
+              }`}
+              disabled={over}
+              onClick={handleResignClick}
+              title={over ? '对局已结束' : '认输本局'}
+            >
+              {confirmResign ? '确认认输?' : '认输'}
+            </button>
           </div>
         </div>
       </div>
