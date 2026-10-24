@@ -21,6 +21,7 @@ import { useUIContext } from '../context/UIContext'
 import { DrillHeader } from './drill/DrillHeader'
 import { DrillActionDock } from './drill/DrillControls'
 import { CombatChronicle } from './drill/CombatChronicle'
+import { FloatingTacticalCapsule } from './drill/FloatingTacticalCapsule'
 
 export interface DrillDeskProps {
   open?: boolean
@@ -902,7 +903,29 @@ export function DrillDesk(props?: DrillDeskProps) {
         <div className={`flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)] min-h-0 overflow-hidden bg-white ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
           {/* 左侧棋盘列：特斯拉纯粹主控台 */}
           <div className="flex flex-col items-center justify-between p-3 border-b lg:border-b-0 lg:border-r border-slate-100 bg-[#fafafa] min-h-0 overflow-hidden">
-
+            {/* 盘面顶部沉浸战术灵动胶囊 */}
+            <FloatingTacticalCapsule
+              currentPuzzle={currentPuzzle}
+              solved={solved}
+              inRebuttal={inRebuttal}
+              feedback={feedback}
+              choiceOptions={choiceOptions}
+              hoveredChoice={hoveredChoice}
+              badStepsCount={badSteps.length}
+              animMode={animMode}
+              onHoverChoice={setHoveredChoice}
+              onSelectChoiceRehearse={(opt) => {
+                if (opt.steps && opt.steps.length > 0) {
+                  startAnimation(opt.is_correct ? 'good' : 'bad', opt.steps)
+                }
+              }}
+              onMakeMove={(iccs) => void handleMove(iccs)}
+              onUndo={handleUndo}
+              onStartBadAnim={() => startAnimation('bad')}
+              onStartGoodAnim={() => startAnimation('good')}
+              onMirrorDrill={handleMirrorDrill}
+              onNextPuzzle={handleNextPuzzle}
+            />
 
             {/* 棋盘包围盒 */}
             <div className="w-full flex-1 min-h-[380px] max-h-[520px] flex items-center justify-center relative my-1">

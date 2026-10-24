@@ -107,12 +107,12 @@ export const CombatChronicle: React.FC<CombatChronicleProps> = ({
         </div>
       </div>
 
-      {/* 2. 候选分支对比流 (零边框列表，极度丝滑) */}
+      {/* 2. 候选分支对比流 (极简紧凑型决策矩阵，与盘面胶囊形成呼应) */}
       {choiceOptions.length > 0 && !solved && !inRebuttal && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 uppercase tracking-wider pb-1">
-            <span>DECISION MATRIX</span>
-            <span className="text-[10px]">悬停查看盘面虚影 · 点击落子</span>
+            <span>BRANCHES MATRIX</span>
+            <span className="text-[10px]">盘上胶囊/此处均可一键落子</span>
           </div>
 
           <div className="space-y-1">
@@ -123,7 +123,7 @@ export const CombatChronicle: React.FC<CombatChronicleProps> = ({
               return (
                 <div
                   key={opt.id}
-                  className={`group px-3 py-2.5 rounded-xl transition-all duration-150 cursor-pointer flex items-center justify-between gap-3 ${
+                  className={`group px-3 py-2 rounded-xl transition-all duration-150 cursor-pointer flex items-center justify-between gap-3 ${
                     isHovered
                       ? 'bg-slate-100 text-slate-900 shadow-3xs'
                       : 'hover:bg-slate-50 text-slate-700'
@@ -163,7 +163,7 @@ export const CombatChronicle: React.FC<CombatChronicleProps> = ({
                     </div>
                   </div>
 
-                  {/* 右侧：试看推演图标 (仅在需要时优雅点缀) */}
+                  {/* 右侧：试看推演图标 */}
                   <div className="flex items-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity shrink-0">
                     <button
                       type="button"
