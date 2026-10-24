@@ -174,7 +174,10 @@ export function UIProvider({ children }: { children: ReactNode }) {
       const next = curr === 'sparring' ? 'relay' : 'sparring'
       localStorage.setItem('ef.play_mode', next)
       void g.updateSettings({ play_mode: next } as any)
-      g.pushToast(`已切换为：${next === 'sparring' ? '实战陪练模式' : '信使代打模式'}`, 'info')
+      g.pushToast(
+        `已切换为：${next === 'sparring' ? '实战陪练模式（我执朝我）' : '信使代下模式（引擎朝下）'}`,
+        'info',
+      )
       return next
     })
   }, [g])
@@ -480,17 +483,21 @@ export function UIProvider({ children }: { children: ReactNode }) {
     ],
   )
 
-  // 玩家（我方）执哪一边，哪一边的棋就朝下
-  // 引擎执红 (game.engine_side === 'red') -> 玩家执黑 -> flipped = true (黑方朝下)
-  // 引擎执黑 (game.engine_side === 'black') -> 玩家执红 -> flipped = false (红方朝下)
-  const prevEngineSide = useRef<string | null>(null)
+  // 视角朝向规则：
+  // 1. 信使代下模式 (relay): 我是转述人，引擎朝下
+  //    - 引擎执红 (game.engine_side === 'red') -> 红方朝下 (flipped = false)
+  //    - 引擎执黑 (game.engine_side === 'black') -> 黑方朝下 (flipped = true)
+  // 2. 实战陪练模式 (sparring): 我亲自下棋，我执朝我
+  //    - 我执红 (引擎执黑, game.engine_side === 'black') -> 红方朝下 (flipped = false)
+  //    - 我执黑 (引擎执红, game.engine_side === 'red') -> 黑方朝下 (flipped = true)
   useEffect(() => {
     if (!game) return
-    if (prevEngineSide.current !== game.engine_side) {
-      prevEngineSide.current = game.engine_side
-      setFlipped(game.engine_side === 'red')
-    }
-  }, [game?.engine_side])
+    const shouldFlip =
+      playMode === 'relay'
+        ? game.engine_side === 'black'
+        : game.engine_side === 'red'
+    setFlipped(shouldFlip)
+  }, [game?.engine_side, playMode])
 
   useEffect(() => {
     setSoundEnabled(soundOn)

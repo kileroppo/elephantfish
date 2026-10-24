@@ -32,18 +32,22 @@ export function GameActionGrid({
   const isEngineRed = game.engine_side === 'red'
 
   const handleNewGame = () => {
-    if (playMode === 'sparring') {
-      onSetFlipOverride(isEngineRed)
-    }
+    const shouldFlip =
+      playMode === 'relay'
+        ? game.engine_side === 'black'
+        : game.engine_side === 'red'
+    onSetFlipOverride(shouldFlip)
     onNewGame(game.engine_side)
   }
 
   const handleToggleSide = () => {
-    const nextSide = isEngineRed ? 'black' : 'red'
-    if (playMode === 'sparring') {
-      onSetFlipOverride(nextSide === 'red')
-    }
-    onNewGame(nextSide)
+    const nextEngineSide = isEngineRed ? 'black' : 'red'
+    const shouldFlip =
+      playMode === 'relay'
+        ? nextEngineSide === 'black'
+        : nextEngineSide === 'red'
+    onSetFlipOverride(shouldFlip)
+    onNewGame(nextEngineSide)
   }
 
   const handleResignClick = () => {
@@ -89,7 +93,14 @@ export function GameActionGrid({
           onClick={handleToggleSide}
           title="切换我方执红/执黑"
         >
-          执子先手：{isEngineRed ? '我执黑 · 引擎红' : '我执红 · 引擎黑'}
+          执子先手：
+          {playMode === 'relay'
+            ? isEngineRed
+              ? '引擎执红 · 对手黑'
+              : '引擎执黑 · 对手红'
+            : isEngineRed
+            ? '我执黑 · 引擎红'
+            : '我执红 · 引擎黑'}
         </button>
 
         {/* 第 3 行：视角翻转 + 自由排局 */}

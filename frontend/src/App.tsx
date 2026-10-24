@@ -36,8 +36,11 @@ function AppContent() {
 
   const handleNewGame = useCallback(
     (side: 'red' | 'black') => {
-      // side 为 engine_side：引擎执红则我方执黑 (flipped = true)；引擎执黑则我方执红 (flipped = false)
-      ui.setFlipOverride(side === 'red')
+      // side 为 engine_side
+      // 代下模式：引擎朝下（引擎黑 -> flipped = true）
+      // 陪练模式：我执朝下（引擎红 = 我黑 -> flipped = true）
+      const shouldFlip = ui.playMode === 'relay' ? side === 'black' : side === 'red'
+      ui.setFlipOverride(shouldFlip)
       void g.newGame(side)
     },
     [g, ui],
@@ -195,16 +198,21 @@ function AppContent() {
     if (setup.active) {
       const nextSide = setup.engineSide === 'red' ? 'black' : 'red'
       setup.setEngineSide(nextSide)
-      ui.setFlipOverride(nextSide === 'red')
+      const shouldFlip = ui.playMode === 'relay' ? nextSide === 'black' : nextSide === 'red'
+      ui.setFlipOverride(shouldFlip)
       g.pushToast(
-        `排局设定：引擎执${nextSide === 'red' ? '红' : '黑'}（我方执${nextSide === 'red' ? '黑' : '红'}朝下）`,
+        ui.playMode === 'relay'
+          ? `排局设定：引擎执${nextSide === 'red' ? '红' : '黑'}（引擎${nextSide === 'red' ? '红' : '黑'}方朝下）`
+          : `排局设定：引擎执${nextSide === 'red' ? '红' : '黑'}（我方执${nextSide === 'red' ? '黑' : '红'}朝下）`,
         'info',
       )
     } else if (game) {
       const nextSide = game.engine_side === 'red' ? 'black' : 'red'
       handleNewGame(nextSide)
       g.pushToast(
-        `已切换为引擎执${nextSide === 'red' ? '红' : '黑'}（${nextSide === 'red' ? '红' : '黑'}方朝下）`,
+        ui.playMode === 'relay'
+          ? `已切换为引擎执${nextSide === 'red' ? '红' : '黑'}（引擎朝下）`
+          : `已切换为我执${nextSide === 'red' ? '黑' : '红'}（我方朝下）`,
         'ok',
       )
     }
@@ -223,7 +231,13 @@ function AppContent() {
     : isPlaying
       ? g.thinking
         ? '引擎深度计算中…'
-        : `轮到${sideName(game.turn)}${game.turn === game.engine_side ? '（引擎出招）' : '（您出招，请在盘面落子）'}`
+        : `轮到${sideName(game.turn)}${
+            game.turn === game.engine_side
+              ? '（引擎出招）'
+              : ui.playMode === 'relay'
+              ? '（请录入对方走法）'
+              : '（您出招，请在盘面落子）'
+          }`
       : game.status.reason || '对局结束'
 
   return (
@@ -271,11 +285,13 @@ function AppContent() {
             onTurnChange={setup.setTurn}
             onEngineSideChange={(side) => {
               setup.setEngineSide(side)
-              ui.setFlipOverride(side === 'red')
+              const shouldFlip = ui.playMode === 'relay' ? side === 'black' : side === 'red'
+              ui.setFlipOverride(shouldFlip)
             }}
             onImportFen={setup.importFen}
             onStartGame={() => {
-              ui.setFlipOverride(setup.engineSide === 'red')
+              const shouldFlip = ui.playMode === 'relay' ? setup.engineSide === 'black' : setup.engineSide === 'red'
+              ui.setFlipOverride(shouldFlip)
               void setup.startGame()
             }}
             onExitSetup={setup.exit}

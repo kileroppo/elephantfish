@@ -34,11 +34,14 @@ export function ControlRail(props: ControlRailProps) {
   const onResign = props.onResign ?? (() => void g.resign())
   const onSettings = props.onSettings ?? ((patch) => void g.updateSettings(patch))
 
+  const playMode = props.playMode ?? ui.playMode
+  const togglePlayMode = props.onTogglePlayMode ?? ui.togglePlayMode
+
   const { game, settings } = state
   const over = game.status.state !== 'playing'
   const coachGuardOn = settings.coach_guard !== false
   const activeTier = settings.sparring_level ?? 'master'
-  const isEngineRed = game.engine_side === 'red' // 引擎执红 = 玩家执黑
+  const isEngineRed = game.engine_side === 'red'
 
   const [confirmResign, setConfirmResign] = useState(false)
 
@@ -51,18 +54,35 @@ export function ControlRail(props: ControlRailProps) {
     })
   }
 
-  const handleSelectSide = (playerSide: 'red' | 'black') => {
-    const nextEngineSide: Side = playerSide === 'red' ? 'black' : 'red'
-    if (nextEngineSide === game.engine_side && !over) {
-      return
+  const handleSelectSide = (sideChoice: 'red' | 'black') => {
+    if (playMode === 'relay') {
+      // 信使代下模式：sideChoice 是引擎执子方
+      // sideChoice === 'red' -> 引擎执红先行，红方朝下 (flipped = false)
+      // sideChoice === 'black' -> 引擎执黑后手，黑方朝下 (flipped = true)
+      if (sideChoice === game.engine_side && !over) {
+        return
+      }
+      ui.setFlipOverride(sideChoice === 'black')
+      onNewGame(sideChoice)
+    } else {
+      // 实战陪练模式：sideChoice 是我执子方
+      // sideChoice === 'red' -> 我执红先行，红方朝我 (flipped = false)，引擎执黑
+      // sideChoice === 'black' -> 我执黑后手，黑方朝我 (flipped = true)，引擎执红
+      const nextEngineSide: Side = sideChoice === 'red' ? 'black' : 'red'
+      if (nextEngineSide === game.engine_side && !over) {
+        return
+      }
+      ui.setFlipOverride(sideChoice === 'black')
+      onNewGame(nextEngineSide)
     }
-    // 玩家执黑 -> 翻转棋盘让黑方在底；玩家执红 -> 正向红在底
-    ui.setFlipOverride(playerSide === 'black')
-    onNewGame(nextEngineSide)
   }
 
   const handleNewGame = () => {
-    ui.setFlipOverride(isEngineRed)
+    const shouldFlip =
+      playMode === 'relay'
+        ? game.engine_side === 'black'
+        : game.engine_side === 'red'
+    ui.setFlipOverride(shouldFlip)
     onNewGame(game.engine_side)
   }
 
@@ -108,6 +128,48 @@ export function ControlRail(props: ControlRailProps) {
 
         {/* 核心控件区 */}
         <div className="px-3 pb-3 flex flex-col gap-2.5">
+          {/* 0. 模式选择胶囊：信使代下 vs 实战陪练 */}
+          <div
+            className="w-full inline-flex p-0.5 bg-paper-2/90 rounded-xl border border-hairline text-xs font-medium"
+            role="tablist"
+            aria-label="对战模式选择"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={playMode === 'relay'}
+              className={`flex-1 py-1.5 px-1 rounded-[9px] text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+                playMode === 'relay'
+                  ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
+                  : 'bg-transparent text-ink-3 hover:text-ink-1'
+              }`}
+              onClick={() => {
+                if (playMode !== 'relay') togglePlayMode()
+              }}
+              title="信使代下模式：我是转述人，引擎朝下"
+            >
+              <span>⚡</span>
+              <span>信使代下</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={playMode === 'sparring'}
+              className={`flex-1 py-1.5 px-1 rounded-[9px] text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+                playMode === 'sparring'
+                  ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
+                  : 'bg-transparent text-ink-3 hover:text-ink-1'
+              }`}
+              onClick={() => {
+                if (playMode !== 'sparring') togglePlayMode()
+              }}
+              title="实战陪练模式：我亲自下棋，我执朝我"
+            >
+              <span>🎯</span>
+              <span>实战陪练</span>
+            </button>
+          </div>
+
           {/* 1. 对弈段位选择器 */}
           <div
             className="w-full inline-flex p-0.5 bg-paper-2/90 rounded-xl border border-hairline text-xs font-medium"
@@ -147,7 +209,7 @@ export function ControlRail(props: ControlRailProps) {
             })}
           </div>
 
-          {/* 2. 执子方选择器（直接在主屏，无需展开） */}
+          {/* 2. 执子方选择器（根据当前模式自适应） */}
           <div
             className="w-full inline-flex p-0.5 bg-paper-2/70 rounded-lg border border-hairline text-xs font-medium"
             role="radiogroup"
@@ -156,32 +218,40 @@ export function ControlRail(props: ControlRailProps) {
             <button
               type="button"
               role="radio"
-              aria-checked={!isEngineRed}
+              aria-checked={playMode === 'relay' ? isEngineRed : !isEngineRed}
               className={`flex-1 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
-                !isEngineRed
+                (playMode === 'relay' ? isEngineRed : !isEngineRed)
                   ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
                   : 'bg-transparent text-ink-3 hover:text-ink-1'
               }`}
               onClick={() => handleSelectSide('red')}
-              title="切换为我执红方（红方先手开局）"
+              title={
+                playMode === 'relay'
+                  ? '切换为引擎执红（红方朝下 · 引擎先手）'
+                  : '切换为我执红方（红方朝我 · 我方先手）'
+              }
             >
               <span className="w-1.5 h-1.5 rounded-full bg-cinnabar" />
-              <span>我执红 · 先手</span>
+              <span>{playMode === 'relay' ? '引擎执红 · 先手' : '我执红 · 先手'}</span>
             </button>
             <button
               type="button"
               role="radio"
-              aria-checked={isEngineRed}
+              aria-checked={playMode === 'relay' ? !isEngineRed : isEngineRed}
               className={`flex-1 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
-                isEngineRed
+                (playMode === 'relay' ? !isEngineRed : isEngineRed)
                   ? 'bg-paper-0 text-ink-0 shadow-xs font-semibold'
                   : 'bg-transparent text-ink-3 hover:text-ink-1'
               }`}
               onClick={() => handleSelectSide('black')}
-              title="切换为我执黑方（对方先出招）"
+              title={
+                playMode === 'relay'
+                  ? '切换为引擎执黑（黑方朝下 · 对手先手）'
+                  : '切换为我执黑方（黑方朝我 · 对方先手）'
+              }
             >
               <span className="w-1.5 h-1.5 rounded-full bg-ink-0" />
-              <span>我执黑 · 后手</span>
+              <span>{playMode === 'relay' ? '引擎执黑 · 后手' : '我执黑 · 后手'}</span>
             </button>
           </div>
 

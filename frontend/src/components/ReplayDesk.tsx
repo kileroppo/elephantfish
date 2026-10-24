@@ -107,8 +107,14 @@ export function ReplayDesk(props?: ReplayDeskProps) {
         // 本来就错）就退回第 1 手 —— 摆一副对不上的盘比回到第一步更坏。
         const want = focusPly ?? 1
         setIndex(want >= 1 && want <= r.plies.length ? want : r.plies.length ? 1 : 0)
-        // 视角以我方（玩家视角）朝下：引擎执红 -> 我方执黑 (flipped = true)；引擎执黑 -> 我方执红 (flipped = false)
-        setFlipped(r.game.engine_side === 'red')
+        // 视角朝向规则：
+        // 代下模式：引擎朝下（引擎执黑 -> flipped = true；引擎执红 -> flipped = false）
+        // 实战陪练：我执朝下（我执黑/引擎红 -> flipped = true；我执红/引擎黑 -> flipped = false）
+        const shouldFlip =
+          ui.playMode === 'relay'
+            ? r.game.engine_side === 'black'
+            : r.game.engine_side === 'red'
+        setFlipped(shouldFlip)
       })
       .catch((err: unknown) => {
         if (dead) return
