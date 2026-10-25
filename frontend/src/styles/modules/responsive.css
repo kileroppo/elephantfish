@@ -15,23 +15,35 @@
 }
 
 @media (max-width: 1140px) {
-  body {
-    overflow: auto;
+  html,
+  body,
+  #root {
+    height: auto;
+    min-height: 100dvh;
   }
 
-  /* 窄屏只有一条主栏。
-     这里必须把 .no-left / .no-right 那几个变体一起写进来：它们（上方 118-128 行）
-     的特异性是 (0,2,0)/(0,3,0)，比单个 .workspace 高，所以光写 .workspace 是压不住
-     的 —— 于是窄屏仍然是个三栏栅格，而下面 `.stage { display: contents }` 会把
-     stage-head / board-wrap / relay 从这个栅格里"吐"出来重新参与排布，棋盘正好落进
-     宽度为 0 的边栏轨道里。表现就是：视口窄于 1140px 时棋盘宽度算出来是 0，
-     整块盘面直接看不见。 */
+  body {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .app {
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  /* 窄屏解除高度与弹性挤压限制，改为自然流式纵向排版。
+     消除外层 height: 100% 带来的 grid 强制挤压，确保各区块依序自然堆叠。 */
   .workspace,
   .workspace.no-left,
   .workspace.no-right,
   .workspace.no-left.no-right {
+    height: auto;
+    min-height: auto;
+    flex: none;
     grid-template-columns: minmax(0, 1fr);
-    padding-bottom: 64px;
+    grid-auto-rows: auto;
+    padding-bottom: max(88px, calc(env(safe-area-inset-bottom, 0px) + 72px));
   }
 
   /* 顶栏在窄屏不需要换布局：.topbar 是 flex，写 grid-template-columns
@@ -87,9 +99,21 @@
     order: 3;
   }
 
-  .rail-right {
-    order: 4;
+  /* 窄屏下未打开的控制侧栏不占位 */
+  .rail-left:not(.is-open) {
+    display: none !important;
   }
+
+  /* 窄屏下右侧栏（分析与棋谱）常驻流式展开于下方，供向上自然滑动浏览 */
+  .rail-right,
+  .rail-right:not(.is-open) {
+    display: flex !important;
+    visibility: visible !important;
+    content-visibility: visible !important;
+    order: 4;
+    margin-top: 14px !important;
+  }
+
   .rail-left {
     order: 5;
   }
@@ -130,7 +154,7 @@
   .workspace {
     padding-left: 10px;
     padding-right: 10px;
-    padding-bottom: 72px;
+    padding-bottom: max(88px, calc(env(safe-area-inset-bottom, 0px) + 72px));
   }
 
   .app-shell {

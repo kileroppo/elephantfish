@@ -94,7 +94,7 @@ export function RightRail({ open }: RightRailProps) {
         {/* 侧边栏收起圆形按钮 */}
         <button
           type="button"
-          className="h-8 w-8 rounded-full bg-paper-2/80 hover:bg-paper-3 border border-hairline/80 text-ink-3 hover:text-ink-0 flex items-center justify-center text-xs transition cursor-pointer shrink-0 active:scale-95 shadow-2xs"
+          className="hidden md:flex h-8 w-8 rounded-full bg-paper-2/80 hover:bg-paper-3 border border-hairline/80 text-ink-3 hover:text-ink-0 items-center justify-center text-xs transition cursor-pointer shrink-0 active:scale-95 shadow-2xs"
           onClick={() => {
             ui.closeCoachLive()
             ui.setRailR(false)
