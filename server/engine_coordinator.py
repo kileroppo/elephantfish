@@ -361,8 +361,15 @@ class EngineCoordinator:
                         if task.stop_event.is_set():
                             break
 
-                # 拟人呼吸节拍：避免浅层秒发导致子力弹射，保留真实对弈的落子呼吸感
-                target_pacing = min(settings.get('think_ms', 1500) / 1000.0, 3.0)
+                # 拟人呼吸节拍控制：
+                # 1. 信使代下模式 (relay): 用户是转述人，追求极速响应，算完 0ms 立即落子
+                # 2. 实战陪练模式 (sparring): 保留最多 250ms 的轻微平滑缓冲，避免秒弹同时消除停滞发呆感
+                play_mode = settings.get('play_mode', 'sparring')
+                if play_mode == 'relay':
+                    target_pacing = 0.0
+                else:
+                    target_pacing = min(settings.get('think_ms', 1500) / 1000.0, 0.25)
+
                 remaining = target_pacing - (time.time() - task.started)
                 if remaining > 0 and not task.stop_event.is_set():
                     task.stop_event.wait(remaining)
