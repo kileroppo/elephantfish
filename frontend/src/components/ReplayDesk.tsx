@@ -242,8 +242,23 @@ export function ReplayDesk(props?: ReplayDeskProps) {
   }, [pvMode, causal])
 
   useEffect(() => {
-    const el = stripRef.current?.querySelector<HTMLElement>(`[data-ply="${index}"]`)
-    el?.scrollIntoView({ block: 'nearest' })
+    const container = stripRef.current
+    if (!container) return
+    if (index === 0) {
+      container.scrollTop = 0
+      return
+    }
+    const el = container.querySelector<HTMLElement>(`[data-ply="${index}"]`)
+    if (!el) return
+
+    const cRect = container.getBoundingClientRect()
+    const eRect = el.getBoundingClientRect()
+    // 仅当当前手超出可见区域（上下保留 6px 余量）时精准滚动棋谱容器，避免全局 scrollIntoView 导致整个弹窗跳动
+    if (eRect.top < cRect.top + 6) {
+      container.scrollTop -= Math.ceil(cRect.top + 6 - eRect.top)
+    } else if (eRect.bottom > cRect.bottom - 6) {
+      container.scrollTop += Math.ceil(eRect.bottom - (cRect.bottom - 6))
+    }
   }, [index])
 
   const go = useCallback((to: number) => setIndex(clamp(to, 0, plies.length)), [plies.length])
@@ -393,24 +408,6 @@ export function ReplayDesk(props?: ReplayDeskProps) {
                 }}
               />
 
-              <ReplayTacticsCard
-                sandboxSnap={sandboxSnap}
-                sandboxInfo={sandboxInfo}
-                tactics={current?.review?.tactics}
-              />
-
-              <ReplayCausalCard
-                causal={causal}
-                pvMode={pvMode}
-                onTogglePvMode={(mode) => setPvMode((v) => (v === mode ? 'none' : mode))}
-              />
-
-              {why && (
-                <p className="learn-why replay-why text-xs text-ink-2 bg-paper-1 p-2 rounded border border-hairline m-0" data-replay-why="">
-                  {why}
-                </p>
-              )}
-
               <ReplayEvalChart
                 plies={plies}
                 currentIndex={index}
@@ -424,6 +421,33 @@ export function ReplayDesk(props?: ReplayDeskProps) {
                 stripRef={stripRef}
                 onSelectPly={go}
               />
+
+              {/* 当手深度解析与反馈：置于棋谱下方，定高可滚，绝不挤压或顶动上方棋谱列表 */}
+              <div className="replay-feedback-section flex-1 min-h-[110px] flex flex-col gap-1.5 overflow-y-auto scrollbar-thin">
+                <ReplayTacticsCard
+                  sandboxSnap={sandboxSnap}
+                  sandboxInfo={sandboxInfo}
+                  tactics={current?.review?.tactics}
+                />
+
+                <ReplayCausalCard
+                  causal={causal}
+                  pvMode={pvMode}
+                  onTogglePvMode={(mode) => setPvMode((v) => (v === mode ? 'none' : mode))}
+                />
+
+                {why && (
+                  <p className="learn-why replay-why text-xs text-ink-2 bg-paper-1 p-2.5 rounded-md border border-hairline m-0 shadow-2xs leading-relaxed" data-replay-why="">
+                    {why}
+                  </p>
+                )}
+
+                {!sandboxSnap && !current?.review?.tactics && !causal && !why && (
+                  <div className="replay-feedback-empty flex-1 min-h-[64px] flex items-center justify-center p-2.5 rounded bg-paper-1/40 border border-dashed border-hairline/60 text-ink-3 text-xs text-center select-none">
+                    <span>{current?.by === 'engine' ? '引擎执子走步 · 局势平稳推进' : '本手走法平稳，无关键失误或战术提示'}</span>
+                  </div>
+                )}
+              </div>
 
               <ReplayFooter
                 summary={summary}

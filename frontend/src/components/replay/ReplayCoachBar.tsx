@@ -62,14 +62,23 @@ export function ReplayCoachBar({
         </button>
       )}
 
-      {hasVisualClues && !sandboxSnap && (
+      {!sandboxSnap && (
         <button
           type="button"
-          className={`btn btn-ghost btn-sm text-xs px-2.5 py-1 rounded border border-hairline hover:bg-paper-1 cursor-pointer transition-colors ${
-            showClues ? 'is-on !bg-paper-2 font-medium text-cinnabar' : ''
+          disabled={!hasVisualClues}
+          className={`btn btn-ghost btn-sm text-xs px-2.5 py-1 rounded border border-hairline hover:bg-paper-1 transition-colors ${
+            !hasVisualClues
+              ? 'opacity-35 cursor-not-allowed text-ink-3'
+              : showClues
+              ? 'is-on !bg-paper-2 font-medium text-cinnabar cursor-pointer'
+              : 'cursor-pointer'
           }`}
-          onClick={onToggleClues}
-          title="在回放棋盘上高亮标出此手薄弱格与正解主攻路线"
+          onClick={hasVisualClues ? onToggleClues : undefined}
+          title={
+            hasVisualClues
+              ? '在回放棋盘上高亮标出此手薄弱格与正解主攻路线'
+              : '此手无需法眼点拨'
+          }
         >
           {showClues ? '👁️ 收起法眼' : '👁️ 法眼点拨'}
         </button>

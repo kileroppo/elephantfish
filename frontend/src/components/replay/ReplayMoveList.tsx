@@ -17,7 +17,7 @@ export function ReplayMoveList({
 }: ReplayMoveListProps) {
   return (
     <div
-      className="replay-strip flex-[0_1_auto] min-h-0 flex flex-col gap-0.5 m-0 p-0 list-none overflow-y-auto scrollbar-thin"
+      className="replay-strip relative flex-none h-[240px] sm:h-[250px] min-h-[180px] flex flex-col gap-0.5 m-0 p-0 list-none overflow-y-auto scrollbar-thin"
       ref={stripRef}
       data-replay-strip=""
     >

@@ -248,14 +248,23 @@
    会让人以为这一局还有别的行没渲染出来。长局靠 flex-shrink 收进可用高度。
    不加逐行入场动画：索引一变整列就重渲染（键是 ply，不重挂），动画只会反复播同一句。 */
 .replay-strip {
-  flex: 0 1 auto;
-  min-height: 0;
+  flex: 0 0 250px;
+  height: 250px;
+  min-height: 180px;
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 3px;
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.replay-feedback-section {
+  flex: 1 1 auto;
+  min-height: 110px;
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -346,7 +355,8 @@
   }
 
   .replay-strip {
-    max-height: 34vh;
+    height: 190px;
+    max-height: 28vh;
     flex: 0 0 auto;
   }
 
