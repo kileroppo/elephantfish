@@ -1,5 +1,6 @@
 export * from './ReplayHeader'
 export * from './ReplayBoardSection'
+export * from './ReplayCoachCabin'
 export * from './ReplayMoveHeader'
 export * from './ReplayCoachBar'
 export * from './ReplayTacticsCard'

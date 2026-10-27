@@ -364,8 +364,22 @@ class GameSession:
                         prev_rev = prev_rec['review']
                         if prev_rev.get('status') == 'outside' or prev_rev.get('loss_kind') == 'below_top':
                             if getattr(last, 'pv_iccs', None):
-                                prev_rev['refute_pv'] = list(last.pv_iccs)
-                                prev_rev['punish_move'] = last.pv_iccs[0]
+                                temp_board = self.game.board
+                                temp_red = self.game.red_to_move
+                                refute_list = []
+                                for m_str in last.pv_iccs:
+                                    try:
+                                        mv = nt.from_iccs(m_str)
+                                    except Exception:
+                                        mv = None
+                                    if mv and mv in core.legal_moves(temp_board, temp_red):
+                                        refute_list.append({'iccs': m_str, 'chinese': nt.to_chinese(temp_board, mv)})
+                                        temp_board = core.apply_move(temp_board, temp_red, mv)
+                                        temp_red = not temp_red
+                                    else:
+                                        refute_list.append({'iccs': m_str, 'chinese': m_str})
+                                prev_rev['refute_pv'] = refute_list
+                                prev_rev['punish_move'] = refute_list[0] if refute_list else {'iccs': last.pv_iccs[0], 'chinese': last.pv_iccs[0]}
 
                 rec = self.game.push(
                     abs_move, by='engine',

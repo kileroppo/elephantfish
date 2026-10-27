@@ -18,7 +18,7 @@ export function ReplayEvalChart({
 
   return (
     <div
-      className="replay-eval-chart relative flex items-stretch h-12 bg-paper-2 border border-hairline rounded-sm px-1.5 py-0.5 my-2 overflow-x-auto scrollbar-none shrink-0 after:content-[''] after:absolute after:inset-x-0 after:top-1/2 after:h-px after:bg-hairline-strong after:pointer-events-none after:z-1"
+      className="replay-eval-chart relative flex items-stretch h-9 bg-paper-2/80 border border-hairline rounded-lg px-2 py-0.5 my-1 overflow-x-auto scrollbar-none shrink-0 after:content-[''] after:absolute after:inset-x-0 after:top-1/2 after:h-px after:bg-hairline-strong after:pointer-events-none after:z-1"
       role="group"
       aria-label="全局胜势波形图"
       data-replay-eval-chart=""
@@ -27,7 +27,7 @@ export function ReplayEvalChart({
         const ev = p.eval_red ?? p.review?.played_eval_red ?? 0
         const clamped = Math.max(-800, Math.min(800, ev))
         const isRedAdv = clamped >= 0
-        const barHeight = Math.max(3, Math.round((Math.abs(clamped) / 800) * 20))
+        const barHeight = Math.max(2, Math.round((Math.abs(clamped) / 800) * 15))
         const isSelected = p.ply === currentIndex
         const rv = p.review
         const isBlunder =

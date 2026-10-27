@@ -760,19 +760,20 @@ def diagnose_review(
     in_check_after = core.is_in_check(board_after_played, not red_to_move)
     if len(after_hanging) >= 2:
         motifs.append({'id': 'fork_or_skewer', 'label': '遭抽将捉双', 'severity': 'critical'})
-        targets_desc = '、'.join(f"{h['piece']}({h['square']})" for h in after_hanging[:2])
+        targets_desc = '、'.join(f"{h['piece']}" for h in after_hanging[:2])
         explanations.append(f'走后己方 {targets_desc} 同时受攻，陷入首尾难顾之境。')
     elif new_hanging:
         h0 = new_hanging[0]
+        piece_desc = ('中' + h0['piece']) if h0['square'][0] == 'e' else h0['piece']
         if captured_before:
             motifs.append({'id': 'greedy_capture', 'label': '贪吃失先', 'severity': 'critical'})
             explanations.append(
-                f'贪吃失先：实战「{played_chinese or played_iccs}」虽吃掉{captured_before}，却导致己方{h0["piece"]}({h0["square"]})暴露受攻！'
+                f'贪吃失先：实战「{played_chinese or played_iccs}」虽吃掉{captured_before}，却导致己方{piece_desc}暴露受攻！'
             )
         else:
             motifs.append({'id': 'left_hanging', 'label': '丢无根子', 'severity': 'critical'})
             explanations.append(
-                f'疏于根护：走「{played_chinese or played_iccs}」后，己方{h0["piece"]}({h0["square"]})处于无根受攻险地（被{opp_name}{h0["attacker_piece"]}瞄准）。'
+                f'疏于根护：走「{played_chinese or played_iccs}」后，己方{piece_desc}处于无根受攻险地（被{opp_name}{h0["attacker_piece"]}瞄准）。'
             )
 
     # 3. 检查贪吃失先（吃了子却亏分 >= 120cp）
@@ -791,7 +792,7 @@ def diagnose_review(
             victim_name = core.PIECE_NAME.get(best_dest_ch, '大子')
             motifs.append({'id': 'missed_tactics', 'label': '漏看妙手', 'severity': 'high'})
             explanations.append(
-                f'错失战机：{opp_name}{victim_name}({best_iccs[2:4]})正值薄弱，正着「{best_chinese or best_iccs}」可果断得子！'
+                f'错失战机：{opp_name}{victim_name}正值薄弱，正着「{best_chinese or best_iccs}」可果断得子！'
             )
         elif best_gives_check and ((loss or 0) >= 120 or status == 'outside'):
             motifs.append({'id': 'missed_tactics', 'label': '漏看妙手', 'severity': 'high'})
@@ -1156,13 +1157,13 @@ def build_thinking_guide(
             f'【老将安全度】：{opp_name}老将现在只剩 {ks_enemy["escape_squares"]} 个安全逃生格，重点看能不能直接叫将或锁死底线/中路！'
         )
     if enemy_hanging:
-        desc = '、'.join(f'{h["piece"]}({h["square"]})' for h in enemy_hanging[:2])
+        desc = '、'.join(f'{h["piece"]}' for h in enemy_hanging[:2])
         fp_points.append(f'【白吃与受攻】：{opp_name}的 {desc} 正处于受攻/无保护状态，可直接吃掉或借机抢先！')
     elif enemy_unprot:
-        desc = '、'.join(f'{u["piece"]}({u["square"]})' for u in enemy_unprot[:2])
+        desc = '、'.join(f'{u["piece"]}' for u in enemy_unprot[:2])
         fp_points.append(f'【无根子靶子】：{opp_name}的 {desc} 没有友军保护（无根子），是捉双和闪击的最佳靶子！')
     if my_hanging:
-        desc = '、'.join(f'{h["piece"]}({h["square"]})' for h in my_hanging[:2])
+        desc = '、'.join(f'{h["piece"]}' for h in my_hanging[:2])
         fp_points.append(f'【己方隐患】：小心！我方 {desc} 正在被{opp_name}盯上，如果不先手叫将就必须设防！')
     if not fp_points:
         fp_points.append(f'【先手效率】：双方阵型平稳，优先出动大子（车/马/炮）抢占中路与肋道要津，绝不走无威胁的闲棋。')
@@ -1170,8 +1171,8 @@ def build_thinking_guide(
     # 2. 逆向思维（从3步后的终局倒推回现在）
     if ks_enemy['escape_squares'] <= 1 and best_cn:
         inversion_tip = (
-            f'【从绝杀画面倒推】：不要漫无目的看全盘！{opp_name}老将被困在 {ks_enemy["king_square"]}，'
-            f'只要把火力送到 {best_iccs[2:4] if len(best_iccs) >= 4 else "九宫要害"} 就能锁死他——倒推回来，现在第一步就该走「{best_cn}」！'
+            f'【从绝杀画面倒推】：不要漫无目的看全盘！{opp_name}老将被困在九宫要害，'
+            f'只要把火力送到要害就能锁死他——倒推回来，现在第一步就该走「{best_cn}」！'
         )
     elif best_cn:
         inversion_tip = (

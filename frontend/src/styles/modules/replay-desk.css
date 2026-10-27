@@ -18,8 +18,8 @@
 }
 
 .replay-desk {
-  width: min(1060px, 100%);
-  height: min(88vh, 880px);
+  width: min(1280px, 96vw);
+  height: min(92vh, 920px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -46,8 +46,8 @@
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(272px, 336px);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 420px);
+  gap: 20px;
   /* 读下一局的路上不许盘面上出现一个洞：留着上一局，整块压暗、不接点击，
      比先清空再填上诚实 —— 空的盘会被读成「这一局没走子」。 */
   transition: opacity var(--dur-fast) var(--ease-out);
@@ -61,7 +61,10 @@
 .replay-board {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   min-height: 0;
+  height: 100%;
 }
 
 /* 这一层是整块盘的尺头。盘自己那条 `height:100% + aspect-ratio + max-width:100%`
@@ -71,11 +74,13 @@
    栏高。谁小听谁的，盘自己那条规则就永远落在框里，四档视口量出来都是 0.9000。 */
 .replay-board-wrap {
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   width: 100%;
-  max-height: 100%;
+  max-height: calc(100% - 44px);
   aspect-ratio: 720 / 800;
-  padding-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .replay-ctrl {
@@ -83,7 +88,6 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 20px;
   position: relative;
   z-index: 10;
 }
@@ -160,12 +164,12 @@
 .replay-eval-chart {
   display: flex;
   align-items: stretch;
-  height: 48px;
+  height: 36px;
   background: var(--paper-2, rgba(0, 0, 0, 0.03));
   border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   padding: 2px 6px;
-  margin: 6px 0 10px 0;
+  margin: 4px 0 6px 0;
   position: relative;
   overflow-x: auto;
   scrollbar-width: none;
@@ -248,9 +252,9 @@
    会让人以为这一局还有别的行没渲染出来。长局靠 flex-shrink 收进可用高度。
    不加逐行入场动画：索引一变整列就重渲染（键是 ply，不重挂），动画只会反复播同一句。 */
 .replay-strip {
-  flex: 0 0 250px;
-  height: 250px;
-  min-height: 180px;
+  flex: 0 1 auto;
+  max-height: 220px;
+  min-height: 72px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -264,7 +268,7 @@
 
 .replay-feedback-section {
   flex: 1 1 auto;
-  min-height: 110px;
+  min-height: 140px;
   overflow-y: auto;
   scrollbar-width: thin;
 }

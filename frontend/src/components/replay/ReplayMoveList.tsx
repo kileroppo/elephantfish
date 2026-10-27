@@ -1,91 +1,162 @@
-import type { RefObject } from 'react'
+import { useMemo, useEffect, useRef, type RefObject } from 'react'
 import type { ReplayReply } from '../../types'
 import { gradeDetail, gradeLabel } from '../../lib/format'
 
 export interface ReplayMoveListProps {
   plies: ReplayReply['plies']
   currentIndex: number
-  stripRef: RefObject<HTMLDivElement>
+  stripRef?: RefObject<HTMLDivElement>
   onSelectPly: (ply: number) => void
 }
 
+interface RoundRow {
+  round: number
+  red?: ReplayReply['plies'][number]
+  black?: ReplayReply['plies'][number]
+}
+
+function compactSymbol(tone: string) {
+  switch (tone) {
+    case 'bad':
+      return { sym: '??', cls: 'text-rose-700 bg-rose-500/15' }
+    case 'warn':
+      return { sym: '?', cls: 'text-amber-700 bg-amber-500/15' }
+    case 'soft':
+      return { sym: '?!', cls: 'text-yellow-700 bg-yellow-500/15' }
+    case 'good':
+      return { sym: '✓', cls: 'text-emerald-700 bg-emerald-500/15' }
+    default:
+      return null
+  }
+}
+
+/**
+ * 经典双列记谱表（回合｜红方｜黑方）
+ * 遵循职业象棋比赛记谱规范，红黑并排，极简符号标记（?? / ? / ✓），优雅紧凑。
+ */
 export function ReplayMoveList({
   plies,
   currentIndex,
-  stripRef,
   onSelectPly,
 }: ReplayMoveListProps) {
-  return (
-    <div
-      className="replay-strip relative flex-none h-[240px] sm:h-[250px] min-h-[180px] flex flex-col gap-0.5 m-0 p-0 list-none overflow-y-auto scrollbar-thin"
-      ref={stripRef}
-      data-replay-strip=""
-    >
-      {plies.map((p) => {
-        const g = p.by === 'engine' ? null : gradeLabel(p.review)
-        const on = p.ply === currentIndex
+  const activeCellRef = useRef<HTMLButtonElement | null>(null)
 
-        return (
-          <button
-            type="button"
-            key={p.ply}
-            className={`replay-row by-${p.by} side-${p.side} flex flex-wrap items-baseline gap-x-2 gap-y-0.5 w-full min-h-8 py-1.5 px-2.5 rounded-md border border-transparent bg-paper-1 font-inherit text-left text-ink-2 cursor-pointer transition-all duration-150 hover:border-hairline-strong hover:bg-paper-0 ${
-              p.by === 'engine' ? 'by-engine !bg-transparent text-ink-3' : ''
-            } ${
-              on
-                ? 'is-on !border-[var(--cinnabar-edge)] !bg-gradient-to-b !from-paper-0 !to-[#fbf3e8] !text-ink-0'
-                : ''
-            }`}
-            data-replay-row=""
-            data-ply={p.ply}
-            data-graded={p.review ? '1' : '0'}
-            aria-current={on ? 'step' : undefined}
-            onClick={() => onSelectPly(p.ply)}
-            title={g ? gradeDetail(p.review) : undefined}
-          >
-            <span className="replay-n font-num tabular-nums text-[10px] text-ink-4 min-w-5">
-              {p.ply}
+  // 将连续的单步序列聚合为标准回合对（回合｜红｜黑）
+  const rounds = useMemo<RoundRow[]>(() => {
+    const list: RoundRow[] = []
+    let currentRound: RoundRow | null = null
+
+    for (const p of plies) {
+      if (p.side === 'red' || !currentRound) {
+        currentRound = { round: list.length + 1 }
+        list.push(currentRound)
+      }
+
+      if (p.side === 'red') {
+        currentRound.red = p
+      } else {
+        if (!currentRound.black) {
+          currentRound.black = p
+        } else {
+          currentRound = { round: list.length + 1, black: p }
+          list.push(currentRound)
+        }
+      }
+    }
+    return list
+  }, [plies])
+
+  // 保证当前选中的步数始终在可视区内滚动对齐
+  useEffect(() => {
+    if (activeCellRef.current) {
+      activeCellRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [currentIndex])
+
+  const renderCell = (p?: ReplayReply['plies'][number]) => {
+    if (!p) {
+      return (
+        <span className="h-7.5 px-2 flex items-center text-xs text-ink-mute/30 select-none">
+          —
+        </span>
+      )
+    }
+
+    const on = p.ply === currentIndex
+    const g = p.by === 'engine' ? null : gradeLabel(p.review)
+    const isBlunder = g && (g.tone === 'bad' || g.tone === 'warn')
+    const sym = g ? compactSymbol(g.tone) : null
+
+    return (
+      <button
+        ref={on ? activeCellRef : undefined}
+        type="button"
+        className={`h-7.5 px-2 rounded-md text-xs font-medium transition-all cursor-pointer flex items-center justify-between gap-1 w-full border ${
+          on
+            ? 'bg-cinnabar/10 text-cinnabar border-cinnabar/40 font-bold shadow-3xs'
+            : isBlunder
+            ? 'bg-rose-500/5 hover:bg-rose-500/12 text-rose-900 border-rose-300/40'
+            : 'bg-transparent hover:bg-paper-2 text-ink-1 border-transparent'
+        }`}
+        onClick={() => onSelectPly(p.ply)}
+        title={g ? `${g.text} · ${gradeDetail(p.review)}` : undefined}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="font-num text-[10.5px] opacity-40 shrink-0">
+            {p.ply}
+          </span>
+          <span className="font-display font-medium truncate">
+            {p.chinese || p.iccs}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          {p.gives_check && (
+            <span className="text-[10px] font-bold text-red-600 bg-red-100/80 px-1 rounded">
+              将
             </span>
+          )}
+          {p.mate && (
+            <span className="text-[10px] font-bold text-white bg-red-600 px-1 rounded shadow-3xs">
+              杀
+            </span>
+          )}
+          {sym && (
             <span
-              className={`replay-cn font-display text-xs text-ink-1 ${
-                on ? '!text-cinnabar font-bold' : ''
-              }`}
+              className={`font-mono text-[10.5px] px-1 py-0.2 rounded font-bold ${sym.cls}`}
             >
-              {p.chinese || p.iccs}
+              {sym.sym}
             </span>
-            {p.captured && (
-              <em className="tag tag-capture not-italic text-[10px] px-1 py-px rounded bg-amber-100/70 text-amber-800 border border-amber-200">
-                吃{p.captured}
-              </em>
-            )}
-            {p.gives_check && (
-              <em className="tag tag-check not-italic text-[10px] px-1 py-px rounded bg-red-100/70 text-red-700 border border-red-200 font-semibold">
-                将
-              </em>
-            )}
-            {p.mate && (
-              <em className="tag tag-mate not-italic text-[10px] px-1 py-px rounded bg-red-200 text-red-900 border border-red-300 font-bold">
-                杀
-              </em>
-            )}
-            {g ? (
-              <em className={`grade-chip tone-${g.tone} not-italic text-[10.5px] px-1.5 py-px rounded`}>
-                {g.text}
-              </em>
-            ) : (
-              p.by !== 'engine' &&
-              !p.review && (
-                <em
-                  className="grade-chip tone-mute not-italic text-[10px] px-1 py-px rounded opacity-60 text-ink-mute"
-                  title="这一手没有判分：判分关着、或引擎当时腾不出空档"
-                >
-                  未判分
-                </em>
-              )
-            )}
-          </button>
-        )
-      })}
+          )}
+        </div>
+      </button>
+    )
+  }
+
+  return (
+    <div className="dual-score-container flex-1 min-h-0 flex flex-col rounded-xl bg-paper-1/70 border border-hairline overflow-hidden text-xs">
+      {/* 表头：回合 ｜ 红方 ｜ 黑方 */}
+      <div className="grid grid-cols-[38px_1fr_1fr] items-center px-2 py-1 bg-paper-2/90 border-b border-hairline text-[11px] font-semibold text-ink-3 select-none shrink-0">
+        <span className="text-center font-num">回合</span>
+        <span className="px-2 text-piece-red">🔴 红方</span>
+        <span className="px-2 text-piece-black">⚫ 黑方</span>
+      </div>
+
+      {/* 滚动对局回合表 */}
+      <div className="overflow-y-auto scrollbar-thin flex-1 min-h-0 p-1 flex flex-col gap-0.5">
+        {rounds.map((r) => (
+          <div
+            key={r.round}
+            className="grid grid-cols-[38px_1fr_1fr] items-center rounded-md hover:bg-paper-0/60 transition-colors"
+          >
+            <span className="font-num text-[11px] font-semibold text-ink-4 text-center select-none">
+              {r.round}
+            </span>
+            <div className="px-0.5">{renderCell(r.red)}</div>
+            <div className="px-0.5">{renderCell(r.black)}</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

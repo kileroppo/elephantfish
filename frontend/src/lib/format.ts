@@ -173,6 +173,14 @@ export interface CausalBreakdown {
   explanation: string
 }
 
+export function cleanCoachText(text: string | null | undefined): string {
+  if (!text) return ''
+  return text
+    // 清除棋子后泄露的代数坐标，例如 卒(e5) -> 卒
+    .replace(/\(([a-i][0-9])\)/g, '')
+    .trim()
+}
+
 export function causalBreakdown(review: MoveReview | null | undefined): CausalBreakdown | null {
   if (!review) return null
   const bestLine = review.lines?.[0]
@@ -181,7 +189,11 @@ export function causalBreakdown(review: MoveReview | null | undefined): CausalBr
   const rawRefute = (review as any).refute_pv
   let refutePv: PvStep[] = []
   if (Array.isArray(rawRefute) && rawRefute.length > 0) {
-    refutePv = rawRefute.map((m: any) => typeof m === 'string' ? { iccs: m, chinese: m } : m)
+    refutePv = rawRefute.map((m: any) =>
+      typeof m === 'string'
+        ? { iccs: m, chinese: (review as any).punish_move?.iccs === m ? (review as any).punish_move?.chinese : m }
+        : m
+    )
   } else if (playedLine?.pv && playedLine.pv.length > 1) {
     refutePv = playedLine.pv.slice(1)
   }
@@ -192,7 +204,9 @@ export function causalBreakdown(review: MoveReview | null | undefined): CausalBr
   if (review.rank === 1) {
     explanation = '此招为引擎正着（首选），局势主动。'
   } else if (punishMove && bestMove) {
-    explanation = `实战错走后，对方当场以「${punishMove.chinese || punishMove.iccs}」强势反扑；正招当走「${bestMove.chinese || bestMove.iccs}」控盘。`
+    const isPunishRawIccs = /^[a-i][0-9][a-i][0-9]$/.test(punishMove.chinese || '')
+    const punishDesc = !isPunishRawIccs && punishMove.chinese ? `以「${punishMove.chinese}」` : ''
+    explanation = `实战错走后，对方当场${punishDesc}强势反扑；正招当走「${bestMove.chinese || bestMove.iccs}」控盘。`
   } else if (bestMove) {
     explanation = `引擎最佳正着为「${bestMove.chinese || bestMove.iccs}」，避免失误丢先。`
   }
@@ -253,9 +267,9 @@ export function gradeLabel(
   const rank = review.rank ?? null
   const loss = review.loss ?? null
 
-  // 掉出前几名：不知道差多少，也不是差 0。width 是「前几名」的那个几。
+  // 掉出前几名：属于严重失机与大漏
   if (review.status === 'outside' || kind === 'below_top') {
-    return { text: `没进引擎前 ${review.width} 名`, tone: 'bad' }
+    return { text: '漏着', tone: 'bad' }
   }
 
   // 杀棋：只谈杀多远，centipawn 的减法在这里算不出任何东西。

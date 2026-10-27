@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../api'
 import type { GameSnapshot, ReplayReply, SandboxReply } from '../types'
 import { buildReplay, snapshotAt } from '../lib/replay'
@@ -12,14 +12,10 @@ import { useUIContext } from '../context/UIContext'
 import { useGameContext } from '../context/GameContext'
 import {
   ReplayBoardSection,
-  ReplayCausalCard,
-  ReplayCoachBar,
+  ReplayCoachCabin,
   ReplayEvalChart,
-  ReplayFooter,
   ReplayHeader,
-  ReplayMoveHeader,
   ReplayMoveList,
-  ReplayTacticsCard,
 } from './replay'
 
 /**
@@ -85,7 +81,6 @@ export function ReplayDesk(props?: ReplayDeskProps) {
   const [index, setIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [autoPlay, setAutoPlay] = useState(false)
-  const stripRef = useRef<HTMLDivElement>(null)
 
   const gameId = seed?.gameId ?? null
   const focusPly = seed?.focusPly ?? null
@@ -241,26 +236,6 @@ export function ReplayDesk(props?: ReplayDeskProps) {
     return []
   }, [pvMode, causal])
 
-  useEffect(() => {
-    const container = stripRef.current
-    if (!container) return
-    if (index === 0) {
-      container.scrollTop = 0
-      return
-    }
-    const el = container.querySelector<HTMLElement>(`[data-ply="${index}"]`)
-    if (!el) return
-
-    const cRect = container.getBoundingClientRect()
-    const eRect = el.getBoundingClientRect()
-    // 仅当当前手超出可见区域（上下保留 6px 余量）时精准滚动棋谱容器，避免全局 scrollIntoView 导致整个弹窗跳动
-    if (eRect.top < cRect.top + 6) {
-      container.scrollTop -= Math.ceil(cRect.top + 6 - eRect.top)
-    } else if (eRect.bottom > cRect.bottom - 6) {
-      container.scrollTop += Math.ceil(eRect.bottom - (cRect.bottom - 6))
-    }
-  }, [index])
-
   const go = useCallback((to: number) => setIndex(clamp(to, 0, plies.length)), [plies.length])
 
   useEffect(() => {
@@ -303,7 +278,6 @@ export function ReplayDesk(props?: ReplayDeskProps) {
 
   if (!mounted) return null
 
-  const summary = reply?.summary
   const head = reply?.game
 
   return (
@@ -314,7 +288,7 @@ export function ReplayDesk(props?: ReplayDeskProps) {
       onClick={onClose}
     >
       <div
-        className={`sheet replay-desk w-[min(1060px,100%)] h-[min(88vh,880px)] flex flex-col overflow-hidden p-4 sm:p-6 bg-paper-0/98 rounded-2xl shadow-2xl border border-hairline transition-all duration-200 ${
+        className={`sheet replay-desk w-[min(1280px,96vw)] h-[min(92vh,920px)] flex flex-col overflow-hidden p-4 sm:p-5 bg-paper-0/98 rounded-3xl shadow-[0_24px_80px_rgba(0,0,0,0.25)] border border-hairline transition-all duration-200 ${
           leaving ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -344,7 +318,7 @@ export function ReplayDesk(props?: ReplayDeskProps) {
 
         {game && replay && !replay.error && (
           <div
-            className={`replay-body flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(272px,336px)] gap-4 transition-opacity duration-150 ${
+            className={`replay-body flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,1.25fr)_minmax(360px,420px)] gap-5 transition-opacity duration-150 ${
               loading ? 'is-loading opacity-50 pointer-events-none' : ''
             }`}
           >
@@ -369,17 +343,27 @@ export function ReplayDesk(props?: ReplayDeskProps) {
               onToggleFlip={() => setFlipped((v) => !v)}
             />
 
-            <div className="replay-side flex flex-col min-h-0 gap-2">
-              <ReplayMoveHeader current={current} grade={grade} />
-
-              <ReplayCoachBar
+            <div className="replay-side flex flex-col min-h-0 gap-2.5 h-full">
+              {/* 1. 名师精读主舱 */}
+              <ReplayCoachCabin
+                current={current}
+                grade={grade}
+                why={why}
                 turningCount={turningPlies.length}
                 hasVisualClues={!!current?.review?.tactics?.visual_clues}
                 showClues={showClues}
-                sandboxSnap={!!sandboxSnap}
+                sandboxSnap={sandboxSnap}
+                sandboxInfo={sandboxInfo}
                 sandboxBusy={sandboxBusy}
                 canRetrySandbox={!!sandboxBaseFen}
+                causal={causal}
+                pvMode={pvMode}
+                onTogglePvMode={(mode) => setPvMode((v) => (v === mode ? 'none' : mode))}
                 onContinueGame={() => void handleContinueGame()}
+                onNextTurningPly={() => {
+                  const next = turningPlies.find((p) => p > index) ?? turningPlies[0]
+                  go(next)
+                }}
                 onDrillSpecificGame={
                   head?.game_id
                     ? () => {
@@ -388,10 +372,6 @@ export function ReplayDesk(props?: ReplayDeskProps) {
                       }
                     : undefined
                 }
-                onNextTurningPly={() => {
-                  const next = turningPlies.find((p) => p > index) ?? turningPlies[0]
-                  go(next)
-                }}
                 onToggleClues={() => setShowClues((v) => !v)}
                 onEnterSandbox={() => void enterSandbox()}
                 onRetrySandbox={() => {
@@ -408,52 +388,21 @@ export function ReplayDesk(props?: ReplayDeskProps) {
                 }}
               />
 
-              <ReplayEvalChart
-                plies={plies}
-                currentIndex={index}
-                onSelectPly={go}
-                isTurningPly={isTurningPly}
-              />
-
-              <ReplayMoveList
-                plies={plies}
-                currentIndex={index}
-                stripRef={stripRef}
-                onSelectPly={go}
-              />
-
-              {/* 当手深度解析与反馈：置于棋谱下方，定高可滚，绝不挤压或顶动上方棋谱列表 */}
-              <div className="replay-feedback-section flex-1 min-h-[110px] flex flex-col gap-1.5 overflow-y-auto scrollbar-thin">
-                <ReplayTacticsCard
-                  sandboxSnap={sandboxSnap}
-                  sandboxInfo={sandboxInfo}
-                  tactics={current?.review?.tactics}
+              {/* 2. 全局复盘索引舱：波形图 + 经典双列记谱表（自动填满下半区，彻底杜绝空白断层） */}
+              <div className="flex flex-col gap-1.5 flex-1 min-h-0 overflow-hidden">
+                <ReplayEvalChart
+                  plies={plies}
+                  currentIndex={index}
+                  onSelectPly={go}
+                  isTurningPly={isTurningPly}
                 />
 
-                <ReplayCausalCard
-                  causal={causal}
-                  pvMode={pvMode}
-                  onTogglePvMode={(mode) => setPvMode((v) => (v === mode ? 'none' : mode))}
+                <ReplayMoveList
+                  plies={plies}
+                  currentIndex={index}
+                  onSelectPly={go}
                 />
-
-                {why && (
-                  <p className="learn-why replay-why text-xs text-ink-2 bg-paper-1 p-2.5 rounded-md border border-hairline m-0 shadow-2xs leading-relaxed" data-replay-why="">
-                    {why}
-                  </p>
-                )}
-
-                {!sandboxSnap && !current?.review?.tactics && !causal && !why && (
-                  <div className="replay-feedback-empty flex-1 min-h-[64px] flex items-center justify-center p-2.5 rounded bg-paper-1/40 border border-dashed border-hairline/60 text-ink-3 text-xs text-center select-none">
-                    <span>{current?.by === 'engine' ? '引擎执子走步 · 局势平稳推进' : '本手走法平稳，无关键失误或战术提示'}</span>
-                  </div>
-                )}
               </div>
-
-              <ReplayFooter
-                summary={summary}
-                head={head}
-                emptyPlies={plies.length === 0}
-              />
             </div>
           </div>
         )}

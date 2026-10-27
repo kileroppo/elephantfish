@@ -18,13 +18,22 @@ export function ReplayHeader({ head, seedGameId, onClose }: ReplayHeaderProps) {
           </span>
           <h2 className="text-sm sm:text-base font-bold text-ink-0 m-0">对局复盘台</h2>
         </div>
-        <p className="font-num text-[11px] text-ink-3 hidden sm:block m-0">
-          {head
-            ? `${describeSource(head.source)} · 引擎执${shortSide(head.engine_side)} · ` +
-              `${head.ply_count} 手 · ${relativeTime(head.updated_at)}`
-            : seedGameId
-              ? `对局 ID: ${seedGameId}`
-              : '对局历史'}
+        <p className="font-num text-[11px] text-ink-3 hidden sm:flex items-center gap-2 m-0">
+          <span>
+            {head
+              ? `${describeSource(head.source)} · 引擎执${shortSide(head.engine_side)} · ` +
+                `${head.ply_count} 手 · ${relativeTime(head.updated_at)}`
+              : seedGameId
+                ? `对局 ID: ${seedGameId}`
+                : '对局历史'}
+          </span>
+
+          {head?.state && head.state !== 'playing' && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-paper-2 text-ink-1 border border-hairline/60">
+              {head.winner ? `${shortSide(head.winner)}胜` : '和局'}
+              {head.reason ? ` · ${head.reason}` : ''}
+            </span>
+          )}
         </p>
       </div>
       <button
