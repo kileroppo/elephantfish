@@ -97,7 +97,11 @@ CREATE TABLE IF NOT EXISTS games (
     winner       TEXT,
     reason       TEXT,
     -- 引擎视角的胜负：wins / losses / draws；还没结束就是 NULL。
-    outcome      TEXT
+    outcome      TEXT,
+    -- 对局模式：sparring (实战对战) | relay (信使代下)
+    play_mode    TEXT NOT NULL DEFAULT 'sparring',
+    -- 信使代下时的对手模型名称或端点标识（如 DeepSeek-R1 等）
+    opponent_model TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS plies (
@@ -251,7 +255,7 @@ BLURRED_KINDS = ('at_most', 'uncertain', 'below_top')
 # 逐字段对账的键集：接口给多了或给少了都会红。
 GAME_HEAD_COLUMNS = ('game_id', 'start_fen', 'engine_side', 'source', 'opened_at',
                      'updated_at', 'ply_count', 'fen_now', 'state', 'winner',
-                     'reason', 'outcome')
+                     'reason', 'outcome', 'play_mode', 'opponent_model')
 
 PLY_COLUMNS = ('ply', 'side', 'by', 'iccs', 'chinese', 'piece', 'captured',
                'gives_check', 'mate', 'eval_red', 'mate_in', 'depth',
@@ -385,6 +389,8 @@ def _blank_games_summary(store_enabled=True):
         'truncated': False,      # 是不是被 limit 切过 —— UI 要能说「还有 N 局没列」
         'play_games': 0,         # source='play'：真正下完/下过的那些
         'setup_games': 0,        # source='setup'：排局/补棋摆出来的，不是同一件事
+        'sparring_games': 0,     # 对战对局数
+        'relay_games': 0,        # 信使代下对局数
         'graded_plies': 0,       # 全库带判分的手数
         'graded_games': 0,       # 其中有判分的局数 —— 「哪些局值得回看」就靠它
         'limit': 0,
@@ -412,6 +418,13 @@ class Store:
         self._conn.execute('PRAGMA journal_mode=WAL')
         self._conn.execute('PRAGMA foreign_keys=ON')
         self._conn.executescript(SCHEMA)
+        # 兼容已有旧数据库：平滑增量迁移字段
+        for col, col_def in [('play_mode', "TEXT NOT NULL DEFAULT 'sparring'"),
+                             ('opponent_model', "TEXT NOT NULL DEFAULT ''")]:
+            try:
+                self._conn.execute(f'ALTER TABLE games ADD COLUMN {col} {col_def}')
+            except sqlite3.OperationalError:
+                pass
         self._conn.commit()
 
     @property
@@ -631,7 +644,7 @@ class Store:
         summary['games'] = len({gid for e in groups.values() for gid in e['game_ids']})
         return {'mistakes': listed, 'summary': summary}
 
-    def recent_games(self, limit=None):
+    def recent_games(self, limit=None, mode=None, q=None):
         """历次对局的列表，新的一手最先 —— UI 靠它**挑一局**来回放。
 
         错题本讲的是「哪个局面你错过」，这一句讲的是「哪一局值得重看」。两者
@@ -650,6 +663,8 @@ class Store:
         但 ``source`` 一并带回去：那不是同一件事，藏起来会让 UI 以为「没下过」，
         把它混进战绩里又是另一个错。字段由 UI 自己念。
 
+        支持按 ``mode``（sparring 对战 / relay 信使代下 / setup 排局）及关键词 ``q`` 进行过滤检索。
+
         ``limit`` 缺省 ``GAMES_LIMIT_DEFAULT``，``0`` 表示不封顶。被切掉的那些
         不消失：``summary.total_games`` 与 ``summary.truncated`` 照实说。
 
@@ -660,22 +675,42 @@ class Store:
         if self._conn is None:
             return {'games': [], 'summary': _blank_games_summary(store_enabled=False)}
 
+        where_clauses = []
+        params = []
+        if mode and mode not in ('all', '', None):
+            if mode == 'setup':
+                where_clauses.append("g.source = 'setup'")
+            elif mode in ('sparring', 'relay'):
+                where_clauses.append("g.source <> 'setup' AND COALESCE(g.play_mode, 'sparring') = ?")
+                params.append(mode)
+        if q and str(q).strip():
+            kw = f"%{str(q).strip()}%"
+            where_clauses.append("(g.opponent_model LIKE ? OR g.game_id LIKE ? OR g.reason LIKE ?)")
+            params.extend([kw, kw, kw])
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
         with self._lock:
             rows = self._conn.execute(
                 f"""
                 SELECT g.game_id, g.start_fen, g.engine_side, g.source,
                        g.opened_at, g.updated_at, g.ply_count, g.fen_now,
                        g.state, g.winner, g.reason, g.outcome,
+                       COALESCE(g.play_mode, 'sparring'),
+                       COALESCE(g.opponent_model, ''),
                        COALESCE(p.graded_plies, 0)
                 FROM games g
                 {_GRADED_JOIN}
+                {where_sql}
                 ORDER BY g.updated_at DESC, g.game_id
-                """).fetchall()
+                """, params).fetchall()
             totals = self._conn.execute(
                 f"""
                 SELECT COUNT(*),
                        SUM(CASE WHEN g.source = 'setup' THEN 1 ELSE 0 END),
                        SUM(CASE WHEN g.source <> 'setup' THEN 1 ELSE 0 END),
+                       SUM(CASE WHEN g.source <> 'setup' AND COALESCE(g.play_mode, 'sparring') = 'sparring' THEN 1 ELSE 0 END),
+                       SUM(CASE WHEN g.source <> 'setup' AND g.play_mode = 'relay' THEN 1 ELSE 0 END),
                        COALESCE(SUM(p.graded_plies), 0),
                        SUM(CASE WHEN COALESCE(p.graded_plies, 0) > 0
                                 THEN 1 ELSE 0 END)
@@ -691,10 +726,13 @@ class Store:
         summary = _blank_games_summary()
         summary['limit'] = limit
         (summary['total_games'], setup_games, play_games,
+         sparring_games, relay_games,
          summary['graded_plies'], summary['graded_games']) = (
             [int(v or 0) for v in totals])
         summary['setup_games'] = setup_games
         summary['play_games'] = play_games
+        summary['sparring_games'] = sparring_games
+        summary['relay_games'] = relay_games
         listed = games[:limit] if limit else games
         summary['listed'] = len(listed)
         summary['truncated'] = len(listed) < len(games)
@@ -766,6 +804,51 @@ class Store:
                 'game_id': game_id,
             },
         }
+
+    def export_game(self, game_id: str, fmt: str = 'pgn') -> dict:
+        """导出单局对局记录为标准 PGN 或训练 JSONL。"""
+        replay = self.game_replay(game_id)
+        if not replay.get('found'):
+            return {'ok': False, 'message': f'未找到对局：{game_id}'}
+        if str(fmt).lower() == 'jsonl':
+            lines = format_game_jsonl(replay)
+            content = '\n'.join(lines)
+            return {'ok': True, 'content': content, 'format': 'jsonl',
+                    'filename': f'game-{game_id}.jsonl', 'count': len(lines)}
+        content = format_game_pgn(replay)
+        return {'ok': True, 'content': content, 'format': 'pgn',
+                'filename': f'game-{game_id}.pgn', 'count': 1}
+
+    def export_dataset(self, mode: str = None, fmt: str = 'jsonl',
+                       min_plies: int = 2, limit: int = 500) -> dict:
+        """批量按模式与筛选条件导出对局训练集（供离线学习、NNUE与强化学习微调）。"""
+        games_res = self.recent_games(limit=limit, mode=mode)
+        games_list = games_res.get('games', [])
+
+        if str(fmt).lower() == 'pgn':
+            pgn_chunks = []
+            for g in games_list:
+                if g.get('ply_count', 0) < min_plies:
+                    continue
+                rep = self.game_replay(g['game_id'])
+                if rep.get('found'):
+                    pgn_chunks.append(format_game_pgn(rep))
+            content = '\n\n'.join(pgn_chunks)
+            mode_tag = mode or 'all'
+            return {'ok': True, 'content': content, 'format': 'pgn',
+                    'filename': f'dataset-{mode_tag}.pgn', 'count': len(pgn_chunks)}
+
+        all_lines = []
+        for g in games_list:
+            if g.get('ply_count', 0) < min_plies:
+                continue
+            rep = self.game_replay(g['game_id'])
+            if rep.get('found'):
+                all_lines.extend(format_game_jsonl(rep))
+        mode_tag = mode or 'all'
+        content = '\n'.join(all_lines)
+        return {'ok': True, 'content': content, 'format': 'jsonl',
+                'filename': f'dataset-{mode_tag}.jsonl', 'count': len(all_lines)}
 
     # ------------------------------------------------------------------ #
     # 精训营学员档案（只读与增量记录）
@@ -969,12 +1052,23 @@ class Store:
         now = time.time()
         status = game.status()
 
+        play_mode = getattr(sess, 'play_mode', None)
+        if not play_mode and hasattr(sess, 'settings'):
+            play_mode = sess.settings.get('play_mode', 'sparring')
+        play_mode = str(play_mode or 'sparring')
+
+        opponent_model = getattr(sess, 'opponent_model', '')
+        if not opponent_model and hasattr(sess, 'opponent') and isinstance(sess.opponent, dict):
+            opponent_model = sess.opponent.get('model') or sess.opponent.get('url', '')
+        opponent_model = str(opponent_model or '')
+
         conn.execute(
             """
             INSERT INTO games(game_id, start_fen, engine_side, source,
                               opened_at, updated_at, ply_count,
-                              fen_now, state, winner, reason, outcome)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                              fen_now, state, winner, reason, outcome,
+                              play_mode, opponent_model)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(game_id) DO UPDATE SET
                 start_fen=excluded.start_fen,
                 engine_side=excluded.engine_side,
@@ -985,14 +1079,17 @@ class Store:
                 state=excluded.state,
                 winner=excluded.winner,
                 reason=excluded.reason,
-                outcome=excluded.outcome
+                outcome=excluded.outcome,
+                play_mode=excluded.play_mode,
+                opponent_model=excluded.opponent_model
             """,
             (gid, game.start_fen, game.engine_side,
              getattr(sess, 'game_source', 'play'),
              now, now, len(game.records),
              nt.to_fen(game.board, game.red_to_move),
              status['state'], status['winner'], status['reason'],
-             game_stats_outcome(sess)),
+             game_stats_outcome(sess),
+             play_mode, opponent_model),
         )
 
         # 整个重写这一局的棋谱。删多插少不是偷懒，是「投影」这个词的含义：
@@ -1047,3 +1144,116 @@ def game_stats_outcome(sess):
     跟账本一致，不是跟「此刻看起来谁赢了」一致。
     """
     return getattr(sess, 'game_stats', {}).get('settled')
+
+
+def format_game_pgn(replay_data: dict) -> str:
+    """将一局回放数据格式化为标准中国象棋 PGN 文本。"""
+    game = replay_data.get('game') or {}
+    plies = replay_data.get('plies') or []
+
+    date_str = time.strftime('%Y.%m.%d', time.localtime(game.get('opened_at', time.time())))
+    engine_side = game.get('engine_side', 'black')
+    play_mode = game.get('play_mode', 'sparring')
+    opp_model = game.get('opponent_model', '')
+
+    if play_mode == 'relay':
+        event_name = 'XQ-Coach 信使代下对弈'
+        red_name = opp_model if engine_side == 'black' else 'XQ-Coach Engine'
+        black_name = 'XQ-Coach Engine' if engine_side == 'black' else opp_model
+    else:
+        event_name = 'XQ-Coach 实战陪练对弈'
+        red_name = 'User' if engine_side == 'black' else 'XQ-Coach Engine'
+        black_name = 'XQ-Coach Engine' if engine_side == 'black' else 'User'
+
+    result = '*'
+    if game.get('winner') == 'red':
+        result = '1-0'
+    elif game.get('winner') == 'black':
+        result = '0-1'
+    elif game.get('state') == 'draw':
+        result = '1/2-1/2'
+
+    headers = [
+        ('[Game', '"Chinese Chess"]'),
+        ('[Event', f'"{event_name}"]'),
+        ('[Site', '"XQ-Coach Platform"]'),
+        ('[Date', f'"{date_str}"]'),
+        ('[Round', '"1"]'),
+        ('[Red', f'"{red_name or "Red"}"]'),
+        ('[Black', f'"{black_name or "Black"}"]'),
+        ('[Result', f'"{result}"]'),
+        ('[FEN', f'"{game.get("start_fen") or "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1"}"]'),
+        ('[Mode', f'"{play_mode}"]'),
+        ('[GameId', f'"{game.get("game_id", "")}"]'),
+    ]
+    if opp_model:
+        headers.append(('[OpponentModel', f'"{opp_model}"]'))
+
+    lines = [f'{tag} {val}' for tag, val in headers]
+    lines.append('')
+
+    move_chunks = []
+    for p in plies:
+        ply_num = p.get('ply', 1)
+        round_num = (ply_num + 1) // 2
+        is_red = p.get('side') == 'red'
+        prefix = f'{round_num}. ' if is_red else f'{round_num}... '
+        c_move = p.get('chinese', '')
+        iccs = p.get('iccs', '')
+        comment = ''
+        annotations = []
+        if p.get('eval_red') is not None:
+            annotations.append(f'[%eval {p["eval_red"] / 100:.2f}]')
+        if p.get('think_time') is not None:
+            annotations.append(f'[%clk {p["think_time"]:.1f}s]')
+        if annotations:
+            comment = ' {' + ' '.join(annotations) + '}'
+        move_chunks.append(f'{prefix}{c_move} ({iccs}){comment}')
+
+    if result != '*':
+        move_chunks.append(result)
+
+    lines.append(' '.join(move_chunks))
+    return '\n'.join(lines)
+
+
+def format_game_jsonl(replay_data: dict) -> list[str]:
+    """将一局回放数据逐手拆解为结构化训练 JSONL 记录（每行一个 JSON）。"""
+    game = replay_data.get('game') or {}
+    plies = replay_data.get('plies') or []
+    lines = []
+    gid = game.get('game_id', '')
+    play_mode = game.get('play_mode', 'sparring')
+    opp_model = game.get('opponent_model', '')
+    outcome = game.get('outcome')
+    winner = game.get('winner')
+
+    for p in plies:
+        review = p.get('review') or {}
+        rv_lines = review.get('lines') or []
+        best_line = rv_lines[0] if rv_lines and isinstance(rv_lines[0], dict) else {}
+        item = {
+            'game_id': gid,
+            'play_mode': play_mode,
+            'opponent_model': opp_model,
+            'ply': p.get('ply'),
+            'side': p.get('side'),
+            'by': p.get('by'),
+            'fen_before': p.get('fen_before'),
+            'move_iccs': p.get('iccs'),
+            'move_chinese': p.get('chinese'),
+            'eval_red': p.get('eval_red'),
+            'depth': p.get('depth'),
+            'think_time': p.get('think_time'),
+            'best_iccs': best_line.get('iccs') or review.get('best_iccs') or '',
+            'best_chinese': best_line.get('chinese') or '',
+            'loss': review.get('loss'),
+            'loss_kind': review.get('loss_kind'),
+            'gives_check': p.get('gives_check', False),
+            'mate': p.get('mate', False),
+            'game_outcome': outcome,
+            'winner': winner,
+        }
+        lines.append(json.dumps(item, ensure_ascii=False))
+    return lines
+

@@ -516,9 +516,13 @@ export interface GameHead {
   reason: string
   /** 引擎视角的胜负；还没结束是 null */
   outcome: 'wins' | 'losses' | 'draws' | null
+  /** 对局模式：sparring 实战对战 | relay 信使代下 */
+  play_mode?: 'sparring' | 'relay'
+  /** 信使代下时的对手模型名称或端点标识 */
+  opponent_model?: string
 }
 
-/** 列表的一行 = 那 12 列再加「这一局有几手带判分」。 */
+/** 列表的一行 = 那 14 列再加「这一局有几手带判分」。 */
 export interface GameRow extends GameHead {
   /** 这一局有几手带着判分 —— 「哪一局值得回看」就靠它 */
   graded_plies: number
@@ -531,6 +535,8 @@ export interface GamesSummary {
   truncated: boolean
   play_games: number
   setup_games: number
+  sparring_games?: number
+  relay_games?: number
   graded_plies: number
   graded_games: number
   limit: number
@@ -540,6 +546,13 @@ export interface GamesSummary {
 export interface GamesReply extends ApiReply {
   games: GameRow[]
   summary: GamesSummary
+}
+
+export interface ExportReply extends ApiReply {
+  content: string
+  format: 'pgn' | 'jsonl'
+  filename: string
+  count: number
 }
 
 /**

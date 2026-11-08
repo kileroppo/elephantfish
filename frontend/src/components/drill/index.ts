@@ -1,6 +1,4 @@
 export * from './DrillHeader'
 export * from './DrillControls'
-export * from './DrillTacticsHUD'
-export * from './DrillExplanationModal'
 export * from './CombatChronicle'
 export * from './FloatingTacticalCapsule'

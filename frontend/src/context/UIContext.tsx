@@ -77,6 +77,7 @@ export interface UIContextType {
   toggleRailR: () => void
   setRailR: Dispatch<SetStateAction<boolean>>
   playMode: 'sparring' | 'relay'
+  setPlayMode: (mode: 'sparring' | 'relay') => void
   togglePlayMode: () => void
   coachGuard: boolean
   toggleCoachGuard: () => void
@@ -168,6 +169,12 @@ export function UIProvider({ children }: { children: ReactNode }) {
     },
     [playMode, g],
   )
+
+  const changePlayMode = useCallback((next: 'sparring' | 'relay') => {
+    setPlayMode(next)
+    localStorage.setItem('ef.play_mode', next)
+    void g.updateSettings({ play_mode: next } as any)
+  }, [g])
 
   const togglePlayMode = useCallback(() => {
     setPlayMode((curr) => {
@@ -586,6 +593,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
         toggleRailR,
         setRailR,
         playMode,
+        setPlayMode: changePlayMode,
         togglePlayMode,
         coachGuard,
         toggleCoachGuard,

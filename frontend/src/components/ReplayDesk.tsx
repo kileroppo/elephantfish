@@ -10,6 +10,7 @@ import {
 import { useExitPhase } from '../hooks/useExitPhase'
 import { useUIContext } from '../context/UIContext'
 import { useGameContext } from '../context/GameContext'
+import { downloadExportFile } from './GameShelf'
 import {
   ReplayBoardSection,
   ReplayCoachCabin,
@@ -163,22 +164,45 @@ export function ReplayDesk(props?: ReplayDeskProps) {
     return () => window.clearInterval(timer)
   }, [autoPlay, plies.length])
 
-  const handleContinueGame = useCallback(async () => {
-    const targetFen = sandboxSnap
-      ? sandboxSnap.fen
-      : (index < plies.length
-          ? plies[index]?.fen_before
-          : reply?.game?.fen_now) ?? reply?.game?.start_fen
-    if (!targetFen) return
-    const engineSide = reply?.game?.engine_side ?? 'black'
-    try {
-      await g.loadPosition(targetFen, engineSide)
-      g.pushToast('已从此局面开始实战对弈', 'info')
-      onClose()
-    } catch {
-      g.pushToast('加载局面失败', 'error')
-    }
-  }, [sandboxSnap, index, plies, reply, g, onClose])
+  const handleContinueGame = useCallback(
+    async (mode: 'sparring' | 'relay' = 'sparring') => {
+      const targetFen = sandboxSnap
+        ? sandboxSnap.fen
+        : (index < plies.length
+            ? plies[index]?.fen_before
+            : reply?.game?.fen_now) ?? reply?.game?.start_fen
+      if (!targetFen) return
+      const engineSide = reply?.game?.engine_side ?? 'black'
+      try {
+        await g.loadPosition(targetFen, engineSide, mode, 'play')
+        ui.setPlayMode(mode)
+        g.pushToast(
+          `已从此局面开始${mode === 'sparring' ? '实战对弈' : '信使代下'}`,
+          'info',
+        )
+        onClose()
+      } catch {
+        g.pushToast('加载局面失败', 'error')
+      }
+    },
+    [sandboxSnap, index, plies, reply, g, ui, onClose],
+  )
+
+  const handleExportGame = useCallback(
+    async (format: 'pgn' | 'jsonl') => {
+      if (!gameId) return
+      try {
+        const res = await api.exportGame(gameId, format)
+        if (res.ok && res.content) {
+          downloadExportFile(res.content, res.filename || `game-${gameId}.${format}`)
+          g.pushToast(`已导出 ${format.toUpperCase()} 记录`, 'info')
+        }
+      } catch {
+        g.pushToast('导出对局失败', 'error')
+      }
+    },
+    [gameId, g],
+  )
 
   useEffect(() => {
     setPvMode('none')
@@ -306,6 +330,7 @@ export function ReplayDesk(props?: ReplayDeskProps) {
           head={head}
           seedGameId={seed?.gameId}
           onClose={onClose}
+          onExportGame={handleExportGame}
         />
 
         {error && (
@@ -359,7 +384,8 @@ export function ReplayDesk(props?: ReplayDeskProps) {
                 causal={causal}
                 pvMode={pvMode}
                 onTogglePvMode={(mode) => setPvMode((v) => (v === mode ? 'none' : mode))}
-                onContinueGame={() => void handleContinueGame()}
+                onContinueGame={() => void handleContinueGame('sparring')}
+                onContinueRelay={() => void handleContinueGame('relay')}
                 onNextTurningPly={() => {
                   const next = turningPlies.find((p) => p > index) ?? turningPlies[0]
                   go(next)

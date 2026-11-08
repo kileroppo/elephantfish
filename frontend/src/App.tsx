@@ -134,6 +134,9 @@ function AppContent() {
       }
       if (typing) return
 
+      // 特训营模态打开时，全局快捷键（Z 禅意/T 主题/F 翻转等）让路给特训营内部快捷键
+      if (ui.drillOpen) return
+
       if (ui.replay) return
 
       if (setup.active && (e.key === 'Delete' || e.key === 'Backspace')) {

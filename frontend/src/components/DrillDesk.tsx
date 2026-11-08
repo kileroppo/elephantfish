@@ -81,8 +81,7 @@ export function DrillDesk(props?: DrillDeskProps) {
   const [solved, setSolved] = useState(false)
   const [stage, setStage] = useState<'demo' | 'drill' | 'exam' | 'mirror'>('drill')
 
-  const [spotlightActive] = useState<boolean>(false)
-  const [xrayActive] = useState<boolean>(true)
+  const xrayActive = true
   const [choiceOptions, setChoiceOptions] = useState<ChoiceOption[]>([])
   const [xray, setXray] = useState<XiangqiXRay | null>(null)
   const [hoveredChoice, setHoveredChoice] = useState<ChoiceOption | null>(null)
@@ -161,23 +160,6 @@ export function DrillDesk(props?: DrillDeskProps) {
       // 静默处理
     }
   }, [])
-
-  // 核心战区聚光灯 squares
-  const spotlightSquares = useMemo(() => {
-    if (!spotlightActive) return null
-    const set = new Set<string>()
-    if (currentPuzzle?.visual_clues?.key_pieces) {
-      currentPuzzle.visual_clues.key_pieces.forEach((s) => set.add(s))
-    }
-    if (currentPuzzle?.visual_clues?.weakness_squares) {
-      currentPuzzle.visual_clues.weakness_squares.forEach((s) => set.add(s))
-    }
-    if (goodSteps.length > 0 && goodSteps[0].iccs) {
-      set.add(goodSteps[0].iccs.slice(0, 2))
-      set.add(goodSteps[0].iccs.slice(2, 4))
-    }
-    return Array.from(set)
-  }, [spotlightActive, currentPuzzle, goodSteps])
 
   // What-If 走前试探残影 (Ghost Move)
   const ghostMove = useMemo(() => {
@@ -370,7 +352,7 @@ export function DrillDesk(props?: DrillDeskProps) {
       } else {
         const sub = res.puzzle.plain_subtitle || res.puzzle.master_quote || res.puzzle.target
         setFeedback({
-          text: `【当前任务：你执${sideLabel}先行】${sub}（如果看不懂局势，可随时点下方「👁️ 看对手想干嘛」或「🧠 算路三问」）`,
+          text: `【当前任务：你执${sideLabel}先行】${sub}（看不懂局势？可随时点下方「💡 点拨」或「👁️ 看威胁」）`,
           tone: 'info',
         })
       }
@@ -734,6 +716,7 @@ export function DrillDesk(props?: DrillDeskProps) {
   // 7. 分步提示获取
   const handleRequestHint = async () => {
     if (!currentPuzzle) return
+    if (hintLevel >= 3) return
     if (stage === 'exam') {
       onToast('实战检验模式不提供提示，切换到「自己动手试走」即可使用提示！', 'warn')
       return
@@ -806,19 +789,51 @@ export function DrillDesk(props?: DrillDeskProps) {
     }
   }
 
+  // 键盘快捷键动作表：每帧刷新为最新闭包，避免长挂 effect 捕获到挂载时的旧状态
+  const keyActionsRef = useRef<{ undo: () => void; reset: () => void; hint: () => void; next: () => void; threat: () => void } | null>(null)
+  keyActionsRef.current = {
+    undo: () => { if (!thinking) void handleUndo() },
+    reset: () => { if (!thinking) void handleReset() },
+    hint: handleRequestHint,
+    next: handleNextPuzzle,
+    threat: () => { if (threatSteps.length > 0 && animMode === 'none' && !thinking) startAnimation('threat') },
+  }
+
   // 键盘快捷键监听
   useEffect(() => {
     if (!mounted || leaving) return
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      const isTyping = !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable))
       if (e.key === 'Escape') {
         e.preventDefault()
         clearAnimTimer()
         onClose()
-      } else if (e.key === 'f' || e.key === 'F') {
-        const t = e.target as HTMLElement | null
-        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
-        e.preventDefault()
-        setFlipped((v) => !v)
+        return
+      }
+      if (isTyping) return
+      const actions = keyActionsRef.current
+      if (!actions) return
+      switch (e.key.toLowerCase()) {
+        case 'f':
+          e.preventDefault()
+          setFlipped((v) => !v)
+          break
+        case 'z':
+          actions.undo()
+          break
+        case 'r':
+          actions.reset()
+          break
+        case 'h':
+          actions.hint()
+          break
+        case 'n':
+          actions.next()
+          break
+        case 't':
+          actions.threat()
+          break
       }
     }
     window.addEventListener('keydown', onKey)
@@ -829,6 +844,12 @@ export function DrillDesk(props?: DrillDeskProps) {
     if (!focusMotif) return []
     return puzzles.filter((p) => p.motif === focusMotif)
   }, [focusMotif, puzzles])
+
+  // exam 无提示检验阶段不展示候选芯片，避免暴露答案空间
+  const visibleChoices = useMemo(
+    () => (stage === 'exam' ? [] : choiceOptions),
+    [stage, choiceOptions],
+  )
 
 
 
@@ -851,8 +872,6 @@ export function DrillDesk(props?: DrillDeskProps) {
       ? animFrames[Math.min(animStep, animFrames.length - 1)]
       : game
 
-  const userSideLabel = currentPuzzle?.side === 'black' ? '黑方先行（你执黑）' : '红方先行（你执红）'
-
   return (
     <div
       className={`fixed inset-0 z-[300] bg-ink-0/35 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 transition-all duration-300 select-none ${
@@ -861,7 +880,11 @@ export function DrillDesk(props?: DrillDeskProps) {
       role="dialog"
       aria-modal="true"
       aria-label="象棋实战特训营"
-      onClick={onClose}
+      onClick={() => {
+        // 有进行中的推演/惩罚/思考时，遮罩误点不关闭，避免打断训练
+        if (animMode !== 'none' || inRebuttal || thinking) return
+        onClose()
+      }}
     >
       <div
         className={`w-[min(1240px,96vw)] h-[min(92vh,900px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-slate-50 text-slate-900 rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.2)] border border-slate-200 transition-all duration-300 ${
@@ -908,8 +931,10 @@ export function DrillDesk(props?: DrillDeskProps) {
               currentPuzzle={currentPuzzle}
               solved={solved}
               inRebuttal={inRebuttal}
+              stage={stage}
+              reveal={stage === 'demo'}
               feedback={feedback}
-              choiceOptions={choiceOptions}
+              choiceOptions={visibleChoices}
               hoveredChoice={hoveredChoice}
               badStepsCount={badSteps.length}
               animMode={animMode}
@@ -922,7 +947,6 @@ export function DrillDesk(props?: DrillDeskProps) {
               onMakeMove={(iccs) => void handleMove(iccs)}
               onUndo={handleUndo}
               onStartBadAnim={() => startAnimation('bad')}
-              onStartGoodAnim={() => startAnimation('good')}
               onMirrorDrill={handleMirrorDrill}
               onNextPuzzle={handleNextPuzzle}
             />
@@ -941,7 +965,6 @@ export function DrillDesk(props?: DrillDeskProps) {
                   onMove={handleMove}
                   moveBubble={moveBubble}
                   xrayOverlay={xrayActive ? xray : null}
-                  spotlightSquares={spotlightSquares}
                   ghostMove={ghostMove}
                 />
               ) : (
@@ -952,7 +975,6 @@ export function DrillDesk(props?: DrillDeskProps) {
             {/* 棋盘下方动作坞 */}
             <DrillActionDock
               animMode={animMode}
-              badStepsCount={badSteps.length}
               threatStepsCount={threatSteps.length}
               inRebuttal={inRebuttal}
               hasGame={!!game}
@@ -971,11 +993,6 @@ export function DrillDesk(props?: DrillDeskProps) {
               animStep={animStep}
               activeStepsCount={activeSteps.length}
               animPlaying={animPlaying}
-              onResetAnimStep={() => {
-                clearAnimTimer()
-                setAnimPlaying(false)
-                setAnimStep(0)
-              }}
               onPrevAnimStep={() => {
                 clearAnimTimer()
                 setAnimPlaying(false)
@@ -1004,22 +1021,15 @@ export function DrillDesk(props?: DrillDeskProps) {
               currentPuzzle={currentPuzzle}
               solved={solved}
               inRebuttal={inRebuttal}
-              userSideLabel={userSideLabel}
               feedback={feedback}
               badStepsCount={badSteps.length}
-              animMode={animMode}
               hoveredChoice={hoveredChoice}
-              choiceOptions={choiceOptions}
-              prosCons={prosCons}
+              choiceOptions={visibleChoices}
+              reveal={stage === 'demo'}
               hints={hints}
               hintLevel={hintLevel}
               moveHistory={moveHistory}
               elapsedSeconds={elapsedSeconds}
-              onUndo={handleUndo}
-              onStartBadAnim={() => startAnimation('bad')}
-              onStartGoodAnim={() => startAnimation('good')}
-              onMirrorDrill={handleMirrorDrill}
-              onNextPuzzle={handleNextPuzzle}
               onHoverChoice={setHoveredChoice}
               onSelectChoiceRehearse={(opt) => {
                 if (opt.steps && opt.steps.length > 0) {

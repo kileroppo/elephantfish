@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { GameRow, GamesSummary } from '../types'
 import { api, ApiError } from '../api'
-import { describeSource } from '../lib/replay'
 import { relativeTime, shortSide, sideName } from '../lib/format'
 import { useUIContext } from '../context/UIContext'
 
@@ -22,6 +21,18 @@ export interface GameShelfProps {
   onPick?: (gameId: string) => void
 }
 
+export function downloadExportFile(content: string, filename: string, type = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 export function GameShelf(props: GameShelfProps) {
   const ui = useUIContext()
   const onPick = props.onPick ?? ui.openReplay
@@ -29,11 +40,14 @@ export function GameShelf(props: GameShelfProps) {
   const [summary, setSummary] = useState<GamesSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [modeFilter, setModeFilter] = useState<'all' | 'sparring' | 'relay'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      const reply = await api.games()
+      const reply = await api.games(undefined, modeFilter, searchQuery)
       setRows(reply.games ?? [])
       setSummary(reply.summary ?? null)
       setError(null)
@@ -43,27 +57,113 @@ export function GameShelf(props: GameShelfProps) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [modeFilter, searchQuery])
 
   useEffect(() => {
     void reload()
   }, [reload])
 
+  const handleExportDataset = useCallback(
+    async (format: 'jsonl' | 'pgn') => {
+      setExporting(true)
+      try {
+        const res = await api.exportDataset(modeFilter, format)
+        if (res.ok && res.content) {
+          downloadExportFile(res.content, res.filename || `dataset-${modeFilter}.${format}`)
+        }
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : '导出训练集失败')
+      } finally {
+        setExporting(false)
+      }
+    },
+    [modeFilter],
+  )
+
   return (
     <section className="panel shelf" aria-label="复盘架" data-shelf="">
-      <header className="panel-head">
+      <header className="panel-head flex items-center justify-between">
         <h2>复盘架</h2>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            className="btn btn-outline btn-xs px-2 py-0.5 text-[11px] rounded cursor-pointer text-fg-muted hover:text-fg border-border-subtle"
+            onClick={() => void handleExportDataset('jsonl')}
+            disabled={exporting || !rows || rows.length === 0}
+            title="批量导出当前筛选对局为训练集（JSONL 包含 FEN、走法、评分及 MultiPV）"
+          >
+            {exporting ? '导出中...' : '📥 导出训练集'}
+          </button>
+          <button
+            type="button"
+            className="mistake-reload shelf-reload"
+            data-shelf-reload=""
+            onClick={() => void reload()}
+            disabled={loading}
+            title="重新读一遍存档（这一步不改任何一局）"
+          >
+            {loading ? '读取中' : '重读'}
+          </button>
+        </div>
+      </header>
+
+            {/* 搜索与过滤栏 */}
+      <div className="flex items-center gap-1.5 my-1">
+        <input
+          type="text"
+          placeholder="搜索对手 / 局号..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="flex-1 px-2 py-1 text-xs rounded border border-border-subtle/70 bg-paper-1 text-ink-0 placeholder:text-ink-3/60 focus:outline-hidden focus:border-primary/50"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            className="text-xs text-ink-3 hover:text-ink-0 px-1"
+            onClick={() => setSearchQuery('')}
+            title="清空搜索"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* 模式切换胶囊 Tab */}
+      <div className="flex items-center gap-1 my-1.5 border-b border-border-subtle/50 pb-1.5 text-xs">
         <button
           type="button"
-          className="mistake-reload shelf-reload"
-          data-shelf-reload=""
-          onClick={() => void reload()}
-          disabled={loading}
-          title="重新读一遍存档（这一步不改任何一局）"
+          className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+            modeFilter === 'all'
+              ? 'bg-primary/10 text-primary font-medium'
+              : 'text-fg-muted hover:text-fg'
+          }`}
+          onClick={() => setModeFilter('all')}
         >
-          {loading ? '读取中' : '重读'}
+          全部 {summary ? `(${summary.total_games})` : ''}
         </button>
-      </header>
+        <button
+          type="button"
+          className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+            modeFilter === 'sparring'
+              ? 'bg-cinnabar/10 text-cinnabar font-medium'
+              : 'text-fg-muted hover:text-fg'
+          }`}
+          onClick={() => setModeFilter('sparring')}
+        >
+          ⚔️ 实战对战 {summary?.sparring_games !== undefined ? `(${summary.sparring_games})` : ''}
+        </button>
+        <button
+          type="button"
+          className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+            modeFilter === 'relay'
+              ? 'bg-indigo-500/10 text-indigo-500 font-medium'
+              : 'text-fg-muted hover:text-fg'
+          }`}
+          onClick={() => setModeFilter('relay')}
+        >
+          🤖 信使代下 {summary?.relay_games !== undefined ? `(${summary.relay_games})` : ''}
+        </button>
+      </div>
 
       <p className="mistake-source shelf-source">
         {summary
@@ -80,47 +180,67 @@ export function GameShelf(props: GameShelfProps) {
       )}
 
       {!error && summary?.store_enabled && rows?.length === 0 && (
-        <p className="hint mistake-hint">库里还没有一局：下完（或录完）一局再来重读。</p>
+        <p className="hint mistake-hint">当前筛选条件下暂无对局记录。</p>
       )}
 
       {rows && rows.length > 0 && (
         <ul className="shelf-list">
-          {rows.map((row) => (
-            <li key={row.game_id} className="shelf-row">
-              <div className="flex items-center gap-1.5 w-full">
-                <button
-                  type="button"
-                  className={`shelf-pick flex-1${row.graded_plies ? ' has-graded' : ''}`}
-                  onClick={() => onPick(row.game_id)}
-                  title={`把这一局摆到复盘台上（${row.ply_count} 手）`}
-                  data-shelf-game={row.game_id}
-                >
-                  <span className="shelf-kind">{describeSource(row.source)}</span>
-                  <span className="shelf-count">
-                    {row.ply_count} 手
-                    {row.graded_plies ? ` · ${row.graded_plies} 手有判分` : ''}
-                  </span>
-                  <span className="shelf-side">引擎执{shortSide(row.engine_side)}</span>
-                  <span className="shelf-when">{relativeTime(row.updated_at)}</span>
-                  <span className="shelf-over">
-                    {row.state && row.state !== 'playing'
-                      ? row.reason || (row.winner ? `${sideName(row.winner)}胜` : '结束')
-                      : '进行中'}
-                  </span>
-                </button>
-                {row.graded_plies > 0 && (
+          {rows.map((row) => {
+            const isRelay = row.play_mode === 'relay'
+            const isSetup = row.source === 'setup'
+            const modeTag = isSetup
+              ? '排局'
+              : isRelay
+              ? `代下${row.opponent_model ? ` · ${row.opponent_model}` : ''}`
+              : '对战'
+
+            return (
+              <li key={row.game_id} className="shelf-row">
+                <div className="flex items-center gap-1.5 w-full">
                   <button
                     type="button"
-                    className="btn btn-outline btn-xs px-2 py-1 text-[11px] shrink-0 text-cinnabar border-cinnabar/40 hover:bg-cinnabar/10 rounded cursor-pointer"
-                    onClick={() => ui.openDrillAt(undefined, row.game_id)}
-                    title={`在训练营中拆解本局 ${row.graded_plies} 处胜负手`}
+                    className={`shelf-pick flex-1${row.graded_plies ? ' has-graded' : ''}`}
+                    onClick={() => onPick(row.game_id)}
+                    title={`把这一局摆到复盘台上（${row.ply_count} 手）`}
+                    data-shelf-game={row.game_id}
                   >
-                    ⚔️ 拆解特训
+                    <span
+                      className={`shelf-kind text-[11px] px-1.5 py-0.5 rounded font-medium ${
+                        isRelay
+                          ? 'text-indigo-500 bg-indigo-500/10'
+                          : isSetup
+                          ? 'text-fg-muted bg-fg-muted/10'
+                          : 'text-cinnabar bg-cinnabar/10'
+                      }`}
+                    >
+                      {modeTag}
+                    </span>
+                    <span className="shelf-count">
+                      {row.ply_count} 手
+                      {row.graded_plies ? ` · ${row.graded_plies} 手有判分` : ''}
+                    </span>
+                    <span className="shelf-side">引擎执{shortSide(row.engine_side)}</span>
+                    <span className="shelf-when">{relativeTime(row.updated_at)}</span>
+                    <span className="shelf-over">
+                      {row.state && row.state !== 'playing'
+                        ? row.reason || (row.winner ? `${sideName(row.winner)}胜` : '结束')
+                        : '进行中'}
+                    </span>
                   </button>
-                )}
-              </div>
-            </li>
-          ))}
+                  {row.graded_plies > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-xs px-2 py-1 text-[11px] shrink-0 text-cinnabar border-cinnabar/40 hover:bg-cinnabar/10 rounded cursor-pointer"
+                      onClick={() => ui.openDrillAt(undefined, row.game_id)}
+                      title={`在训练营中拆解本局 ${row.graded_plies} 处胜负手`}
+                    >
+                      ⚔️ 拆解特训
+                    </button>
+                  )}
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
 

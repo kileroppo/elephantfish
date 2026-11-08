@@ -171,7 +171,7 @@ def _open_archive(path):
 # 一列或少一列，界面读的是这份清单，这里就得为它红一次。
 GAME_HEAD_KEYS = {'game_id', 'start_fen', 'engine_side', 'source', 'opened_at',
                   'updated_at', 'ply_count', 'fen_now', 'state', 'winner',
-                  'reason', 'outcome'}
+                  'reason', 'outcome', 'play_mode', 'opponent_model'}
 PLY_KEYS = {'ply', 'side', 'by', 'iccs', 'chinese', 'piece', 'captured',
             'gives_check', 'mate', 'eval_red', 'mate_in', 'depth', 'think_time',
             'fen_before', 'review'}
@@ -953,7 +953,7 @@ def run(client, store_path):
     check('响应只有 games 与 summary：不夹带 state，也不回一份会话快照',
           isinstance(games, list) and isinstance(gsummary, dict)
           and set(listing) == {'ok', 'games', 'summary'}, f'键={sorted(listing)}')
-    check('列表每行的字段就是约定的那 13 个（多一列少一列都算契约变了）',
+    check('列表每行的字段就是约定的那 15 个（多一列少一列都算契约变了）',
           all(set(row) == GAME_HEAD_KEYS | {'graded_plies'} for row in games),
           str(sorted(games[0])) if games else '空')
     check('行里的 state 是存档那一列（字符串），不是一份会话状态快照',
@@ -1031,7 +1031,7 @@ def run(client, store_path):
           status == 200 and replay.get('ok') is True and replay.get('found') is True
           and set(replay) == {'ok', 'found', 'store_enabled', 'game', 'plies',
                                'summary'}, f'status={status} 键={sorted(replay)}')
-    check('局头的键就是 games 那 12 列（界面读不到第二份会话状态）',
+    check('局头的键就是 games 那 14 列（界面读不到第二份会话状态）',
           set(replay.get('game') or {}) == GAME_HEAD_KEYS,
           str(sorted(replay.get('game') or {})))
     check('棋谱按 ply 升序连续，行数与 ply_count、与服务自己的实况都一致',
@@ -1106,6 +1106,27 @@ def run(client, store_path):
     qa, qb = without_clocks(state_a), without_clocks(state_b)
     check('读历史不改会话状态：/api/state 除了几个现算的时钟，逐字段相同',
           qa == qb, '不同的键：' + str([k for k in qa if qa[k] != qb.get(k)]))
+
+    # ---- 12b. 模式筛选与导出接口 ------------------------------------------ #
+    st_exp_g, exp_g = client.get(f'/api/export/game?game_id={current_id}&format=pgn')
+    check('GET /api/export/game (pgn) -> 200 且返回合法 PGN',
+          st_exp_g == 200 and exp_g.get('ok') is True and '[Game "Chinese Chess"]' in exp_g.get('content', ''),
+          f"status={st_exp_g} format={exp_g.get('format')}")
+
+    st_exp_j, exp_j = client.get(f'/api/export/game?game_id={current_id}&format=jsonl')
+    check('GET /api/export/game (jsonl) -> 200 且返回 JSONL 内容',
+          st_exp_j == 200 and exp_j.get('ok') is True and len(exp_j.get('content', '').splitlines()) >= 3,
+          f"status={st_exp_j} count={exp_j.get('count')}")
+
+    st_exp_ds, exp_ds = client.get('/api/export/dataset?mode=sparring&format=jsonl')
+    check('GET /api/export/dataset -> 200 且返回批量数据集',
+          st_exp_ds == 200 and exp_ds.get('ok') is True and 'dataset-sparring.jsonl' in exp_ds.get('filename', ''),
+          f"status={st_exp_ds} filename={exp_ds.get('filename')}")
+
+    st_filt, body_filt = client.get('/api/games?mode=sparring')
+    check('GET /api/games?mode=sparring -> 200 且只返回对战记录',
+          st_filt == 200 and body_filt.get('ok') is True and all(r.get('play_mode') != 'relay' for r in body_filt.get('games', [])),
+          f"status={st_filt}")
     db3.close()
 
     # ---- 13. 国手名师精训营：三段式传功、当场反击、法眼点拨与精通晋升 ---- #

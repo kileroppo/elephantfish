@@ -1,6 +1,7 @@
 import type {
   ApiReply,
   AppState,
+  ExportReply,
   GameBreakdownReply,
   GameSnapshot,
   GamesReply,
@@ -86,8 +87,14 @@ export const api = {
   resign: (side?: 'red' | 'black') =>
     request<ApiReply>('/api/resign', { method: 'POST', body: JSON.stringify({ side }) }),
 
-  load: (payload: { fen?: string; moves?: string[]; engine_side?: 'red' | 'black' }) =>
-    request<ApiReply>('/api/load', { method: 'POST', body: JSON.stringify(payload) }),
+  load: (payload: {
+    fen?: string
+    moves?: string[]
+    engine_side?: 'red' | 'black'
+    play_mode?: 'sparring' | 'relay'
+    source?: 'play' | 'setup'
+    opponent_model?: string
+  }) => request<ApiReply>('/api/load', { method: 'POST', body: JSON.stringify(payload) }),
 
   settings: (payload: {
     max_depth?: number
@@ -125,12 +132,37 @@ export const api = {
 
   /**
    * 历次对局的列表（挑一局来回放）。同样是只读、不进轮询。
-   * `limit` 只有界面要「还有 N 局没列」时才传；缺省交给服务端的常量。
+   * 支持按 limit、mode（all | sparring | relay | setup）及搜索词 q 检索。
    */
-  games: (limit?: number) =>
-    request<GamesReply>(
-      limit === undefined ? '/api/games' : `/api/games?limit=${encodeURIComponent(limit)}`,
+  games: (limit?: number, mode?: string, q?: string) => {
+    const params = new URLSearchParams()
+    if (limit !== undefined) params.set('limit', String(limit))
+    if (mode && mode !== 'all') params.set('mode', mode)
+    if (q) params.set('q', q)
+    const qs = params.toString()
+    return request<GamesReply>(qs ? `/api/games?${qs}` : '/api/games')
+  },
+
+  /** 导出指定对局为 PGN 或训练 JSONL */
+  exportGame: (gameId: string, format: 'pgn' | 'jsonl' = 'pgn') =>
+    request<ExportReply>(
+      `/api/export/game?game_id=${encodeURIComponent(gameId)}&format=${encodeURIComponent(format)}`,
     ),
+
+  /** 批量导出对局训练集（供 AI 神经网络与大模型训练微调） */
+  exportDataset: (
+    mode?: string,
+    format: 'pgn' | 'jsonl' = 'jsonl',
+    minPlies = 2,
+    limit = 500,
+  ) => {
+    const params = new URLSearchParams()
+    if (mode && mode !== 'all') params.set('mode', mode)
+    params.set('format', format)
+    params.set('min_plies', String(minPlies))
+    params.set('limit', String(limit))
+    return request<ExportReply>(`/api/export/dataset?${params.toString()}`)
+  },
 
   /**
    * 某一局的每一手 —— 回放要的全部真值都在这一份里（`start_fen` + 有序 ICCS，

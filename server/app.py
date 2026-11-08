@@ -128,7 +128,9 @@ def _games(query):
     limit, error = _parse_limit(query.get('limit'))
     if error:
         return Reply({'ok': False, 'message': error, 'limit': query.get('limit')}, 400)
-    out = SESSION.store.recent_games(limit=limit)
+    mode = (query.get('mode') or '').strip()
+    q = (query.get('q') or '').strip()
+    out = SESSION.store.recent_games(limit=limit, mode=mode, q=q)
     out['ok'] = True
     return Reply(out)
 
@@ -165,6 +167,33 @@ def _game(query):
                       'message': f'存档里没有这一局：{game_id}'}, 404)
     replay['ok'] = True
     return Reply(replay)
+
+
+def _export_game(query):
+    """单局对局导出为 PGN 或训练 JSONL：GET /api/export/game?game_id=...&format=pgn|jsonl"""
+    game_id = (query.get('game_id') or '').strip()
+    if not game_id:
+        return Reply({'ok': False, 'message': '缺少 game_id 参数'}, 400)
+    fmt = (query.get('format') or 'pgn').strip().lower()
+    res = SESSION.store.export_game(game_id, fmt=fmt)
+    status = 200 if res.get('ok') else 404
+    return Reply(res, status)
+
+
+def _export_dataset(query):
+    """批量对局训练集导出：GET /api/export/dataset?mode=...&format=jsonl|pgn&min_plies=4"""
+    mode = (query.get('mode') or '').strip() or None
+    fmt = (query.get('format') or 'jsonl').strip().lower()
+    try:
+        min_plies = int(query.get('min_plies') or 2)
+    except ValueError:
+        min_plies = 2
+    try:
+        limit = int(query.get('limit') or 500)
+    except ValueError:
+        limit = 500
+    res = SESSION.store.export_dataset(mode=mode, fmt=fmt, min_plies=min_plies, limit=limit)
+    return Reply(res, 200)
 
 
 # --------------------------------------------------------------------------- #
@@ -207,6 +236,8 @@ GET_ROUTES = {
 QUERY_ROUTES = {
     '/api/games': _games,
     '/api/game': _game,
+    '/api/export/game': _export_game,
+    '/api/export/dataset': _export_dataset,
     '/api/training/puzzles': lambda q: TRAINING.list_puzzles_reply(
         category=q.get('category'), motif=q.get('motif'), game_id=q.get('game_id')
     ),

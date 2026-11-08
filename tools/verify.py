@@ -2290,7 +2290,7 @@ def test_replay_read_path():
     check('回放行的字段就是约定的那些（不多不少，也不夹带会话快照）',
           all(set(row) == set(store_mod.PLY_COLUMNS) for row in replay['plies']),
           str(sorted(replay['plies'][0]) if replay['plies'] else '空'))
-    check('局头的字段就是 games 那 12 列（界面不会拿到一份 state 快照）',
+    check('局头的字段就是 games 那 14 列（界面不会拿到一份 state 快照）',
           set(replay['game']) == set(store_mod.GAME_HEAD_COLUMNS),
           str(sorted(set(replay['game']))))
 
@@ -2321,7 +2321,7 @@ def test_replay_read_path():
     # ---- 列表：挑一局要靠它 ---------------------------------------------- #
 
     listing = store.recent_games(limit=0)
-    check('列表一行的字段 = games 的 12 列 + graded_plies（graded_plies 是算出来的）',
+    check('列表一行的字段 = games 的 14 列 + graded_plies（graded_plies 是算出来的）',
           all(set(row) == set(store_mod.GAME_HEAD_COLUMNS) | {'graded_plies'}
               for row in listing['games']),
           str(sorted(set(listing['games'][0]))))
@@ -2507,6 +2507,23 @@ def test_replay_read_path():
     check('SQL 句数与库里有几局无关：一局与四局都是同样几句（不是逐局一问）',
           len(verbs_two) == len(verbs_many) and len(verbs_two) <= 5,
           f'{len(verbs_two)} vs {len(verbs_many)} 句')
+
+    
+    # 导出 PGN 与训练 JSONL 契约自检
+    res_pgn = store.export_game(sess.game_id, fmt='pgn')
+    check('export_game (pgn) 导出合法 PGN 且包含 Event 与 FEN',
+          res_pgn['ok'] and '[Game "Chinese Chess"]' in res_pgn['content'] and '[FEN ' in res_pgn['content'],
+          str(res_pgn.get('filename')))
+
+    res_jsonl = store.export_game(sess.game_id, fmt='jsonl')
+    check('export_game (jsonl) 导出结构化训练记录',
+          res_jsonl['ok'] and res_jsonl['count'] >= 1 and 'game_id' in res_jsonl['content'],
+          str(res_jsonl.get('count')))
+
+    res_ds = store.export_dataset(mode='sparring', fmt='jsonl')
+    check('export_dataset 批量导出对战训练集',
+          res_ds['ok'] and 'dataset-sparring.jsonl' in res_ds['filename'],
+          str(res_ds.get('filename')))
 
     store.close()
 

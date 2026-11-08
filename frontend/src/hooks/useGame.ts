@@ -39,7 +39,12 @@ interface UseGame {
   resign: () => Promise<void>
   stopThinking: () => Promise<void>
   updateSettings: (patch: Partial<AppState['settings']>) => Promise<void>
-  loadPosition: (fen: string, engine_side?: 'red' | 'black') => Promise<void>
+  loadPosition: (
+    fen: string,
+    engine_side?: 'red' | 'black',
+    play_mode?: 'sparring' | 'relay',
+    source?: 'play' | 'setup',
+  ) => Promise<void>
 }
 
 export function useGame(): UseGame {
@@ -295,9 +300,14 @@ export function useGame(): UseGame {
   )
 
   const loadPosition = useCallback(
-    async (fen: string, engine_side?: 'red' | 'black') => {
+    async (
+      fen: string,
+      engine_side?: 'red' | 'black',
+      play_mode?: 'sparring' | 'relay',
+      source: 'play' | 'setup' = 'play',
+    ) => {
       lastPly.current = -1
-      await run(() => api.load({ fen, engine_side }))
+      await run(() => api.load({ fen, engine_side, play_mode, source }))
     },
     [run],
   )

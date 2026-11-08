@@ -16,6 +16,7 @@ export interface ReplayCoachCabinProps {
   pvMode: 'none' | 'best' | 'refute'
   onTogglePvMode: (mode: 'best' | 'refute') => void
   onContinueGame: () => void
+  onContinueRelay?: () => void
   onNextTurningPly: () => void
   onDrillSpecificGame?: () => void
   onToggleClues: () => void
@@ -44,6 +45,7 @@ export function ReplayCoachCabin({
   pvMode,
   onTogglePvMode,
   onContinueGame,
+  onContinueRelay,
   onNextTurningPly,
   onDrillSpecificGame,
   onToggleClues,
@@ -312,8 +314,8 @@ export function ReplayCoachCabin({
         )}
       </div>
 
-      {/* 3. 底部：轻量行动条（入营特训 vs 从此接下） */}
-      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-hairline/60">
+      {/* 3. 底部：复现接盘行动条（入营拆解、从此步实战、从此步代下） */}
+      <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-hairline/60 flex-wrap">
         {onDrillSpecificGame ? (
           <button
             type="button"
@@ -328,15 +330,29 @@ export function ReplayCoachCabin({
           <div />
         )}
 
-        <button
-          type="button"
-          className="h-7.5 px-2.5 rounded-lg text-xs font-semibold bg-paper-2 hover:bg-paper-3 text-ink-0 border border-hairline transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
-          onClick={onContinueGame}
-          title="从此局面开始，进入实战对局与引擎对练"
-        >
-          <span>⚔️</span>
-          <span className="whitespace-nowrap">从此局面接着下</span>
-        </button>
+        <div className="flex items-center gap-1.5 ml-auto">
+          {onContinueRelay && (
+            <button
+              type="button"
+              className="h-7.5 px-2.5 rounded-lg text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/30 transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+              onClick={onContinueRelay}
+              title="从此局面开始切换为信使代下模式"
+            >
+              <span>🤖</span>
+              <span className="whitespace-nowrap">从此步代下</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="h-7.5 px-2.5 rounded-lg text-xs font-semibold bg-cinnabar/10 hover:bg-cinnabar/20 text-cinnabar border border-cinnabar/30 transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+            onClick={onContinueGame}
+            title="从此局面开始，进入实战对局与引擎对练"
+          >
+            <span>⚔️</span>
+            <span className="whitespace-nowrap">从此步实战</span>
+          </button>
+        </div>
       </div>
     </div>
   )

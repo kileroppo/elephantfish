@@ -374,8 +374,7 @@ class EngineCoordinator:
                 if remaining > 0 and not task.stop_event.is_set():
                     task.stop_event.wait(remaining)
 
-                if not task.stop_event.is_set():
-                    on_complete(task, last, start_board, red_to_move)
+                on_complete(task, last, start_board, red_to_move)
             except Exception as exc:
                 traceback.print_exc()
                 task.status = 'error'

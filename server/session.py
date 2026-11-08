@@ -141,6 +141,8 @@ class GameSession:
         if not self.engines.available(PIKAFISH):
             self.engines.set_preference(BUILTIN)
         self.settings = {**DEFAULT_SETTINGS, **(settings or {})}
+        self.play_mode = self.settings.get('play_mode', 'sparring')
+        self.opponent_model = ''
 
         # 局面代数。换局 / 载入时 +1。worker 落子前必查 —— 这是「搜索期间局面被
         # 整个换掉」唯一的可靠判据（比对棋盘串挡不住新旧局面恰好相同的情形）。
@@ -547,6 +549,9 @@ class GameSession:
                 self.settings[key] = bool(payload[key])
         if 'play_mode' in payload:
             self.settings['play_mode'] = str(payload['play_mode'])
+            self.play_mode = self.settings['play_mode']
+        if 'opponent_model' in payload:
+            self.opponent_model = str(payload['opponent_model'])
         if 'sparring_level' in payload:
             lvl = str(payload['sparring_level'])
             if lvl in ('apprentice', 'club', 'master', 'god'):
@@ -725,7 +730,13 @@ class GameSession:
             # 排局/补棋摆出来的局另发一张身份证：它不是上一局的续集，
             # 而 source=setup 让它的胜负不进「我这盘下得怎么样」那本账。
             self.game_id = uuid.uuid4().hex[:12]
-            self.game_source = 'setup'
+            source = payload.get('source')
+            self.game_source = str(source) if source in ('play', 'setup') else 'setup'
+            if 'play_mode' in payload:
+                self.play_mode = str(payload['play_mode'])
+                self.settings['play_mode'] = self.play_mode
+            if 'opponent_model' in payload:
+                self.opponent_model = str(payload['opponent_model'])
             self.game_stats = _blank_stats()
             self.engines.new_game()
             if self.game.engine_to_move and not self.game.is_over():
@@ -768,9 +779,11 @@ class GameSession:
 
     def configure_opponent(self, payload):
         with self.lock:
-            for key in ('mode', 'url', 'method', 'move_field'):
+            for key in ('mode', 'url', 'method', 'move_field', 'model', 'name'):
                 if key in payload:
                     self.opponent[key] = payload[key]
+            if 'model' in payload or 'name' in payload:
+                self.opponent_model = str(payload.get('model') or payload.get('name') or '')
             if 'headers' in payload and isinstance(payload['headers'], dict):
                 self.opponent['headers'] = payload['headers']
             if 'auto' in payload:
@@ -838,6 +851,8 @@ class GameSession:
                     'pikafish_path': self.engines.pikafish_path,
                 },
                 'opponent': dict(self.opponent),
+                'play_mode': getattr(self, 'play_mode', self.settings.get('play_mode', 'sparring')),
+                'opponent_model': getattr(self, 'opponent_model', ''),
                 'stats': dict(self.engine_stats),
                 'game_stats': dict(self.game_stats),
                 'pending': dict(self.pending) if self.pending else None,
