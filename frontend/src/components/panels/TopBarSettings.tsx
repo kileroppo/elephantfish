@@ -24,11 +24,11 @@ export function TopBarSettings({
 
   const fullLabel = isRelay
     ? isEngineRed
-      ? '引擎执红 · 先手'
-      : '引擎执黑 · 后手'
+      ? '引擎执红'
+      : '引擎执黑'
     : isEngineRed
-    ? '我执黑 · AI红'
-    : '我执红 · AI黑'
+    ? '我执黑'
+    : '我执红'
 
   const shortLabel = isRelay
     ? isEngineRed

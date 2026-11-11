@@ -73,7 +73,7 @@ export function GameActionGrid({
           className="btn btn-primary h-8.5 px-3 rounded text-xs font-semibold bg-cinnabar text-white hover:bg-cinnabar-bright transition-colors shadow-xs flex items-center justify-center cursor-pointer border-0"
           onClick={handleNewGame}
         >
-          新开一局
+          新局
         </button>
         <button
           type="button"
@@ -81,7 +81,7 @@ export function GameActionGrid({
           onClick={onUndo}
           disabled={!game.ply}
         >
-          悔一步
+          悔棋
         </button>
       </div>
 
@@ -93,14 +93,14 @@ export function GameActionGrid({
           onClick={handleToggleSide}
           title="切换我方执红/执黑"
         >
-          执子先手：
+          执子：
           {playMode === 'relay'
             ? isEngineRed
-              ? '引擎执红 · 对手黑'
-              : '引擎执黑 · 对手红'
+              ? '引擎执红'
+              : '引擎执黑'
             : isEngineRed
-            ? '我执黑 · 引擎红'
-            : '我执红 · 引擎黑'}
+            ? '我执黑'
+            : '我执红'}
         </button>
 
         {/* 第 3 行：视角翻转 + 自由排局 */}

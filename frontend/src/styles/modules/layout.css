@@ -15,6 +15,9 @@
   --rail-l: 262px;
   --rail-r: 360px;
   --rail-gap: 20px;
+  /* 双栏构图（控制列 + 棋盘）的栏距：棋盘垫外扩 14px，栏距必须明显大于它，
+     控制列与棋盘之间才有「留白」而不是「贴着」 */
+  --stage-gutter: 64px;
   /* 抽屉曲线：利落轻盈的东方极简交互 */
   --drawer: 320ms cubic-bezier(0.32, 0.72, 0, 1);
   flex: 1;
@@ -30,7 +33,7 @@
     calc(var(--rail-r) + var(--rail-gap));
   column-gap: 0;
   padding: 8px 24px 18px;
-  transition: grid-template-columns var(--drawer);
+  transition: grid-template-columns var(--drawer), max-width var(--drawer);
 }
 
 /* 核心对弈主态：左侧设置栏收起，棋盘与右侧分析棋谱组成两栏书页黄金视觉 */
@@ -39,7 +42,22 @@
 }
 
 .workspace.no-right {
-  grid-template-columns: calc(var(--rail-l) + var(--rail-gap)) minmax(0, 1fr) 0px;
+  grid-template-columns: calc(var(--rail-l) + var(--stage-gutter)) minmax(0, 1fr) 0px;
+  /* 右栏收起时，把「左栏 + 棋盘」当作一个整体在窗口居中：宽度跟着棋盘实际上限走
+     （与 .stage > .board-wrap 同一把尺）。否则 1fr 的中柱会把棋盘推向窗口右侧，
+     左边是贴边的窄栏、右边留一整条空白，构图重心偏右 */
+  max-width: calc(
+    var(--rail-l) + var(--stage-gutter) +
+    min(calc((100vh - 180px) * 720 / 800), 660px) + 8px
+  );
+}
+
+/* 双栏构图下控制列与棋盘之间的呼吸位由列距承担；
+   收起右栏时栏缝从 --rail-gap 展宽到 --stage-gutter，跟随抽屉曲线过渡 */
+@media (min-width: 1141px) {
+  .workspace.no-right .rail-left {
+    margin-right: var(--stage-gutter);
+  }
 }
 
 .workspace.no-left.no-right {
@@ -180,6 +198,7 @@
 .rail-left {
   margin-right: var(--rail-gap);
   --rail-slide: -20px;
+  transition: margin-right var(--drawer);
 }
 
 /* 右栏内容右对齐：栏轨变窄时裁掉的是左边，看起来就是从屏幕右缘滑进来的 */
@@ -193,6 +212,11 @@
 .rail-left > * {
   width: calc(var(--rail-l) - 2px);
   flex-shrink: 0;
+  /* 左栏只有一张控制卡：在满高的栏轨里垂直居中，不再贴顶、下方留一整条空柱。
+     矮窗口内容放不下时 auto margin 自动归零，照常从顶部滚动（窄屏栏轨是
+     auto 行，高度即内容高，此处同样不生效） */
+  margin-top: auto;
+  margin-bottom: auto;
 }
 
 .rail-right > * {

@@ -91,7 +91,7 @@ export function SetupFooter({
             开局状态：引擎执{engineSide === 'red' ? '红' : '黑'}（朝下），
             {turn === engineSide
               ? '开局由引擎自动出招'
-              : `开局轮到${turn === 'red' ? '红' : '黑'}方（请在盘面落子）`}
+              : `开局轮到${turn === 'red' ? '红' : '黑'}方 · 请落子`}
           </span>
         </div>
       </div>

@@ -54,7 +54,8 @@ export function RelayConsole(props: RelayConsoleProps) {
   const onUndo = props.onUndo ?? (() => void g.undoRound())
   const onPreviewBoard = props.onPreviewBoard ?? ui.handlePreviewBoard
   const [text, setText] = useState('')
-  const [showTypeInput, setShowTypeInput] = useState(false)
+  const showTypeInput = ui.relayInput
+  const setShowTypeInput = ui.setRelayInput
   const [copied, setCopied] = useState(false)
   const [rejected, setRejected] = useState(0)
   const [dismissedPly, setDismissedPly] = useState<number | null>(null)
@@ -106,6 +107,16 @@ export function RelayConsole(props: RelayConsoleProps) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // 轮到信使录入时自动展开录入栏：录入是信使模式的主动作，不该让用户去找入口。
+  // 用户手动收起后不会被立刻顶回来，直到下一次轮到录入（thinking / engine_to_move 变化）
+  const engineToMove = !!game.engine_to_move
+  useEffect(() => {
+    if (ui.drillOpen || ui.replay || ui.previewGame) return
+    if (playMode !== 'relay' || !playing || thinking || engineToMove) return
+    if (queued) return
+    setShowTypeInput(true)
+  }, [playMode, playing, thinking, engineToMove, queued, ui.drillOpen, ui.replay, ui.previewGame, setShowTypeInput])
 
   useEffect(() => () => window.clearTimeout(copyTimer.current), [])
 
@@ -160,7 +171,7 @@ export function RelayConsole(props: RelayConsoleProps) {
         onEngineMove={onEngineMove}
         onCopyMove={copyMove}
         onOpenHelper={(mode) => void ui.openCoachLive(mode)}
-        onToggleTypeInput={() => setShowTypeInput((v) => !v)}
+        onToggleTypeInput={() => setShowTypeInput(!showTypeInput)}
         coachGuard={coachGuard}
         onToggleCoachGuard={onToggleCoachGuard}
         railL={ui.railL}

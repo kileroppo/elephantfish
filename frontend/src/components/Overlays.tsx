@@ -34,13 +34,13 @@ const SHORTCUTS: { keys: string; what: string }[] = [
   { keys: 'Enter', what: '提交输入框里的走法' },
   { keys: 'Tab', what: '采纳第一个候选走法' },
   { keys: 'Esc', what: '清空输入 / 关闭弹层 / 退出禅境' },
-  { keys: 'Ctrl + Z', what: '悔一步' },
+  { keys: 'Ctrl + Z', what: '悔棋' },
   { keys: 'Ctrl + N', what: '开新局（保持当前执子方）' },
   { keys: 'Z', what: '开启 / 退出 禅意极简专注对弈模式' },
   { keys: 'T', what: '切换东方美学材质（宣纸 · 乌墨）' },
   { keys: 'F', what: '翻转棋盘视角' },
   { keys: 'Space', what: '引擎思考时，立即采用当前最好的一步' },
-  { keys: '/', what: '聚焦到录入框' },
+  { keys: '/', what: '展开并聚焦录入栏' },
 ]
 
 export function HelpOverlay(props?: { open?: boolean; onClose?: () => void }) {
@@ -83,7 +83,7 @@ export function HelpOverlay(props?: { open?: boolean; onClose?: () => void }) {
             <strong>🏟️ 精训营闯关。</strong>点击顶栏「精训营」进入系统化杀法、功法与残局试炼。支持三选一演练试探、空间暗线透视（炮架/马腿/无根子）与镜像变式大考，直至真正精通掌握。
           </li>
           <li>
-            <strong>📡 信使代打转述。</strong>在与外部大模型下棋时，可切换为「信使代打」模式：直接在盘上录入对手走法（或敲击键盘 <code>/</code> 录入），一键复制引擎最佳应手反馈给对方模型。
+            <strong>📡 信使代下转述。</strong>在与外部大模型下棋时，可切换为「信使代下」模式：直接在盘上录入对手走法（或敲击键盘 <code>/</code> 展开录入栏），一键复制引擎最佳应手反馈给对方模型。
           </li>
           <li>
             <strong>🔍 动态胜负手复盘。</strong>每一局结束均可点击「复盘本局」或右栏错题本，系统自动直达关键胜负手，看清每一步胜势起伏与因果得失。

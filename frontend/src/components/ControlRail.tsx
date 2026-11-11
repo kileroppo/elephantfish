@@ -105,32 +105,25 @@ export function ControlRail(props: ControlRailProps) {
       aria-hidden={!open}
       {...(open ? {} : { inert: '' })}
     >
-      {/* 极简 iOS 控制岛容器：极致轻薄，无折叠跳动 */}
-      <div className="w-full flex flex-col bg-paper-0/95 backdrop-blur-md rounded-2xl border border-hairline shadow-[0_2px_12px_rgba(0,0,0,0.04)] overflow-hidden transition-all duration-300">
+      {/* 无卡片浮层：控件直接落在纸面上，靠栏距与棋盘保持呼吸，不与盘面粘连 */}
+      <div className="w-full flex flex-col">
         {/* 顶部标题栏 */}
-        <div className="flex items-center justify-between px-3.5 pt-3 pb-2 select-none">
+        <div className="flex items-center px-3 pt-1 pb-2.5 mb-1 select-none border-b border-hairline/50">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-cinnabar" />
-            <h2 className="text-xs font-semibold tracking-wider text-ink-0 m-0">
+            <h2 className="font-display text-xs font-semibold tracking-[0.3em] text-ink-0 m-0">
               对局控制
             </h2>
           </div>
-          <span
-            className={`text-[10.5px] font-num px-2 py-0.5 rounded-full border transition-colors ${
-              coachGuardOn
-                ? 'bg-jade/10 text-jade border-jade/30 font-medium'
-                : 'bg-paper-2 text-ink-mute border-hairline'
-            }`}
-          >
-            {coachGuardOn ? '指导中' : '静音'}
-          </span>
         </div>
 
         {/* 核心控件区 */}
-        <div className="px-3 pb-3 flex flex-col gap-2.5">
-          {/* 0. 模式选择胶囊：信使代下 vs 实战陪练 */}
+        <div className="px-3 pb-3 flex flex-col gap-3">
+          {/* 0. 模式选择：信使代下 vs 实战陪练。
+              桌面端（≥640）顶栏中央分段器是同一状态的主入口，这里不再重复；
+              仅窄屏（顶栏分段器隐藏时）保留，供抽屉里切换。无框文字行，与整列浮层语言一致 */}
           <div
-            className="w-full inline-flex p-0.5 bg-paper-2/90 rounded-xl border border-hairline text-xs font-medium"
+            className="w-full flex sm:hidden items-center text-xs font-medium"
             role="tablist"
             aria-label="对战模式选择"
           >
@@ -138,41 +131,42 @@ export function ControlRail(props: ControlRailProps) {
               type="button"
               role="tab"
               aria-selected={playMode === 'relay'}
-              className={`flex-1 py-1.5 px-1 rounded-[9px] text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+              className={`flex-1 py-1.5 px-1 text-[11px] transition-colors duration-200 cursor-pointer border-0 bg-transparent flex items-center justify-center gap-1 whitespace-nowrap ${
                 playMode === 'relay'
-                  ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
-                  : 'bg-transparent text-ink-3 hover:text-ink-1'
+                  ? 'text-cinnabar font-semibold'
+                  : 'text-ink-3 hover:text-ink-1'
               }`}
               onClick={() => {
                 if (playMode !== 'relay') togglePlayMode()
               }}
               title="信使代下模式：我是转述人，引擎朝下"
             >
-              <span>⚡</span>
+              <span className="text-[10px] opacity-70">⚡</span>
               <span>信使代下</span>
             </button>
+            <span className="w-px h-3.5 bg-hairline-strong/60" aria-hidden="true" />
             <button
               type="button"
               role="tab"
               aria-selected={playMode === 'sparring'}
-              className={`flex-1 py-1.5 px-1 rounded-[9px] text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+              className={`flex-1 py-1.5 px-1 text-[11px] transition-colors duration-200 cursor-pointer border-0 bg-transparent flex items-center justify-center gap-1 whitespace-nowrap ${
                 playMode === 'sparring'
-                  ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
-                  : 'bg-transparent text-ink-3 hover:text-ink-1'
+                  ? 'text-cinnabar font-semibold'
+                  : 'text-ink-3 hover:text-ink-1'
               }`}
               onClick={() => {
                 if (playMode !== 'sparring') togglePlayMode()
               }}
               title="实战陪练模式：我亲自下棋，我执朝我"
             >
-              <span>🎯</span>
+              <span className="text-[10px] opacity-70">🎯</span>
               <span>实战陪练</span>
             </button>
           </div>
 
-          {/* 1. 对弈段位选择器 */}
+          {/* 1. 对弈段位选择器：无框文字行，选中项以一枚朱砂点标记 */}
           <div
-            className="w-full inline-flex p-0.5 bg-paper-2/90 rounded-xl border border-hairline text-xs font-medium"
+            className="w-full flex items-start text-xs font-medium"
             role="tablist"
             aria-label="对弈段位选择"
           >
@@ -194,24 +188,32 @@ export function ControlRail(props: ControlRailProps) {
                   type="button"
                   role="tab"
                   aria-selected={isOn}
-                  className={`flex-1 py-1.5 px-1 rounded-[9px] text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-0.5 whitespace-nowrap ${
+                  className={`flex-1 pt-1 pb-1.5 px-0.5 text-[11px] transition-colors duration-200 cursor-pointer border-0 bg-transparent flex flex-col items-center gap-1.5 whitespace-nowrap ${
                     isOn
-                      ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
-                      : 'bg-transparent text-ink-3 hover:text-ink-1'
+                      ? 'text-cinnabar font-semibold'
+                      : 'text-ink-3 hover:text-ink-1'
                   }`}
                   onClick={() => handleSelectTier(t)}
                   title={`${t.label}（拟人节奏约 ${t.ms}ms）`}
                 >
-                  <span className="text-[10px]">{emoji}</span>
-                  <span>{shortName}</span>
+                  <span className="flex items-center gap-0.5">
+                    <span className="text-[10px] opacity-70">{emoji}</span>
+                    <span>{shortName}</span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`h-[3px] rounded-full bg-cinnabar transition-all duration-200 ${
+                      isOn ? 'w-4 opacity-90' : 'w-0 opacity-0'
+                    }`}
+                  />
                 </button>
               )
             })}
           </div>
 
-          {/* 2. 执子方选择器（根据当前模式自适应） */}
+          {/* 2. 执子方选择器（根据当前模式自适应）：无框，色点明暗随选中 */}
           <div
-            className="w-full inline-flex p-0.5 bg-paper-2/70 rounded-lg border border-hairline text-xs font-medium"
+            className="w-full flex items-center text-xs font-medium"
             role="radiogroup"
             aria-label="执子选择"
           >
@@ -219,10 +221,10 @@ export function ControlRail(props: ControlRailProps) {
               type="button"
               role="radio"
               aria-checked={playMode === 'relay' ? isEngineRed : !isEngineRed}
-              className={`flex-1 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+              className={`flex-1 py-1.5 px-1 text-[11px] transition-colors duration-200 cursor-pointer border-0 bg-transparent flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 (playMode === 'relay' ? isEngineRed : !isEngineRed)
-                  ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
-                  : 'bg-transparent text-ink-3 hover:text-ink-1'
+                  ? 'text-cinnabar font-semibold'
+                  : 'text-ink-3 hover:text-ink-1'
               }`}
               onClick={() => handleSelectSide('red')}
               title={
@@ -231,17 +233,22 @@ export function ControlRail(props: ControlRailProps) {
                   : '切换为我执红方（红方朝我 · 我方先手）'
               }
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-cinnabar" />
-              <span>{playMode === 'relay' ? '引擎执红 · 先手' : '我执红 · 先手'}</span>
+              <span
+                className={`w-1.5 h-1.5 rounded-full bg-cinnabar transition-opacity duration-200 ${
+                  (playMode === 'relay' ? isEngineRed : !isEngineRed) ? 'opacity-100' : 'opacity-30'
+                }`}
+              />
+              <span>{playMode === 'relay' ? '引擎执红' : '我执红'}</span>
             </button>
+            <span className="w-px h-3.5 bg-hairline-strong/60" aria-hidden="true" />
             <button
               type="button"
               role="radio"
               aria-checked={playMode === 'relay' ? !isEngineRed : isEngineRed}
-              className={`flex-1 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+              className={`flex-1 py-1.5 px-1 text-[11px] transition-colors duration-200 cursor-pointer border-0 bg-transparent flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 (playMode === 'relay' ? !isEngineRed : isEngineRed)
-                  ? 'bg-paper-0 text-ink-0 shadow-xs font-semibold'
-                  : 'bg-transparent text-ink-3 hover:text-ink-1'
+                  ? 'text-ink-0 font-semibold'
+                  : 'text-ink-3 hover:text-ink-1'
               }`}
               onClick={() => handleSelectSide('black')}
               title={
@@ -250,14 +257,18 @@ export function ControlRail(props: ControlRailProps) {
                   : '切换为我执黑方（黑方朝我 · 对方先手）'
               }
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-ink-0" />
-              <span>{playMode === 'relay' ? '引擎执黑 · 后手' : '我执黑 · 后手'}</span>
+              <span
+                className={`w-1.5 h-1.5 rounded-full bg-ink-0 transition-opacity duration-200 ${
+                  (playMode === 'relay' ? !isEngineRed : isEngineRed) ? 'opacity-100' : 'opacity-30'
+                }`}
+              />
+              <span>{playMode === 'relay' ? '引擎执黑' : '我执黑'}</span>
             </button>
           </div>
 
           {/* 3. 实时防走错提醒 Toggle Switch */}
           <div className="flex items-center justify-between px-1 py-0.5">
-            <span className="text-xs font-medium text-ink-1">实时防走错提醒</span>
+            <span className="text-xs font-medium text-ink-1">防走错提醒</span>
             <button
               type="button"
               role="switch"
@@ -278,22 +289,22 @@ export function ControlRail(props: ControlRailProps) {
             </button>
           </div>
 
-          {/* 4. 核心高频双核操作：新开一局 (重点) + 悔一步 */}
+          {/* 4. 核心高频双核操作：新局（印章感）+ 悔棋（淡墨 ghost） */}
           <div className="grid grid-cols-2 gap-2 pt-0.5">
             <button
               type="button"
-              className="h-8.5 px-3 rounded-xl text-xs font-semibold bg-cinnabar text-white hover:bg-cinnabar-bright transition-all shadow-xs flex items-center justify-center cursor-pointer border-0 active:scale-95"
+              className="h-8.5 px-3 rounded-lg font-display text-[13px] font-semibold tracking-[0.3em] indent-[0.3em] bg-cinnabar text-white hover:bg-cinnabar-bright transition-all shadow-xs flex items-center justify-center cursor-pointer border-0 active:scale-95"
               onClick={handleNewGame}
             >
-              新开一局
+              新局
             </button>
             <button
               type="button"
-              className="h-8.5 px-3 rounded-xl text-xs font-medium bg-paper-2 hover:bg-paper-3 text-ink-1 border border-hairline transition-all flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+              className="h-8.5 px-3 rounded-lg font-display text-[13px] font-medium tracking-[0.2em] indent-[0.2em] bg-transparent hover:bg-paper-2 text-ink-2 hover:text-ink-0 border border-hairline transition-all flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
               onClick={onUndo}
               disabled={!game.ply}
             >
-              悔一步
+              悔棋
             </button>
           </div>
 
@@ -309,7 +320,7 @@ export function ControlRail(props: ControlRailProps) {
               onClick={onToggleSetup}
               title={setupMode ? '点击退出自由排局' : '进入自由补棋与排局'}
             >
-              {setupMode ? '● 退出排局' : '自由排局'}
+              {setupMode ? '● 退出排局' : '排局'}
             </button>
 
             <span className="text-hairline-strong select-none">·</span>

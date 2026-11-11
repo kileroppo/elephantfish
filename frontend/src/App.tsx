@@ -233,14 +233,12 @@ function AppContent() {
     ? `补棋排局中 · 设定【${setup.turn === 'red' ? '红先' : '黑先'}】`
     : isPlaying
       ? g.thinking
-        ? '引擎深度计算中…'
-        : `轮到${sideName(game.turn)}${
-            game.turn === game.engine_side
-              ? '（引擎出招）'
-              : ui.playMode === 'relay'
-              ? '（请录入对方走法）'
-              : '（您出招，请在盘面落子）'
-          }`
+        ? '引擎思考中…'
+        : game.turn === game.engine_side
+          ? `轮到${sideName(game.turn)} · 引擎出招`
+          : ui.playMode === 'relay'
+            ? `请代录${sideName(game.turn)}走法`
+            : `轮到${sideName(game.turn)} · 请落子`
       : game.status.reason || '对局结束'
 
   return (
@@ -327,6 +325,9 @@ function AppContent() {
               inCheck={game.in_check}
               setupActive={setup.active}
               ply={game.ply}
+              onPillClick={
+                ui.playMode === 'relay' && isPlaying ? () => ui.setRelayInput(true) : undefined
+              }
             />
 
             <div className={`board-wrap relative ${showOverModal ? 'is-over' : ''}`}>

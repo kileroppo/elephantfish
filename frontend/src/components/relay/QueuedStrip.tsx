@@ -12,7 +12,7 @@ export function QueuedStrip({ queued, onClearQueue }: QueuedStripProps) {
       data-relay-queued={queued}
     >
       <span className="text-ink-2">
-        已排队录入对方走法：<strong className="font-semibold text-ink-0">{queued}</strong>（等待计算结束）
+        已排队走法：<strong className="font-semibold text-ink-0">{queued}</strong>（等待计算结束）
       </span>
       <button
         type="button"

@@ -6,6 +6,7 @@ interface StageHeadProps {
   inCheck: boolean
   setupActive: boolean
   ply?: number
+  onPillClick?: () => void
 }
 
 export function StageHead({
@@ -16,6 +17,7 @@ export function StageHead({
   inCheck,
   setupActive,
   ply,
+  onPillClick,
 }: StageHeadProps) {
   const isRed = turn === 'red'
   const roundNo = ply !== undefined ? Math.floor(ply / 2) + 1 : 1
@@ -23,13 +25,15 @@ export function StageHead({
   return (
     <div className="stage-head flex items-center justify-center gap-2 h-8 mb-1 select-none shrink-0">
       <span
+        onClick={onPillClick}
+        title={onPillClick ? '点击展开录入栏（快捷键 /）' : undefined}
         className={`inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-medium border transition-all duration-200 shadow-xs ${
           !isPlaying
             ? 'bg-paper-2 text-ink-3 border-hairline'
             : isEngineTurn
               ? 'bg-paper-0 border-cinnabar/40 text-cinnabar shadow-cinnabar/5'
               : 'bg-paper-0 border-hairline-strong text-ink-1'
-        }`}
+        } ${onPillClick ? 'cursor-pointer hover:border-cinnabar/40' : ''}`}
       >
         <span
           className={`w-2.5 h-2.5 rounded-full transition-transform duration-200 ${

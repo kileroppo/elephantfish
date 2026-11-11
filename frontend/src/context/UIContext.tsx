@@ -104,6 +104,8 @@ export interface UIContextType {
     pv: string[],
     clues: VisualClues | null,
   ) => void
+  relayInput: boolean
+  setRelayInput: (v: boolean) => void
 }
 
 const UIContext = createContext<UIContextType | null>(null)
@@ -126,6 +128,9 @@ export function UIProvider({ children }: { children: ReactNode }) {
   })
   const [shadowGuess, setShadowGuess] = useState(() => localStorage.getItem('ef.shadow_guess') === '1')
   const [liveHelper, setLiveHelper] = useState<string | null>(null)
+
+  // 信使录入栏展开态：提升到全局，状态条可点击唤起，轮到录入时也能自动展开
+  const [relayInput, setRelayInput] = useState(false)
 
   // 师傅扶手走错失误点拨：按模式独立记忆（实战默认开启，转述默认静默关闭）
   const [coachGuardSparring, setCoachGuardSparring] = useState(() => {
@@ -616,6 +621,8 @@ export function UIProvider({ children }: { children: ReactNode }) {
         previewGame,
         previewPv,
         handlePreviewBoard,
+        relayInput,
+        setRelayInput,
       }}
     >
       {children}

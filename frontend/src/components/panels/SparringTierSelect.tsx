@@ -41,7 +41,7 @@ export function SparringTierSelect({
               : 'bg-paper-2 text-ink-mute border-hairline'
           }`}
         >
-          {coachGuardOn ? '指导中' : '静音'}
+          {coachGuardOn ? '提醒中' : '静音'}
         </span>
       </header>
 
@@ -78,7 +78,7 @@ export function SparringTierSelect({
           onClick={onToggleCoachGuard}
           title="开启后，当你在实战中走出严重漏着或丢子缓手时，教练台立即弹出棋理归因与听劝重走提示"
         >
-          {coachGuardOn ? '🛡️ 走错实时提醒：已开启' : '走错实时提醒：已关闭'}
+          {coachGuardOn ? '🛡️ 防走错提醒：已开启' : '防走错提醒：已关闭'}
         </button>
       </div>
     </section>

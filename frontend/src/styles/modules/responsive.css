@@ -7,6 +7,7 @@
     --rail-l: 236px;
     --rail-r: 320px;
     --rail-gap: 16px;
+    --stage-gutter: 44px;
     padding: 8px 16px 16px;
   }
   .workspace.no-left {

@@ -118,7 +118,7 @@ export function EngineHero({
                         : 'bg-transparent border-dashed border-hairline text-ink-4'
                     }`}
                     onClick={onToggleCoachGuard}
-                    title="走错失先防错提醒开关"
+                    title="防走错提醒开关"
                   >
                     {coachGuard ? '🛡️防错:开' : '🛡️防错:关'}
                   </button>
@@ -128,7 +128,7 @@ export function EngineHero({
                     type="button"
                     className="flex items-center h-7 px-2.5 rounded-lg bg-paper-1 hover:bg-paper-2 border border-hairline text-ink-1 text-xs font-medium transition active:scale-95 shadow-xs whitespace-nowrap"
                     onClick={onUndo}
-                    title="撤回上一步 (Ctrl+Z)"
+                    title="悔棋 (Ctrl+Z)"
                   >
                     ↩ 悔棋
                   </button>
