@@ -174,10 +174,6 @@ export function RelayConsole(props: RelayConsoleProps) {
         onToggleTypeInput={() => setShowTypeInput(!showTypeInput)}
         coachGuard={coachGuard}
         onToggleCoachGuard={onToggleCoachGuard}
-        railL={ui.railL}
-        railR={ui.railR}
-        onToggleRailL={ui.toggleRailL}
-        onToggleRailR={ui.toggleRailR}
       />
 
       {/* 走错失误提醒 · 大白话解释 + 一键看为什么亏动画（固定于左下角，远离棋盘） */}

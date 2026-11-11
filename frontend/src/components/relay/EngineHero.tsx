@@ -20,10 +20,6 @@ export interface EngineHeroProps {
   onToggleTypeInput: () => void
   coachGuard?: boolean
   onToggleCoachGuard?: () => void
-  railL?: boolean
-  railR?: boolean
-  onToggleRailL?: () => void
-  onToggleRailR?: () => void
 }
 
 export function EngineHero({

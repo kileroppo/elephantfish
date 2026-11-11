@@ -28,7 +28,6 @@ const LS_FLIP = 'ef.flipped'
 const FLIP_TOTAL_MS = 340
 const FLIP_MID_MS = 150
 const LS_SOUND = 'ef.sound'
-const LS_RAIL_L = 'ef.rail-left'
 const LS_RAIL_R = 'ef.rail-right'
 const LS_THEME = 'ef.theme'
 
@@ -70,9 +69,6 @@ export interface UIContextType {
   toggleCoachLivePlay: () => void
   nextCoachLiveStep: () => void
   prevCoachLiveStep: () => void
-  railL: boolean
-  toggleRailL: () => void
-  setRailL: Dispatch<SetStateAction<boolean>>
   railR: boolean
   toggleRailR: () => void
   setRailR: Dispatch<SetStateAction<boolean>>
@@ -272,7 +268,6 @@ export function UIProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const [railL, setRailL] = useState(() => localStorage.getItem(LS_RAIL_L) === '1')
   const [railR, setRailR] = useState(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 1140) {
       return false
@@ -280,7 +275,6 @@ export function UIProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem(LS_RAIL_R) !== '0'
   })
 
-  const toggleRailL = useCallback(() => setRailL((v) => !v), [])
   const toggleRailR = useCallback(() => setRailR((v) => !v), [])
   const toggleSound = useCallback(() => setSoundOn((v) => !v), [])
 
@@ -548,10 +542,6 @@ export function UIProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(LS_RAIL_L, railL ? '1' : '0')
-  }, [railL])
-
-  useEffect(() => {
     localStorage.setItem(LS_RAIL_R, railR ? '1' : '0')
   }, [railR])
 
@@ -591,9 +581,6 @@ export function UIProvider({ children }: { children: ReactNode }) {
         toggleCoachLivePlay,
         nextCoachLiveStep,
         prevCoachLiveStep,
-        railL,
-        toggleRailL,
-        setRailL,
         railR,
         toggleRailR,
         setRailR,

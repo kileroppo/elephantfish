@@ -13,7 +13,6 @@ import { BootScreen } from './components/app/BootScreen'
 import { ZenHud } from './components/app/ZenHud'
 import { StageHead } from './components/app/StageHead'
 import { ResultModal } from './components/app/ResultModal'
-import { RailTabs } from './components/app/RailTabs'
 import { GameProvider, useGameContext } from './context/GameContext'
 import { UIProvider, useUIContext } from './context/UIContext'
 import { isSoundEnabled, play } from './lib/sound'
@@ -126,6 +125,12 @@ function AppContent() {
 
       if (e.key === 'Escape') {
         ui.setHelp(false)
+        // 退出禅意必须放在无条件 return 之前 —— 此前这条死代码导致 Esc 永远退不出禅意
+        if (ui.zenMode) {
+          e.preventDefault()
+          ui.setZenMode(false)
+          return
+        }
         if (setup.active) {
           setup.clearSelection()
         }
@@ -173,11 +178,6 @@ function AppContent() {
           ui.closeCoachLive()
         }
         ui.toggleRailR()
-        return
-      }
-      if (e.key === 'Escape' && ui.zenMode) {
-        e.preventDefault()
-        ui.setZenMode(false)
         return
       }
       if (e.key === 'f' || e.key === 'F' || e.key === 'x' || e.key === 'X') {
@@ -300,16 +300,7 @@ function AppContent() {
           />
         </main>
       ) : (
-        <main className={`workspace${ui.railL && !ui.zenMode ? '' : ' no-left'}${ui.railR && !ui.zenMode ? '' : ' no-right'}`}>
-          {!ui.zenMode && (
-            <RailTabs
-              railL={ui.railL}
-              railR={ui.railR}
-              onToggleL={ui.toggleRailL}
-              onToggleR={ui.toggleRailR}
-            />
-          )}
-
+        <main className={`workspace${ui.zenMode ? ' no-left' : ''}${ui.railR && !ui.zenMode ? '' : ' no-right'}`}>
           <ControlRail
             setupMode={setup.active}
             onToggleSetup={setup.toggle}

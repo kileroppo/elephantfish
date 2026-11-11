@@ -36,9 +36,9 @@ export function CoachInterruptCard({
   if (!show || !tactics || !lastHumanMove || ui.drillOpen || !!ui.replay) return null
 
   // 严禁使用带有 translateX(-50%) 的居中动画，防止卡片向左漂移出屏幕
-  // 在桌面端固定在屏幕左下角（24px），展开左侧栏时智能靠右（284px），完全远离中央棋盘（棋盘在 700px+）
+  // 在桌面端固定在屏幕左下角（24px），常驻控制岛在场时智能靠右（284px），完全远离中央棋盘（棋盘在 700px+）
   const isLargeScreen = typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
-  const leftPx = ui.railL && !ui.zenMode ? 284 : 24
+  const leftPx = !ui.zenMode ? 284 : 24
 
   const cardNode = (
     <div

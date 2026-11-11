@@ -41,6 +41,8 @@ const SHORTCUTS: { keys: string; what: string }[] = [
   { keys: 'F', what: '翻转棋盘视角' },
   { keys: 'Space', what: '引擎思考时，立即采用当前最好的一步' },
   { keys: '/', what: '展开并聚焦录入栏' },
+  { keys: ']', what: '展开 / 收起右侧分析栏' },
+  { keys: '?', what: '打开本帮助' },
 ]
 
 export function HelpOverlay(props?: { open?: boolean; onClose?: () => void }) {
