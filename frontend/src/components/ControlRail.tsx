@@ -205,7 +205,7 @@ export function ControlRail(props: ControlRailProps) {
                   type="button"
                   role="tab"
                   aria-selected={isOn}
-                  className={`h-9 px-2 rounded-xl text-xs transition-all duration-200 cursor-pointer border flex items-center justify-between text-left ${
+                  className={`h-9 px-2 rounded-xl text-xs transition-all duration-200 active:scale-[0.98] cursor-pointer border flex items-center justify-between text-left ${
                     isOn
                       ? 'bg-cinnabar/8 text-cinnabar border-cinnabar/50 font-semibold shadow-2xs'
                       : 'bg-paper-1/60 hover:bg-paper-2 text-ink-2 border-hairline/80 hover:border-ink-4/40'
@@ -247,7 +247,7 @@ export function ControlRail(props: ControlRailProps) {
               type="button"
               role="radio"
               aria-checked={isPlayerRed}
-              className={`h-8.5 px-2 rounded-xl text-xs transition-all duration-200 cursor-pointer border flex items-center justify-center gap-1.5 ${
+              className={`h-8.5 px-2 rounded-xl text-xs transition-all duration-200 active:scale-95 cursor-pointer border flex items-center justify-center gap-1.5 ${
                 isPlayerRed
                   ? 'bg-cinnabar/10 text-cinnabar border-cinnabar/50 font-semibold shadow-2xs'
                   : 'bg-paper-1/60 hover:bg-paper-2 text-ink-2 border-hairline/80'
@@ -269,7 +269,7 @@ export function ControlRail(props: ControlRailProps) {
               type="button"
               role="radio"
               aria-checked={!isPlayerRed}
-              className={`h-8.5 px-2 rounded-xl text-xs transition-all duration-200 cursor-pointer border flex items-center justify-center gap-1.5 ${
+              className={`h-8.5 px-2 rounded-xl text-xs transition-all duration-200 active:scale-95 cursor-pointer border flex items-center justify-center gap-1.5 ${
                 !isPlayerRed
                   ? 'bg-ink-0/10 text-ink-0 border-ink-1/40 font-semibold shadow-2xs'
                   : 'bg-paper-1/60 hover:bg-paper-2 text-ink-2 border-hairline/80'

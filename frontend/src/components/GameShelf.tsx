@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GameRow, GamesSummary } from '../types'
 import { api, ApiError } from '../api'
 import { relativeTime, shortSide, sideName } from '../lib/format'
@@ -11,8 +11,8 @@ import { useUIContext } from '../context/UIContext'
  * 每行那个 `graded_plies`（这一局有几手带着判分）—— 判分是挂在能重放的棋谱上的，
  * 有判分的局才谈得上「复盘」。
  *
- * 与错题本同一条纪律：只在页面装载和按「重读」时发一次 `GET /api/games`，
- * **不进 130ms 那条轮询**。它读的是存档，不是会话，读多少遍都不该改变任何一局；
+ * 与错题本同一条纪律：只在页面装载、按「重读」、切筛选（搜索词过 250ms 防抖）
+ * 时发 `GET /api/games`，**不进 130ms 那条轮询**。它读的是存档，不是会话，读多少遍都不该改变任何一局；
  * 把它挂进轮询就等于让一个「看看下过什么」的请求去跟对局抢带宽。
  */
 
@@ -43,21 +43,38 @@ export function GameShelf(props: GameShelfProps) {
   const [exporting, setExporting] = useState(false)
   const [modeFilter, setModeFilter] = useState<'all' | 'sparring' | 'relay'>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  // 搜索框 value 只管受控回显（敲一键立刻显示），真正发给接口的查询词晚 250ms 才
+  // 跟上：连续敲键的中间态根本不会发请求。首载不经防抖——debouncedQuery 初始就是
+  // ''，下面的 reload effect 在装载时立即查一次；切筛选/按「重读」也直接走 reload。
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  // 过期响应守卫：每次发请求先领号，响应回来时若号已被更新的请求顶掉，整份丢弃——
+  // 防止「先发后到」的慢响应把新结果盖回去（快速输入时列表乱序闪动的根源）。
+  const requestSeqRef = useRef(0)
 
   const reload = useCallback(async () => {
+    const seq = ++requestSeqRef.current
     setLoading(true)
     try {
-      const reply = await api.games(undefined, modeFilter, searchQuery)
+      const reply = await api.games(undefined, modeFilter, debouncedQuery)
+      if (seq !== requestSeqRef.current) return // 过期响应：已有更新的请求，丢弃
       setRows(reply.games ?? [])
       setSummary(reply.summary ?? null)
       setError(null)
     } catch (err) {
+      if (seq !== requestSeqRef.current) return
       // 读失败就说读失败：留一副看起来「没下过棋」的空架比报个错更坏
       setError(err instanceof ApiError ? err.message : '历史那几局没读回来')
     } finally {
-      setLoading(false)
+      if (seq === requestSeqRef.current) setLoading(false)
     }
-  }, [modeFilter, searchQuery])
+  }, [modeFilter, debouncedQuery])
+
+  // 搜索防抖：输入每敲一键只改 searchQuery，这里反复 clearTimeout 把 250ms 内的
+  // 连击合并成停手后的一次查询词更新；组件卸载时 cleanup 兜底清掉定时器。
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(searchQuery), 250)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
 
   useEffect(() => {
     void reload()

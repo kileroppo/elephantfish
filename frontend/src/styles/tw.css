@@ -58,4 +58,50 @@
   --animate-duration-fast: 140ms;
   --animate-duration: 220ms;
   --animate-duration-slow: 380ms;
+
+  /* 入场淡入：RightRail tab 面板 / CombatChronicle / DrillHeader 下拉 /
+     FloatingTacticalCapsule / CoachLiveCard / EngineHero 复制反馈 /
+     ReplayCoachCabin 等 13 处 animate-fadeIn 调用点。
+     keyframes 写在 @theme 内，v4 会随 animate-fadeIn 工具类按需产出。 */
+  --animate-fadeIn: fadeIn 200ms var(--ease-out) both;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   入场动画（tw-animate-css 语义的最小手写等价，不装依赖）
+   --------------------------------------------------------------------------
+   覆盖 12 处调用点（ResultModal / ZenHud / BootScreen / SetupPanel /
+   SetupStudio 系列 / SetupTemplates / EngineHero 下拉）使用的组合：
+     animate-in + fade-in + zoom-in-95 + slide-in-from-top-2
+   变体类只负责设置 --tw-enter-* 变量，animate-in 负责消费它们。
+   时长取 var(--tw-duration, 180ms)：v4.3.3 的 duration-* 会同时产出
+   --tw-duration，调用点各自写的 duration-150/200/300 因此被尊重；
+   未写 duration-* 的调用点落到 180ms 默认值（与 useExitPhase 退场对称）。 */
+@utility animate-in {
+  animation: twEnter var(--tw-duration, 180ms) var(--ease-out) both;
+}
+
+@utility fade-in {
+  --tw-enter-opacity: 0;
+}
+
+@utility zoom-in-95 {
+  --tw-enter-scale: 0.95;
+}
+
+@utility slide-in-from-top-2 {
+  --tw-enter-translate-y: -0.5rem;
+}
+
+@keyframes twEnter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: scale(var(--tw-enter-scale, 1))
+      translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0);
+  }
 }

@@ -83,7 +83,7 @@ export function TopBar(props: TopBarProps) {
             type="button"
             role="tab"
             aria-selected={playMode === 'relay'}
-            className={`h-7 px-3 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer border-0 flex items-center justify-center gap-1 ${
+            className={`h-7 px-3 rounded-lg text-xs font-medium tracking-wide transition-all active:scale-95 cursor-pointer border-0 flex items-center justify-center gap-1 ${
               playMode === 'relay'
                 ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
@@ -101,7 +101,7 @@ export function TopBar(props: TopBarProps) {
             type="button"
             role="tab"
             aria-selected={playMode === 'sparring'}
-            className={`h-7 px-3 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer border-0 flex items-center justify-center gap-1 ${
+            className={`h-7 px-3 rounded-lg text-xs font-medium tracking-wide transition-all active:scale-95 cursor-pointer border-0 flex items-center justify-center gap-1 ${
               playMode === 'sparring'
                 ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
@@ -118,7 +118,7 @@ export function TopBar(props: TopBarProps) {
 
         <button
           type="button"
-          className={`h-8 px-3.5 rounded-xl text-xs font-medium tracking-wide transition-all cursor-pointer border flex items-center justify-center gap-1.5 shadow-2xs ${
+          className={`h-8 px-3.5 rounded-xl text-xs font-medium tracking-wide transition-all active:scale-95 cursor-pointer border flex items-center justify-center gap-1.5 shadow-2xs ${
             drillMode
               ? 'bg-cinnabar text-white border-cinnabar font-semibold shadow-xs'
               : 'bg-paper-2/90 hover:bg-paper-1 text-ink-1 border-hairline'

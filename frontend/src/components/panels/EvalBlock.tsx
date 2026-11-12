@@ -50,6 +50,7 @@ export function EvalBlock({ evalRed, mateIn, trend }: EvalBlockProps) {
     <div className="eval-block flex flex-col gap-2.5 p-3 rounded-2xl bg-paper-0/95 border border-hairline/80 shadow-2xs select-none">
       <div className="eval-verdict flex items-center justify-between">
         <span
+          key={call.text}
           className={`eval-call px-2.5 py-0.5 rounded-lg text-xs border tracking-wide shadow-3xs ${getToneBadgeClass(
             call.tone,
           )}`}
@@ -66,27 +67,23 @@ export function EvalBlock({ evalRed, mateIn, trend }: EvalBlockProps) {
 
       {/* Apple 级动态胜势进度槽 */}
       <div
-        className="eval-bar relative h-3 w-full rounded-full overflow-hidden flex bg-paper-2 border border-hairline/80 shadow-inner"
+        className="eval-bar w-full bg-paper-2 border border-hairline/80"
         role="img"
         aria-label={`红方胜势 ${Math.round(ratio * 100)}%`}
       >
         <div
-          className="eval-red h-full bg-gradient-to-r from-cinnabar to-[#ea5848] transition-all duration-400 ease-out"
+          className="eval-red h-full"
           style={{ width: `${ratio * 100}%` }}
         />
         <div
-          className="eval-black h-full bg-gradient-to-r from-[#2f333c] to-[#191b20] transition-all duration-400 ease-out"
+          className="eval-black h-full"
           style={{ width: `${(1 - ratio) * 100}%` }}
         />
         <div className="eval-mid absolute left-1/2 top-0 bottom-0 w-[1.5px] bg-white/70 -translate-x-1/2 z-10" />
-        <div
-          className="eval-tick-track absolute inset-0 pointer-events-none"
-          style={{ '--er': ratio } as CSSProperties}
-        >
-          <div
-            className="eval-tick absolute top-0 bottom-0 w-1.5 -ml-0.75 bg-amber-300 rounded-full shadow-xs border border-amber-500/50"
-            style={{ left: `${ratio * 100}%` }}
-          />
+        <div className="eval-tick-track" style={{ '--er': ratio } as CSSProperties}>
+          {/* tick 不自带 left：水平位置全权交给 track 的 --er translateX，
+              两处各给一份位移会把刻度叠到 2×ratio 处 */}
+          <div className="eval-tick border border-amber-500/50" />
         </div>
       </div>
 

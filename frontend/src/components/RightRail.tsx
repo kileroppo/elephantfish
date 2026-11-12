@@ -35,7 +35,7 @@ export function RightRail({ open }: RightRailProps) {
             type="button"
             role="tab"
             aria-selected={activeTab === 'analysis'}
-            className={`flex-1 py-1.5 px-2 rounded-xl text-[11.5px] tracking-wide transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+            className={`flex-1 py-1.5 px-2 rounded-xl text-[11.5px] tracking-wide transition-all duration-200 active:scale-95 cursor-pointer border-0 flex items-center justify-center gap-1 ${
               activeTab === 'analysis'
                 ? 'bg-paper-0 text-cinnabar shadow-xs font-bold'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
@@ -50,7 +50,7 @@ export function RightRail({ open }: RightRailProps) {
             type="button"
             role="tab"
             aria-selected={activeTab === 'mistakes'}
-            className={`flex-1 py-1.5 px-2 rounded-xl text-[11.5px] tracking-wide transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+            className={`flex-1 py-1.5 px-2 rounded-xl text-[11.5px] tracking-wide transition-all duration-200 active:scale-95 cursor-pointer border-0 flex items-center justify-center gap-1 ${
               activeTab === 'mistakes'
                 ? 'bg-paper-0 text-cinnabar shadow-xs font-bold'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
@@ -65,7 +65,7 @@ export function RightRail({ open }: RightRailProps) {
             type="button"
             role="tab"
             aria-selected={activeTab === 'shelf'}
-            className={`flex-1 py-1.5 px-2 rounded-xl text-[11.5px] tracking-wide transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+            className={`flex-1 py-1.5 px-2 rounded-xl text-[11.5px] tracking-wide transition-all duration-200 active:scale-95 cursor-pointer border-0 flex items-center justify-center gap-1 ${
               activeTab === 'shelf'
                 ? 'bg-paper-0 text-cinnabar shadow-xs font-bold'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
@@ -78,7 +78,7 @@ export function RightRail({ open }: RightRailProps) {
 
           <button
             type="button"
-            className={`py-1.5 px-2 rounded-xl text-[11px] transition-all duration-200 cursor-pointer border-0 ${
+            className={`py-1.5 px-2 rounded-xl text-[11px] transition-all duration-200 active:scale-95 cursor-pointer border-0 ${
               activeTab === 'all'
                 ? 'bg-paper-0 text-cinnabar font-bold shadow-xs'
                 : 'text-ink-4 hover:text-ink-2'

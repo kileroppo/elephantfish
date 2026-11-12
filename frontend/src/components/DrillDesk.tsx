@@ -874,8 +874,10 @@ export function DrillDesk(props?: DrillDeskProps) {
 
   return (
     <div
-      className={`fixed inset-0 z-[300] bg-ink-0/35 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 transition-all duration-300 select-none ${
-        leaving ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      className={`fixed inset-0 z-[300] bg-ink-0/35 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 select-none ${
+        leaving
+          ? 'pointer-events-none [animation:fadeOut_180ms_var(--ease-out)_both]'
+          : '[animation:fadeIn_200ms_var(--ease-out)_both]'
       }`}
       role="dialog"
       aria-modal="true"
@@ -887,8 +889,10 @@ export function DrillDesk(props?: DrillDeskProps) {
       }}
     >
       <div
-        className={`w-[min(1240px,96vw)] h-[min(92vh,900px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-slate-50 text-slate-900 rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.2)] border border-slate-200 transition-all duration-300 ${
-          leaving ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
+        className={`w-[min(1240px,96vw)] h-[min(92vh,900px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-slate-50 text-slate-900 rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.2)] border border-slate-200 ${
+          leaving
+            ? '[animation:sheetOut_180ms_var(--ease-out)_both]'
+            : '[animation:sheetIn_400ms_var(--ease-spring-sm)_both]'
         }`}
         onClick={(e) => e.stopPropagation()}
       >

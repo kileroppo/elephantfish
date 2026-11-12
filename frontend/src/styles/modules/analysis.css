@@ -35,6 +35,14 @@
   color: var(--ink-0);
 }
 
+/* 判词换词（EvalBlock 里以 key 重挂）的一次性入场，复用 panels.css 的 rise。
+   freeze.css 的停摆清单管不到 .eval-call，也不许为它去扩那份清单 ——
+   干脆把门开在规则自身：.app.is-thinking 下整条失配，换词就是干换，
+   与 rung / pv-list 在思考期的纪律同款。 */
+.app:not(.is-thinking) .eval-call {
+  animation: rise 300ms var(--ease-out) both;
+}
+
 .eval-call.tone-red {
   color: var(--cinnabar);
 }
@@ -88,7 +96,8 @@
 }
 
 /* tick 轨道：全宽，位移用 transform（translateX % 以轨道自身宽度为参照），
-   回弹感来自 --ease-spring */
+   回弹感来自 --ease-spring。tick 自己不带 left：水平位置全权归这里的 --er，
+   两处各给一份位移就会把刻度叠到 2×ratio 处 */
 .eval-tick-track {
   position: absolute;
   top: 0;

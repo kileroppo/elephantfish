@@ -15,6 +15,12 @@
   animation: none;
 }
 
+/* 将军徽标（StageHead 的 TW animate-bounce）：老 .check-flag 早已在停摆清单里，
+   它改用 Tailwind 类后没跟着迁移，思考期间一直蹦 —— 补上同一份安静 */
+.app.is-thinking .stage-head .animate-bounce {
+  animation: none;
+}
+
 /* 落点那圈弧环：它是全站唯一「从第一手挂到终局」的常驻动画，而且思考期间一定在盘上
    （引擎正是在回应上一手，落点框刚亮着）。原来用 SMIL 转，这一段停摆清单管不着它 ——
    现在换成 CSS transform 了，才终于停得下来。 */

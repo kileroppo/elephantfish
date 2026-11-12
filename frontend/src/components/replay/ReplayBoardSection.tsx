@@ -61,7 +61,7 @@ export function ReplayBoardSection({
         <div className="flex items-center gap-0.5 sm:gap-1">
           <button
             type="button"
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-2 hover:text-ink-0 hover:bg-paper-2 transition cursor-pointer border border-transparent disabled:opacity-25 disabled:cursor-not-allowed"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-2 hover:text-ink-0 hover:bg-paper-2 transition active:scale-95 cursor-pointer border border-transparent disabled:opacity-25 disabled:cursor-not-allowed"
             onClick={() => onGo(0)}
             disabled={index === 0}
             title="回到开局局面"
@@ -70,7 +70,7 @@ export function ReplayBoardSection({
           </button>
           <button
             type="button"
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-2 hover:text-ink-0 hover:bg-paper-2 transition cursor-pointer border border-transparent disabled:opacity-25 disabled:cursor-not-allowed"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-2 hover:text-ink-0 hover:bg-paper-2 transition active:scale-95 cursor-pointer border border-transparent disabled:opacity-25 disabled:cursor-not-allowed"
             onClick={() => onGo(index - 1)}
             disabled={index === 0}
             title="退回一手（←）"
@@ -87,7 +87,7 @@ export function ReplayBoardSection({
 
           <button
             type="button"
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-2 hover:text-ink-0 hover:bg-paper-2 transition cursor-pointer border border-transparent disabled:opacity-25 disabled:cursor-not-allowed"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-2 hover:text-ink-0 hover:bg-paper-2 transition active:scale-95 cursor-pointer border border-transparent disabled:opacity-25 disabled:cursor-not-allowed"
             onClick={() => onGo(index + 1)}
             disabled={index >= totalPlies}
             title="前进一步（→）"
@@ -96,7 +96,7 @@ export function ReplayBoardSection({
           </button>
           <button
             type="button"
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-2 hover:text-ink-0 hover:bg-paper-2 transition cursor-pointer border border-transparent disabled:opacity-25 disabled:cursor-not-allowed"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-2 hover:text-ink-0 hover:bg-paper-2 transition active:scale-95 cursor-pointer border border-transparent disabled:opacity-25 disabled:cursor-not-allowed"
             onClick={() => onGo(totalPlies)}
             disabled={index >= totalPlies}
             title="跳到终局"
@@ -110,7 +110,7 @@ export function ReplayBoardSection({
         {/* 2. 自动逐手连播控制 */}
         <button
           type="button"
-          className={`h-7 px-2.5 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1 border shrink-0 ${
+          className={`h-7 px-2.5 rounded-lg text-xs font-medium transition active:scale-95 cursor-pointer flex items-center gap-1 border shrink-0 ${
             autoPlay
               ? 'bg-cinnabar text-white border-cinnabar font-semibold shadow-xs'
               : 'bg-paper-2/70 hover:bg-paper-2 text-ink-2 border-hairline'

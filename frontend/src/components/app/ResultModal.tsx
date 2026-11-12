@@ -33,7 +33,7 @@ export function ResultModal({
 
   return (
     <div
-      className={`absolute inset-0 z-30 flex items-center justify-center p-4 bg-ink-0/40 backdrop-blur-sm transition-opacity duration-200 select-none ${
+      className={`absolute inset-0 z-30 flex items-center justify-center p-4 bg-ink-0/40 backdrop-blur-sm transition-opacity duration-[180ms] select-none ${
         overLeaving ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
     >
@@ -48,7 +48,7 @@ export function ResultModal({
       </div>
 
       {/* Apple Sheet 风格结果卡片 */}
-      <div className="relative z-10 w-full max-w-[340px] max-h-[92%] overflow-y-auto bg-paper-0/95 backdrop-blur-md border border-hairline rounded-2xl p-6 text-center shadow-2xl animate-in zoom-in-95 duration-200">
+      <div className="relative z-10 w-full max-w-[340px] max-h-[92%] overflow-y-auto bg-paper-0/95 backdrop-blur-md border border-hairline rounded-2xl p-6 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-200">
         <button
           type="button"
           className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full flex items-center justify-center text-ink-3 hover:text-ink-1 hover:bg-paper-2 transition text-sm cursor-pointer"

@@ -779,6 +779,27 @@
   box-shadow:
     0 0 calc(var(--u) * 4px) rgba(255, 255, 255, 0.95),
     0 0 calc(var(--u) * 8px) rgba(255, 255, 255, 0.65);
+  /* 非吃子的空点 pop 落定之后并不是死的：中心亮点自己轻轻地呼吸。
+     呼吸挂在 ::after 上 —— 跟 .target 本体的 pop 各占一个元素，两条动画
+     互不见面，入场那条带 --i 波次延迟的 animation 简写一个字不用动。
+     节拍与吃子点的 targetCapturePulse 同拍（2s ease-in-out infinite alternate，
+     两类落点同一次提交挂载，起搏时刻一致，永远同步），幅度压在釉光那一档：
+     scale 0.92↔1.08、opacity 0.85↔1 —— 看得见盘面活着，但不抢戏。
+     同 targetCapturePulse 的性能纪律：辉光的模糊半径保持静态，呼吸只动
+     transform/opacity，阴影跟着伪元素整体被合成器缩放，不逐帧重算。
+     吃子点的 ::after 本来就 display:none，这条对它天然无效。 */
+  animation: targetBreathe 2s ease-in-out infinite alternate;
+}
+
+@keyframes targetBreathe {
+  from {
+    transform: scale(0.92);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1.08);
+    opacity: 1;
+  }
 }
 
 /* 退场：落子那一刻，可走点是「收回去」的，不是被剪刀剪掉的。
@@ -902,6 +923,32 @@
 .target.is-over {
   opacity: 1;
   filter: drop-shadow(0 0 calc(var(--u) * 8px) rgba(255, 255, 255, 1));
+}
+
+/* 掠过那一下除了变亮，中心亮点再轻轻弹一次：120ms、一趟、不填充。
+   只能挂在 ::after 上 —— 若写在 .target.is-over 本体上，这条更具体的
+   animation 声明会整条顶掉入场 pop；拖子一离开，动画清单变回原样，
+   pop 从头重放（scale 0.2 再蹦一次），正是上面退场注释警告过的那类坑。
+   ::after 的清单从 [breathe] 变成 [breathe, nudge]，breathe 仍在第 0 位
+   不会被重启；两条里 nudge 排在后、active 期间赢得 transform，
+   结束（fill: none）后交还 breathe 的当前相位 —— 相位没断过。
+   吃子点的 ::after 是 display:none，那里不弹，环照常变亮。 */
+.target.is-over::after {
+  animation:
+    targetBreathe 2s ease-in-out infinite alternate,
+    targetNudge 120ms var(--ease-out);
+}
+
+@keyframes targetNudge {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.4);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 @keyframes pop {

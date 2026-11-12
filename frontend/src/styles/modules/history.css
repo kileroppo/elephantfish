@@ -204,6 +204,29 @@
   color: var(--paper-0);
 }
 
+/* ---- 严重档的一记强调（warn / bad / mate）----
+   严重失误不该只靠换个底色等人在扫谱时自己撞见：gradeIn 照旧管入场位移，
+   这里再叠一拍 —— 一圈朱砂描边从 chip 外缘向内收拢、一次即止。只描一圈
+   不循环，说的是「这一手值得停一下」，不是警报；tone-warn 的描边本来就是
+   这个色（--cinnabar-edge），闪的等于它自己那圈边在往外晕开又收回。
+   box-shadow 只在起始帧声明，结束帧落回元素本来的值 —— bad/mate 那枚
+   shadow-xs 不会被 fill-mode 吃掉。思考期由 freeze.css 的
+   `.grade-chip { animation: none }` 整体压住（动画列表整条停，两拍一起停），
+   减弱动效由 responsive.css 的全局 1ms 压缩兜底，均无需在此另写。 */
+.grade-chip.tone-warn,
+.grade-chip.tone-bad,
+.grade-chip.tone-mate {
+  animation:
+    gradeIn var(--dur) var(--ease-enter) both,
+    chipFlare 380ms var(--ease-out) both;
+}
+
+@keyframes chipFlare {
+  from {
+    box-shadow: 0 0 0 3px var(--cinnabar-edge);
+  }
+}
+
 /* 「还没有判分」：虚线、最淡的一档。它必须和「判了、而且没问题」看得出区别，
    又要比任何一条结论都安静 —— 它说的是界面的事，不是人的棋。 */
 .grade-chip.tone-mute {
@@ -223,4 +246,18 @@
   text-align: center;
   font-size: 12px;
   color: var(--ink-mute);
+}
+
+/* ---- 主变胶囊（PvBlock 的 .pv-list li）的波次入场 ----
+   .pv-list li 的 rise 入场本体在 analysis.css，这里只补拍子：每枚胶囊
+   按 --i 晚 18ms 起步，与盘面可走点（board.css 的 target 波次）同一套
+   语言。必须写在本文件的原因：analysis.css 的 animation 简写会把 delay
+   归零，而 app.css 里 history.css 排在 analysis.css 之后 —— 同为 (0,1,1)
+   特异性，靠导入顺序这条 longhand 才压得住；若调整 @import 顺序它会静默
+   失效。思考期不用另写冻结：freeze.css 的
+   `.app.is-thinking .pv-list li { animation: none }` 特异性更高，且
+   animation: none 连 delay 一起停；减弱动效由 responsive.css 全局压到
+   1ms 兜底。 */
+.pv-list li {
+  animation-delay: calc(var(--i, 0) * 18ms);
 }

@@ -137,7 +137,7 @@ export function EngineHero({
               {gameEngineToMove && playing && (
                 <button
                   type="button"
-                  className="px-3 py-1 rounded-lg bg-cinnabar text-white text-xs font-medium shadow-xs active:scale-95"
+                  className="px-3 py-1 rounded-lg bg-cinnabar text-white text-xs font-medium shadow-xs transition active:scale-95"
                   onClick={onEngineMove}
                 >
                   让引擎先出招
@@ -234,7 +234,7 @@ export function EngineHero({
             </span>
             <button
               type="button"
-              className="px-2.5 py-0.5 text-[11px] h-6 rounded-full border border-cinnabar/40 text-cinnabar bg-paper-0 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap hover:bg-cinnabar hover:text-white transition-colors duration-150 active:scale-95"
+              className="px-2.5 py-0.5 text-[11px] h-6 rounded-full border border-cinnabar/40 text-cinnabar bg-paper-0 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap hover:bg-cinnabar hover:text-white transition duration-150 active:scale-95"
               onClick={onStop}
               title="采用当前最优步 (Space)"
             >
@@ -361,7 +361,7 @@ export function EngineHero({
             {gameEngineToMove && playing && (
               <button
                 type="button"
-                className="h-[24px] px-2.5 text-[11px] leading-none rounded-lg bg-cinnabar text-white font-medium shadow-xs active:scale-95"
+                className="h-[24px] px-2.5 text-[11px] leading-none rounded-lg bg-cinnabar text-white font-medium shadow-xs transition active:scale-95"
                 onClick={onEngineMove}
               >
                 让引擎先出招

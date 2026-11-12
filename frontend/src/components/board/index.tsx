@@ -73,6 +73,10 @@ export function Board({
 }: BoardProps) {
   const surfaceRef = useRef<HTMLDivElement>(null)
 
+  // 触感追光节流：pointermove 只记最新指针坐标，合并到下一帧 rAF 一次性写回 CSS 变量
+  const glowPosRef = useRef<{ x: number; y: number } | null>(null)
+  const glowFrameRef = useRef<number | null>(null)
+
   // 拖拽：从「按下一颗子」到「松手」之间的全部状态都在这里
   const [drag, setDrag] = useState<DragState | null>(null)
   const dragRef = useRef<{
@@ -277,6 +281,7 @@ export function Board({
       if (hideImpact.current) window.clearTimeout(hideImpact.current)
       if (hideKnock.current) window.clearTimeout(hideKnock.current)
       if (hideAlarm.current) window.clearTimeout(hideAlarm.current)
+      if (glowFrameRef.current !== null) cancelAnimationFrame(glowFrameRef.current)
     },
     [],
   )
@@ -496,14 +501,23 @@ export function Board({
   }
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (surfaceRef.current) {
-      const rect = surfaceRef.current.getBoundingClientRect()
-      if (rect.width > 0 && rect.height > 0) {
-        const px = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
-        const py = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
-        surfaceRef.current.style.setProperty('--mouse-x', `${px.toFixed(1)}%`)
-        surfaceRef.current.style.setProperty('--mouse-y', `${py.toFixed(1)}%`)
-      }
+    // 触感追光：事件里只记录最新位置，写回合并到下一帧一次性完成（以帧前最后一次位置为准）
+    glowPosRef.current = { x: e.clientX, y: e.clientY }
+    if (glowFrameRef.current === null) {
+      glowFrameRef.current = requestAnimationFrame(() => {
+        glowFrameRef.current = null
+        const pos = glowPosRef.current
+        glowPosRef.current = null
+        const el = surfaceRef.current
+        if (!pos || !el) return
+        const rect = el.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          const px = Math.max(0, Math.min(100, ((pos.x - rect.left) / rect.width) * 100))
+          const py = Math.max(0, Math.min(100, ((pos.y - rect.top) / rect.height) * 100))
+          el.style.setProperty('--mouse-x', `${px.toFixed(1)}%`)
+          el.style.setProperty('--mouse-y', `${py.toFixed(1)}%`)
+        }
+      })
     }
     const d = dragRef.current
     if (!d || !d.from) return

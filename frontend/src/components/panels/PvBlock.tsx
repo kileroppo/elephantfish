@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useUIContext } from '../../context/UIContext'
 
 export interface PvStepItem {
@@ -28,6 +29,8 @@ export function PvBlock({ pvText }: PvBlockProps) {
             return (
               <li
                 key={`${step.iccs}-${i}`}
+                /* --i：入场波次的序号，history.css 拿它排 18ms 一档的 rise（同盘面可走点） */
+                style={{ '--i': i } as CSSProperties}
                 className={`pv-step flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs transition-all duration-150 cursor-pointer border ${
                   isRed
                     ? 'pv-red bg-rose-50/80 hover:bg-rose-100 text-piece-red border-rose-200/80 shadow-3xs hover:-translate-y-0.5 hover:shadow-xs'
