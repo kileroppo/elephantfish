@@ -130,8 +130,10 @@ export function RelayConsole(props: RelayConsoleProps) {
     if (!payload) return
     const outcome = await onSubmit(payload)
     if (outcome === 'ok' || outcome === 'queued') {
+      // 只清文本、不收起录入栏：信使模式几乎每手都要录入，自动收起会让
+      // 底盘每回合「呼吸」一次（2026-11-18 录入栏改流内布局后的配套决定）。
+      // 真想收起有 Esc / 「收起」按钮，下次轮到录入时效果照旧自动展开。
       setText('')
-      setShowTypeInput(false)
     } else {
       setRejected((n) => n + 1)
     }
@@ -150,9 +152,10 @@ export function RelayConsole(props: RelayConsoleProps) {
 
   return (
     <section
-      className="relay-compact relative shrink-0 flex flex-col md:flex-row items-center justify-center mt-2 mx-auto w-full md:w-fit md:h-10 md:min-h-10 md:max-h-10 max-w-[min(100%,720px)] box-border"
+      className="relay-compact relative shrink-0 flex flex-col items-center justify-center gap-1.5 mt-2 mx-auto w-full md:h-auto md:min-h-10 max-w-[min(100%,720px)] box-border"
       aria-label="应手与控制"
       data-relay=""
+      data-relay-typing={showTypeInput ? 'true' : undefined}
     >
       {/* 核心应手展示区 / 对弈Dock（桌面端单行超紧凑胶囊，移动端精致双行） */}
       <EngineHero

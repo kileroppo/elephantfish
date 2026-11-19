@@ -38,7 +38,7 @@ export function ReplayEvalChart({
         return (
           <div
             key={p.ply}
-            className={`eval-bar-col flex-1 min-w-[8px] max-w-[22px] h-full relative cursor-pointer flex items-center justify-center transition-all duration-150 hover:opacity-85 hover:bg-black/5 ${
+            className={`eval-bar-col flex-1 min-w-[8px] max-w-[22px] h-full relative cursor-pointer flex items-center justify-center ${
               isSelected ? 'is-selected' : ''
             } ${isBlunder ? 'is-blunder' : ''}`}
             onClick={() => onSelectPly(p.ply)}
@@ -51,7 +51,7 @@ export function ReplayEvalChart({
               <div
                 className={`eval-bar-fill absolute inset-x-0 rounded-xs z-2 ${
                   isRedAdv ? 'is-red bg-piece-red' : 'is-black bg-piece-black'
-                } ${isBlunder ? '!bg-amber-500 shadow-[0_0_3px_#f59e0b]' : ''}`}
+                }`}
                 style={{
                   height: `${barHeight}px`,
                   [isRedAdv ? 'bottom' : 'top']: '50%',

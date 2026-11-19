@@ -31,7 +31,7 @@ export function TopBarActions({
       {onCycleTheme && (
         <button
           type="button"
-          className="h-7 px-2.5 rounded-lg text-xs tracking-wide text-ink-2 hover:text-cinnabar hover:bg-paper-2 transition-all cursor-pointer border border-transparent flex items-center gap-1.5"
+          className="h-7 px-2.5 rounded-lg text-xs tracking-wide text-ink-2 hover:text-cinnabar hover:bg-paper-2 transition-[color,background-color,border-color] cursor-pointer border border-transparent flex items-center gap-1.5"
           onClick={onCycleTheme}
           title="切换棋盘材质主题 (快捷键 T)"
           aria-label="切换材质主题"
@@ -45,7 +45,7 @@ export function TopBarActions({
       {onToggleZen && (
         <button
           type="button"
-          className={`h-7 px-2.5 rounded-lg text-xs tracking-wide transition-all cursor-pointer flex items-center gap-1.5 border ${
+          className={`h-7 px-2.5 rounded-lg text-xs tracking-wide transition-[color,background-color,border-color] cursor-pointer flex items-center gap-1.5 border ${
             zenMode
               ? 'text-cinnabar border-cinnabar/40 bg-cinnabar/5 font-semibold'
               : 'text-ink-2 hover:text-cinnabar border-transparent hover:bg-paper-2'
@@ -62,7 +62,7 @@ export function TopBarActions({
       {/* 3. 音效开关 */}
       <button
         type="button"
-        className={`h-7 px-2.5 rounded-lg text-xs tracking-wide transition-all cursor-pointer flex items-center gap-1.5 border ${
+        className={`h-7 px-2.5 rounded-lg text-xs tracking-wide transition-[color,background-color,border-color] cursor-pointer flex items-center gap-1.5 border ${
           soundOn
             ? 'text-ink-2 hover:text-cinnabar border-transparent hover:bg-paper-2'
             : 'text-ink-4 border-dashed border-hairline hover:bg-paper-2'
@@ -79,7 +79,7 @@ export function TopBarActions({
       {onToggleRailR && (
         <button
           type="button"
-          className={`h-7 px-2.5 rounded-lg text-xs tracking-wide transition-all cursor-pointer flex items-center gap-1.5 border ${
+          className={`h-7 px-2.5 rounded-lg text-xs tracking-wide transition-[color,background-color,border-color] cursor-pointer flex items-center gap-1.5 border ${
             railR
               ? 'text-cinnabar border-cinnabar/40 bg-cinnabar/5 font-semibold'
               : 'text-ink-2 hover:text-cinnabar border-transparent hover:bg-paper-2'
@@ -96,7 +96,7 @@ export function TopBarActions({
       {/* 5. 快捷键帮助 */}
       <button
         type="button"
-        className="h-7 w-7 rounded-lg text-xs tracking-wide text-ink-3 hover:text-ink-0 hover:bg-paper-2 transition-all cursor-pointer flex items-center justify-center border border-transparent font-medium"
+        className="h-7 w-7 rounded-lg text-xs tracking-wide text-ink-3 hover:text-ink-0 hover:bg-paper-2 transition-[color,background-color,border-color] cursor-pointer flex items-center justify-center border border-transparent font-medium"
         onClick={onHelp}
         title="帮助与对弈快捷键说明 (?)"
         aria-label="帮助与快捷键说明"

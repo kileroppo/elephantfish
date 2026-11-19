@@ -9,12 +9,92 @@
    长得不一样，而那正是「同一条棋谱两种样子」的来源。
    ========================================================================== */
 
-/* 底下那台机器在回放期间照常 130ms 轮询、照常重绘，这一层糊在其上就不是「开一次
-   算一次」而是每 tick 重糊一整屏 —— 第 17 条帧预算最贵的一档。改吃纯色压暗：
-   要看清的是自己那副盘，不是透过毛玻璃猜底下走到哪了。 */
+/* ==========================================================================
+   复盘台过门：入场分幕 + 退场对仗
+   --------------------------------------------------------------------------
+   复盘台是结果弹窗、错题本、对局库三个入口的共同目的地，全场被打开次数
+   最多的层 —— 开与关必须是对仗的两段编排，不能一面有编舞、一面是刀切。
+
+   入场分三幕（只动 transform/opacity，全走合成器）：
+     ① 台子落定  —— .replay-desk 本体的 replayDeskIn，380ms --ease-enter，
+                    像一台机器放到桌上（比 .sheet 通用的 sheetIn 慢一档，
+                    复盘台是一整台机器，不是一张纸片）
+     ② 台头      —— 晚一档 --stagger 起跑，标题先立住
+     ③ 棋盘      —— ×5 档（180ms）起跑，与棋子落盘的基延迟同拍
+                    （board.css 的 pieceEnter 从 180ms 起，波次逐颗落下）
+     ④ 棋谱/教练栏 —— 再跟一档 --stagger，内容最后齐
+   幕与幕之间差一档 --stagger（36ms，tokens.css）—— 全库第一处真正消费
+   这个令牌的编排（motion-system P1-5：它此前定义了却零使用）。
+
+   退场一段收：veil 淡出、台子往回沉一点收一点，--ease-exit 起步即加速，
+   180ms 与 useExitPhase 的默认退场时长同拍，播完正好断在卸载点上。
+
+   减弱动效：responsive.css 的全局块把 animation-duration 与
+   animation-delay 一起压到 1ms（delay 不压等于让用户干等编排），
+   此处无需另写 reduced-motion 分支。
+   ========================================================================== */
+
+/* 面纱：入场与 .overlay 通用的 fadeIn 同参（200ms --ease-out，只动透明度），
+   在自家文件里显式写一遍 —— 过门的完整编排不依赖 overlay 线程的基座类。
+   底色那条既有决定不改：底下那台机器在回放期间照常 130ms 轮询、照常重绘，
+   糊毛玻璃就不是「开一次算一次」而是每 tick 重糊一整屏（第 17 条帧预算
+   最贵的一档）—— 改吃纯色压暗，要看清的是自己那副盘，不是透过毛玻璃
+   猜底下走到哪了。 */
 .replay-veil {
   background: rgba(22, 19, 15, 0.58);
   backdrop-filter: none;
+  animation: replayVeilIn 200ms var(--ease-out) both;
+}
+
+@keyframes replayVeilIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* 台子落定：上移 + 轻缩 + 淡入，--ease-enter 尾段极长的减速让「放」有分量。 */
+.replay-desk {
+  animation: replayDeskIn 380ms var(--dur-slow) var(--ease-enter) both;
+}
+
+@keyframes replayDeskIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.975);
+  }
+}
+
+/* 三幕共用的身形：从下一线上来、淡入。transform/opacity 只动这两样。 */
+@keyframes replayActIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* 退场：与入场对仗的一段收。pointer-events 在退场头一帧就掐掉 ——
+   点不到正在淡出的层，也不会在 180ms 里触发第二次关闭。 */
+.replay-veil.is-leaving {
+  animation: replayVeilOut 180ms var(--ease-exit) both;
+  pointer-events: none;
+}
+
+@keyframes replayVeilOut {
+  to {
+    opacity: 0;
+  }
+}
+
+.replay-desk.is-leaving {
+  animation: replayDeskOut 180ms var(--ease-exit) both;
+  pointer-events: none;
+}
+
+@keyframes replayDeskOut {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
 }
 
 .replay-desk {
@@ -26,8 +106,12 @@
   padding: 18px 22px 16px;
 }
 
+/* ② 台头：晚两档 --stagger 起跑 —— 台子落定的头 70ms 里标题先立住。
+   原来这条规则只有一行没人用的 margin（JSX 里挂的是 Tailwind 的 mb-2），
+   现在它是过门第二幕的钩子；margin 不复活，避免静默改掉头下间距。 */
 .replay-head {
-  margin-bottom: 12px;
+  animation: replayActIn 380ms var(--dur-slow) var(--ease-enter)
+    calc(var(--stagger) * 2) both;
 }
 
 .replay-sub {
@@ -58,6 +142,11 @@
   pointer-events: none;
 }
 
+/* ③ 棋盘：×5 档（180ms）起跑，与棋子落盘的基延迟同拍 —— board.css 的
+   pieceEnter 从 180ms 起、按盘面波次逐颗落下，frame 与第一颗子同刻起跑，
+   读作「台子落定，这一局一手手摆回来」。
+   台里这块盘不播 .board 通用的 boardIn（520ms 自己升一次）：两条升起叠在
+   一起会是「机器里再升一台机器」，过门由这一幕统一编排。 */
 .replay-board {
   display: flex;
   flex-direction: column;
@@ -65,6 +154,12 @@
   justify-content: space-between;
   min-height: 0;
   height: 100%;
+  animation: replayActIn 380ms var(--dur-slow) var(--ease-enter)
+    calc(var(--stagger) * 5) both;
+}
+
+.replay-board .board {
+  animation: none;
 }
 
 /* 这一层是整块盘的尺头。盘自己那条 `height:100% + aspect-ratio + max-width:100%`
@@ -110,11 +205,15 @@
   margin-top: 7px;
 }
 
+/* ④ 棋谱/教练栏：再跟一档 --stagger，内容最后齐 —— 棋盘是台面上的主角，
+   阅读材料晚 36ms 到场，三幕读完台子才整个交出去。 */
 .replay-side {
   display: flex;
   flex-direction: column;
   min-height: 0;
   gap: 8px;
+  animation: replayActIn 380ms var(--dur-slow) var(--ease-enter)
+    calc(var(--stagger) * 6) both;
 }
 
 .replay-now {
@@ -165,7 +264,7 @@
   display: flex;
   align-items: stretch;
   height: 36px;
-  background: var(--paper-2, rgba(0, 0, 0, 0.03));
+  background: var(--paper-2);
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
   padding: 2px 6px;
@@ -201,9 +300,12 @@
   transition: opacity var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
+/* 悬停：纸族深一档的半透明罩。原来是 rgba(0,0,0,.04) 的裸黑 —— 两组主题下
+   一深一浅两头不讨好，且不在四组家族里；paper-3 是纸族自己的下一级，
+   宣纸里更深、乌墨里更亮，两个主题各自朝对的方向让位。 */
 .eval-bar-col:hover {
   opacity: 0.85;
-  background: rgba(0, 0, 0, 0.04);
+  background: color-mix(in srgb, var(--paper-3) 55%, transparent);
 }
 
 .eval-bar-track {
@@ -224,16 +326,36 @@
 }
 
 .eval-bar-fill.is-red {
-  background: var(--piece-red, #b8332a);
+  background: var(--piece-red);
 }
 
 .eval-bar-fill.is-black {
-  background: var(--piece-black, #2b231a);
+  background: var(--piece-black);
 }
 
-.eval-bar-col.is-blunder .eval-bar-fill {
-  background: #f59e0b;
-  box-shadow: 0 0 3px #f59e0b;
+/* 转折手标记：一罩朱砂洗色 + 柱顶一粒朱砂珠。**不整根改写柱子的颜色** ——
+   红柱与朱砂同色相（piece-red 与 cinnabar），涂成同一个色就是糊成一片；
+   而且柱子的颜色是数据（谁占优），标记是事件（这里翻过盘），两件事不能
+   共用同一个通道。洗色罩与顶珠都在 cinnabar / cinnabar-wash / cinnabar-edge
+   三档令牌里，乌墨下自动跟随提亮档。 */
+.eval-bar-col.is-blunder {
+  background: var(--cinnabar-wash);
+}
+
+.eval-bar-col.is-blunder::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  /* 0 0 <blur> 是对称发光，tokens.css 光源纪律里明文豁免的一类 */
+  box-shadow: 0 0 3px var(--cinnabar-edge);
+  pointer-events: none;
+  z-index: 4;
 }
 
 .eval-bar-col.is-selected .eval-cursor {
@@ -319,10 +441,12 @@
 }
 
 /* 停在哪一手：朱砂描边 + 纸面抬起。这是整列里唯一的「眼下」，
-   错题本与判分块用的都是同一套语言（.rank-row.is-best）。 */
+   错题本与判分块用的都是同一套语言（.rank-row.is-best）。
+   渐变下半瓣是纸族的暖端 --paper-warm（tokens.css 登记的「这一行被点名了」
+   专用色），不是第五组色。 */
 .replay-row.is-on {
   border-color: var(--cinnabar-edge);
-  background: linear-gradient(180deg, var(--paper-0), #fbf3e8);
+  background: linear-gradient(180deg, var(--paper-0), var(--paper-warm));
   color: var(--ink-0);
 }
 

@@ -15,8 +15,8 @@ export interface DrillHeaderProps {
 }
 
 /**
- * 特斯拉极简状态条 (Ultra-Slim Tesla Header - 32px)
- * 极致纯净、干掉所有大徽标与宣传废话，只保留高维元数据
+ * 特训营状态条（32px）
+ * 纸墨体系：只保留高维元数据 —— 分类选择器、真实掌握进度、翻转与退出。
  */
 export const DrillHeader: React.FC<DrillHeaderProps> = ({
   summary,
@@ -30,7 +30,7 @@ export const DrillHeader: React.FC<DrillHeaderProps> = ({
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // 下拉：点击外部 / Esc 关闭
+  // 下拉：点击外部 / Esc 关闭（Esc 在此消费，不再冒泡到特训营的退出逻辑）
   useEffect(() => {
     if (!dropdownOpen) return
     const onDocMouseDown = (e: MouseEvent) => {
@@ -39,7 +39,11 @@ export const DrillHeader: React.FC<DrillHeaderProps> = ({
       }
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setDropdownOpen(false)
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        setDropdownOpen(false)
+      }
     }
     document.addEventListener('mousedown', onDocMouseDown)
     document.addEventListener('keydown', onKey)
@@ -58,23 +62,23 @@ export const DrillHeader: React.FC<DrillHeaderProps> = ({
   const masteredCount = summary ? summary.mastered : 0
 
   return (
-    <header className="relative flex items-center justify-between px-3 h-8 bg-white border-b border-slate-100 text-slate-700 select-none font-mono text-xs z-30 shrink-0">
-      {/* 1. 左侧：极简战术分类选择器 */}
+    <header className="relative flex items-center justify-between px-3 h-8 bg-paper-0 border-b border-hairline text-ink-2 select-none font-num text-xs z-30 shrink-0">
+      {/* 1. 左侧：战术分类选择器 */}
       <div className="relative flex items-center" ref={dropdownRef}>
         <button
           type="button"
-          className="h-6 px-2 rounded hover:bg-slate-50 text-slate-800 flex items-center gap-1.5 transition cursor-pointer text-xs font-sans font-semibold border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+          className="h-6 px-2 rounded hover:bg-paper-2 text-ink-1 flex items-center gap-1.5 transition cursor-pointer text-xs font-ui font-semibold border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-cinnabar"
           onClick={() => setDropdownOpen((v) => !v)}
           title="切换课程分类"
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
+          <span className="w-1.5 h-1.5 rounded-full bg-cinnabar shrink-0" />
           <span>{categoryTitle}</span>
-          <span className="text-[10px] text-slate-400">▼</span>
+          <span className="text-[10px] text-ink-3">▼</span>
         </button>
 
         {dropdownOpen && (
           <div
-            className="absolute left-0 top-7 w-56 bg-white border border-slate-200 rounded-lg shadow-xl p-1.5 flex flex-col gap-0.5 z-50 animate-fadeIn max-h-[60vh] overflow-y-auto"
+            className="absolute left-0 top-7 w-56 bg-paper-0 border border-hairline-strong rounded-lg shadow-xl p-1.5 flex flex-col gap-0.5 z-50 animate-fadeIn max-h-[60vh] overflow-y-auto"
           >
             {categories.map((cat) => {
               const isSelected = cat.id === activeCategory
@@ -83,10 +87,10 @@ export const DrillHeader: React.FC<DrillHeaderProps> = ({
                 <button
                   key={cat.id}
                   type="button"
-                  className={`px-2 py-1 rounded text-left text-xs transition cursor-pointer flex items-center justify-between font-sans border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 ${
+                  className={`px-2 py-1 rounded text-left text-xs transition cursor-pointer flex items-center justify-between font-ui border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-cinnabar ${
                     isSelected
-                      ? 'bg-slate-100 text-slate-900 font-bold'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      ? 'bg-paper-2 text-ink-0 font-bold'
+                      : 'text-ink-2 hover:bg-paper-1 hover:text-ink-0'
                   }`}
                   onClick={() => {
                     onSelectCategory(cat.id)
@@ -95,7 +99,7 @@ export const DrillHeader: React.FC<DrillHeaderProps> = ({
                 >
                   <span>{cat.name.replace(/^第[一二三四五]篇\s*·\s*/, '')}</span>
                   {count > 0 && (
-                    <span className="text-[10px] font-mono text-slate-400">
+                    <span className="text-[10px] font-num text-ink-3">
                       {count} 题
                     </span>
                   )}
@@ -107,10 +111,10 @@ export const DrillHeader: React.FC<DrillHeaderProps> = ({
       </div>
 
       {/* 2. 中间：真实掌握进度 */}
-      <div className="text-[11px] font-mono text-slate-400 tracking-wider">
+      <div className="text-[11px] font-num text-ink-3 tracking-wider">
         {masteredTotal > 0 ? (
           <span>
-            已掌握 <b className="text-slate-600 font-bold">{masteredCount}</b>/{masteredTotal}
+            已掌握 <b className="text-jade font-bold">{masteredCount}</b>/{masteredTotal}
           </span>
         ) : (
           '特训营'
@@ -121,7 +125,7 @@ export const DrillHeader: React.FC<DrillHeaderProps> = ({
       <div className="flex items-center gap-1">
         <button
           type="button"
-          className="h-6 px-2 text-xs rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer flex items-center gap-1 border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+          className="h-6 px-2 text-xs rounded hover:bg-paper-2 text-ink-2 hover:text-ink-0 transition cursor-pointer flex items-center gap-1 border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-cinnabar"
           onClick={onFlip}
           title="翻转棋盘 (F)"
         >
@@ -131,7 +135,7 @@ export const DrillHeader: React.FC<DrillHeaderProps> = ({
 
         <button
           type="button"
-          className="w-6 h-6 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer flex items-center justify-center text-xs border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+          className="w-6 h-6 rounded hover:bg-paper-2 text-ink-3 hover:text-ink-0 transition cursor-pointer flex items-center justify-center text-xs border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-cinnabar"
           onClick={onClose}
           title="关闭 (Esc)"
         >

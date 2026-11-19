@@ -18,7 +18,7 @@ export function ReplayTacticsCard({
         role="status"
       >
         <div className="replay-sandbox-head flex items-center justify-between gap-2 flex-wrap mb-1 text-xs">
-          <span className="motif-chip is-sandbox inline-block font-semibold text-emerald-800 bg-emerald-100/70 border border-emerald-300 px-2 py-0.5 rounded text-[11px]">
+          <span className="motif-chip is-sandbox inline-block font-semibold text-jade bg-jade/10 border border-jade/30 px-2 py-0.5 rounded text-[11px]">
             🔀 分支沙盒推演中（不改原谱）
           </span>
           {sandboxInfo?.user_move && (

@@ -18,22 +18,33 @@ export function ReplayHeader({ head, seedGameId, onClose, onExportGame }: Replay
     : '实战对战'
 
   return (
-    <header className="flex items-center justify-between pb-3 mb-2 border-b border-hairline select-none shrink-0 gap-2">
+    <header className="replay-head flex items-center justify-between pb-3 mb-2 border-b border-hairline select-none shrink-0 gap-2">
       <div className="flex items-center gap-3 min-w-0">
+        {/* 左上 ← 返回：台面 chrome 契约的左半边（ia-desks F13）——
+            全屏/弹层 Desk 统一「左上 ← 返回（带文字）+ 右上 ✕」双 affordance，
+            与「对局复盘台」标题成对；title 句式与 ✕ 一致。 */}
+        <button
+          type="button"
+          className="h-7 px-2 rounded-lg text-xs font-medium text-ink-2 hover:text-ink-0 hover:bg-paper-2 border border-hairline transition cursor-pointer flex items-center gap-1 shrink-0"
+          onClick={onClose}
+          aria-label="返回对局"
+          title="返回对局 (Esc)"
+        >
+          <span aria-hidden="true">←</span>
+          <span>返回</span>
+        </button>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="w-6 h-6 rounded-lg bg-cinnabar text-white font-kai text-xs font-bold flex items-center justify-center shadow-xs">
+          <span className="w-6 h-6 rounded-lg bg-cinnabar text-[var(--ink-on-accent)] font-kai text-xs font-bold flex items-center justify-center shadow-xs">
             谱
           </span>
           <h2 className="text-sm sm:text-base font-bold text-ink-0 m-0">对局复盘台</h2>
         </div>
         <div className="font-num text-[11px] text-ink-3 hidden sm:flex items-center gap-2 m-0 truncate">
           <span
-            className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-              isRelay
-                ? 'text-indigo-500 bg-indigo-500/10'
-                : isSetup
-                ? 'text-fg-muted bg-fg-muted/10'
-                : 'text-cinnabar bg-cinnabar/10'
+            className={`text-[10px] px-1.5 py-0.5 rounded font-medium border ${
+              isRelay || isSetup
+                ? 'text-ink-2 bg-paper-2 border-hairline/60'
+                : 'text-cinnabar bg-cinnabar/10 border-cinnabar/25'
             }`}
           >
             {modeTag}
@@ -83,7 +94,7 @@ export function ReplayHeader({ head, seedGameId, onClose, onExportGame }: Replay
           className="w-7 h-7 flex items-center justify-center text-ink-3 hover:text-ink-0 hover:bg-paper-2 rounded-full text-sm transition cursor-pointer ml-1"
           onClick={onClose}
           aria-label="关闭复盘台"
-          title="返回主界面 (Esc)"
+          title="返回对局 (Esc)"
         >
           ✕
         </button>

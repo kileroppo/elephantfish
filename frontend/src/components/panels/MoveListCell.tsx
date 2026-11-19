@@ -96,7 +96,7 @@ export function MoveListCell({ rec, isLast, gameId }: MoveListCellProps) {
       {grade ? (
         <em
           key={`g${grade.text}`}
-          className={`grade-chip tone-${grade.tone} not-italic px-1.5 py-0.5 rounded text-[10.5px] border leading-none transition-all ${getToneClasses(
+          className={`grade-chip tone-${grade.tone} not-italic px-1.5 py-0.5 rounded text-[10.5px] border leading-none transition-[background-color,color,border-color,box-shadow] ${getToneClasses(
             grade.tone,
           )}`}
           title={gradeDetail(rec.review)}

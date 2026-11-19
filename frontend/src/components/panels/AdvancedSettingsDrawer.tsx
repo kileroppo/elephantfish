@@ -81,7 +81,7 @@ export function AdvancedSettingsDrawer({
                 <button
                   key={p.ms}
                   type="button"
-                  className={`preset h-7 rounded text-[11.5px] tracking-tight transition-all border flex items-center justify-center font-medium cursor-pointer ${
+                  className={`preset h-7 rounded text-[11.5px] tracking-tight transition-[color,background-color,border-color] border flex items-center justify-center font-medium cursor-pointer ${
                     isOn
                       ? 'is-on bg-cinnabar text-white border-cinnabar font-semibold shadow-xs'
                       : 'bg-paper-1/60 hover:bg-paper-2 text-ink-2 border-hairline'
@@ -99,7 +99,7 @@ export function AdvancedSettingsDrawer({
           <h3 className="text-[11.5px] font-semibold text-ink-2 mb-1.5">走法质量分析</h3>
           <button
             type="button"
-            className={`preset w-full h-8 px-2 rounded text-xs transition-all border flex items-center justify-center font-medium cursor-pointer ${
+            className={`preset w-full h-8 px-2 rounded text-xs transition-[color,background-color,border-color] border flex items-center justify-center font-medium cursor-pointer ${
               analyzeOn
                 ? 'is-on bg-jade/15 text-jade border-jade/40 font-semibold'
                 : 'bg-paper-1/60 hover:bg-paper-2 text-ink-3 border-hairline'

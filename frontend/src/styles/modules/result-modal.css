@@ -2,9 +2,9 @@
    终局遮罩
    ========================================================================== */
 
-/* 终局是一段 1.2s 的收束，不是一个静态遮罩：
+/* 终局是一段约 1.2s 的收束，不是一个静态遮罩：
    ① 棋盘下压降饱和 ② 胜方的王亮朱砂余光 ③ 印章盖下、墨渍散开
-   ④ 遮罩和按钮最后才浮出来。时间线全靠各段的 animation-delay 编排。 */
+   ④ 卡片最后浮出来。时间线全靠各段的 animation-delay 编排。 */
 
 .board-wrap.is-over .board-surface {
   transform: scale(0.985);
@@ -12,8 +12,11 @@
   transition: transform 400ms var(--ease-out), filter 400ms var(--ease-out);
 }
 
-/* 胜方的王：余光呼吸两轮（镜头第 2 步） */
-.piece.is-victor .piece-face {
+/* 胜方的王：余光呼吸两轮（镜头第 2 步）。
+   挂在 .board-wrap.is-over 上而不是裸 .piece.is-victor —— is-victor 在终局
+   那一刻就戴上，而面纱要 3s 后才盖上（App.tsx 的留白定时器），裸选择器下
+   余光会在面纱出现前就走完；is-over 与面纱同帧，四幕因此对得上表。 */
+.board-wrap.is-over .piece.is-victor .piece-face {
   animation: victorGlow 1.1s var(--ease-out) 350ms 2;
 }
 
@@ -27,17 +30,64 @@
   }
 }
 
+/* 终局这一层的退场：面纱自己先淡掉，印章与卡片各自「收回去」——
+   印章是抬起来离开，卡片往回沉，两件东西不同步才像有人来收场。
+   时长取 180ms，与 useExitPhase 的卸载定时器对齐：播完的那一刻正好摘掉。 */
+.result-veil.is-leaving {
+  pointer-events: none;
+}
+
+.result-veil.is-leaving::before {
+  animation: veilLift 180ms var(--ease-out) both;
+}
+
+.result-veil.is-leaving .seal {
+  animation: sealLift 180ms var(--ease-out) both;
+}
+
+.result-veil.is-leaving .result-card {
+  animation: sheetOut 180ms var(--ease-out) both;
+}
+
+@keyframes veilLift {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sealLift {
+  /* from 必须写死：这条动画全会替换掉 sealDrop，不写 from 的话印章会先
+     弹回「没转过」的正位再抬起来 —— 一个 180ms 的动画里闪一下最扎眼 */
+  from {
+    opacity: 1;
+    transform: scale(1) rotate(-4deg);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(1.06) rotate(-4deg);
+  }
+}
+
 /* 终局面纱：暗与模糊都画在 ::before 上，只让它淡入淡出。
    原来这两条动画直接把 `backdrop-filter: blur(0 → 1.5px)` 当关键帧 —— 面纱铺满整块
    棋盘，模糊半径每一帧都在换，等于每帧重新糊一遍 32 颗子；而这一刻正好是终局落定、
    最该从容的时候。模糊半径从此是静态的（一挂上就是 1.5px），淡的只是这一层的透明度，
    糊好的那张图可以留着复用。z-index:-1 让它待在纱的自己的层里、却又压在印章与卡片之下
-   （.result-veil 有 z-index 就是层叠上下文，负值跑不出去）。 */
+   （.result-veil 有 z-index 就是层叠上下文，负值跑不出去）。
+   版面是纵向流：印章在上、卡片在下，两者永远不叠 —— 卡片长高了也是自己滚，
+   压不到印章；盖印的那一下因此永远完整。 */
 .result-veil {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 16px;
   border-radius: var(--r-lg);
   z-index: 50;
 }
@@ -53,54 +103,24 @@
   animation: veilDim 400ms var(--ease-out) both;
 }
 
+/* 乌墨主题下面纱跟着翻成深色：宣纸上盖印是米白罩，乌墨纸上盖印是夜色罩，
+   同一副印泥，两种纸。 */
+[data-theme='wumu'] .result-veil::before {
+  background: rgba(30, 30, 34, 0.5);
+}
+
 @keyframes veilDim {
   from {
     opacity: 0;
   }
 }
 
-/* 终局这一层的退场：面纱自己先淡掉，印章与卡片各自「收回去」——
-   印章是抬起来（-6px）离开，卡片往回沉，两件东西不同步才像有人来收场 */
-.result-veil.is-leaving::before {
-  animation: veilLift 220ms var(--ease-out) both;
-}
-
-.result-veil.is-leaving .seal {
-  animation: sealLift 220ms var(--ease-out) both;
-}
-
-.result-veil.is-leaving .result-card {
-  animation: sheetOut 220ms var(--ease-out) both;
-}
-
-@keyframes veilLift {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes sealLift {
-  /* from 必须写死：这条动画全会替换掉 sealDrop，不写 from 的话印章会先
-     弹回「没转过」的正位再抬起来 —— 一个 220ms 的动画里闪一下最扎眼 */
-  from {
-    opacity: 1;
-    transform: translateX(-50%) scale(1) rotate(-4deg);
-  }
-  to {
-    opacity: 0;
-    transform: translate(-50%, -10px) scale(1.06) rotate(-4deg);
-  }
-}
-
-/* 印章：橙色方章 + 阴刻字，纯 CSS。从上方盖下，落定回弹，
-   ::after 是盖章那一下的墨渍扩散环 */
+/* 印章：方章 + 阴刻字，纯 CSS。从上方盖下，落定回弹，
+   ::after 是盖章那一下的墨渍扩散环。胜局用朱砂印（默认），
+   被绝杀 / 失利与和棋用墨印 —— 印泥颜色就是胜负判词。 */
 .seal {
-  position: absolute;
-  left: 50%;
-  top: 12%;
+  position: relative;
+  flex: 0 0 auto;
   width: 92px;
   height: 92px;
   display: grid;
@@ -108,15 +128,24 @@
   border-radius: 14px;
   background: linear-gradient(160deg, var(--cinnabar-bright), var(--cinnabar));
   box-shadow: calc(18px * var(--light-x)) 18px 40px -14px rgba(180, 50, 42, 0.6),
-    inset 0 0 0 3px rgba(255, 248, 242, 0.85), inset 0 0 0 7px var(--cinnabar);
+    inset 0 0 0 3px var(--paper-0), inset 0 0 0 7px var(--cinnabar);
+  /* 墨渍环的颜色按印泥走；墨印在乌墨主题下纸面翻浅，环也得跟着翻 */
+  --seal-ring: rgba(180, 50, 42, 0.5);
   animation: sealDrop 700ms var(--ease-out) 300ms both;
   z-index: 60;
 }
 
-.winner-none .seal {
+.winner-none .seal,
+.winner-engine .seal {
   background: linear-gradient(160deg, var(--ink-2), var(--ink-1));
   box-shadow: calc(18px * var(--light-x)) 18px 40px -14px rgba(43, 35, 26, 0.55),
-    inset 0 0 0 3px rgba(255, 248, 242, 0.85), inset 0 0 0 7px var(--ink-1);
+    inset 0 0 0 3px var(--paper-0), inset 0 0 0 7px var(--ink-1);
+  --seal-ring: rgba(43, 35, 26, 0.45);
+}
+
+[data-theme='wumu'] .winner-none .seal,
+[data-theme='wumu'] .winner-engine .seal {
+  --seal-ring: rgba(236, 228, 214, 0.45);
 }
 
 .seal span {
@@ -131,12 +160,18 @@
     calc(1px * var(--light-x)) 1px 0 rgba(255, 255, 255, 0.25);
 }
 
+/* 墨章的印面在乌墨主题下是浅色的（墨令牌整体翻浅），阴刻字跟着翻成深色 */
+[data-theme='wumu'] .winner-none .seal span,
+[data-theme='wumu'] .winner-engine .seal span {
+  color: var(--paper-0);
+}
+
 .seal::after {
   content: '';
   position: absolute;
   inset: -14px;
   border-radius: 22px;
-  border: 3px solid rgba(180, 50, 42, 0.5);
+  border: 3px solid var(--seal-ring);
   animation: inkSpread 520ms var(--ease-out) 640ms both;
   pointer-events: none;
 }
@@ -144,18 +179,18 @@
 @keyframes sealDrop {
   0% {
     opacity: 0;
-    transform: translateX(-50%) scale(1.6) rotate(-8deg);
+    transform: scale(1.6) rotate(-8deg);
   }
   55% {
     opacity: 1;
-    transform: translateX(-50%) scale(0.96) rotate(-3deg);
+    transform: scale(0.96) rotate(-3deg);
   }
   72% {
-    transform: translateX(-50%) scale(1.03) rotate(-4.6deg);
+    transform: scale(1.03) rotate(-4.6deg);
   }
   100% {
     opacity: 1;
-    transform: translateX(-50%) scale(1) rotate(-4deg);
+    transform: scale(1) rotate(-4deg);
   }
 }
 
@@ -170,29 +205,42 @@
   }
 }
 
+/* 卡片是第四幕：印章落定、墨渍散开之后才浮上来。
+   max-height/min-height 管住纵向：印章加间距先占定，卡片最多长到剩下的高度，
+   超了自己在里面滚 —— 盖印的那一块永远不被挤掉。 */
 .result-card {
   position: relative;
   width: min(78%, 340px);
-  padding: 26px 24px;
+  max-width: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 26px 24px 22px;
   text-align: center;
   border-radius: var(--r-xl);
   background: var(--paper-0);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--hairline-strong);
   box-shadow: var(--shadow-float);
-  animation: sheetIn 400ms var(--ease-spring-sm) both;
+  animation: sheetIn 400ms var(--ease-spring-sm) 900ms both;
 }
 
+/* 打开时焦点落在卡片容器上（tabIndex=-1，程序化聚焦不画环），
+   键盘用户的焦点环由内部各个出口与全局 :focus-visible 负责。 */
 .modal-close-btn {
   position: absolute;
-  top: 10px;
-  right: 12px;
+  top: 4px;
+  right: 4px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
   background: none;
   border: none;
-  font-size: 16px;
+  font-size: 14px;
   color: var(--ink-mute);
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   transition: color var(--dur-fast) var(--ease-out),
     background var(--dur-fast) var(--ease-out);
 }
@@ -202,9 +250,13 @@
   background: var(--paper-2);
 }
 
+/* 判词 pill：胜 = 朱砂，被绝杀/失利 = 墨，和 = 素。
+   letter-spacing 在最后一个字后面也留一份空，居中时字形整体偏左半份 ——
+   左内距多补半个字距推回真中心（同 .rail-tab 的非对称内距思路）。 */
 .result-kicker {
   display: inline-block;
   padding: 4px 14px;
+  padding-left: calc(14px + 0.1em);
   border-radius: 999px;
   font-size: 12px;
   letter-spacing: 0.2em;
@@ -218,18 +270,169 @@
   background: linear-gradient(180deg, var(--cinnabar-bright), var(--cinnabar));
 }
 
+.winner-engine .result-kicker {
+  color: var(--paper-0);
+  background: var(--ink-1);
+}
+
 .winner-none .result-kicker {
   color: var(--ink-2);
 }
 
 .result-card h2 {
   margin: 14px 0 4px;
+  font-family: var(--font-kai);
   font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-0);
 }
 
+/* 教练点睛：一句人话，整张卡片里唯一不用等宽与全角间距的字 */
+.result-coach {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--ink-2);
+}
+
+/* 统计注脚：压在最下面、细线隔开、数字等宽 —— 仪式之后的脚注，不是主角 */
+.result-stats {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  line-height: 1.8;
+  color: var(--ink-3);
+}
+
+.result-stats b {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.result-stats .is-bad,
+.result-stats .is-bad b {
+  color: var(--cinnabar);
+}
+
+/* 三个出口 + 两个文字出口，全部 ≥44px 触摸目标 */
 .result-actions {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  justify-content: center;
   margin-top: 18px;
+}
+
+.result-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.result-actions-row .btn {
+  flex: 1;
+}
+
+.result-actions .btn {
+  height: 44px;
+  font-size: 13px;
+}
+
+.result-actions .btn:not(.btn-primary) {
+  background: var(--paper-1);
+}
+
+.result-actions .btn:not(.btn-primary):hover {
+  background: var(--paper-2);
+}
+
+.result-actions b {
+  color: var(--cinnabar);
+  font-family: var(--font-num);
+  font-weight: 600;
+}
+
+.result-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.result-foot button {
+  min-height: 44px;
+  padding: 0 12px;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--r-md);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.result-foot button:hover {
+  color: var(--ink-0);
+}
+
+/* ---- 减弱动效：四幕塌缩成静态终帧 ----
+   面纱直接是罩好的，印章直接落在落定位（微倾），墨渍环不扩散，
+   卡片直接在位，王上没有余光。不闪，不晕，也不干等。 */
+@media (prefers-reduced-motion: reduce) {
+  .result-veil::before,
+  .seal,
+  .seal::after,
+  .result-card,
+  .board-wrap.is-over .piece.is-victor .piece-face {
+    animation: none !important;
+  }
+
+  .seal {
+    transform: rotate(-4deg);
+  }
+
+  .seal::after {
+    opacity: 0;
+  }
+
+  .board-wrap.is-over .piece.is-victor .piece-face {
+    filter: none;
+  }
+}
+
+/* ---- 窄屏：印章收小、卡片放宽，纵向仍然不叠 ---- */
+@media (max-width: 640px) {
+  .result-veil {
+    gap: 14px;
+    padding: 12px;
+  }
+
+  .seal {
+    width: 72px;
+    height: 72px;
+    border-radius: 11px;
+  }
+
+  .seal span {
+    font-size: 40px;
+  }
+
+  .seal::after {
+    inset: -11px;
+    border-radius: 17px;
+    border-width: 2px;
+  }
+
+  .result-card {
+    width: min(92%, 340px);
+    padding: 22px 18px 18px;
+  }
+
+  .result-card h2 {
+    font-size: 20px;
+  }
 }

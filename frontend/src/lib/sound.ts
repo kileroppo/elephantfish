@@ -9,7 +9,7 @@
  * 5. 吃子双碰撞（Double-impact）：攻击子砸落 + 被吃子侧向被撞弹开的双重硬木脆裂音。
  */
 
-type Voice = 'move' | 'capture' | 'check' | 'ready' | 'win' | 'lose' | 'snap' | 'poof'
+type Voice = 'move' | 'capture' | 'check' | 'ready' | 'win' | 'lose' | 'fault' | 'snap' | 'poof'
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
@@ -171,6 +171,11 @@ const RECIPES: Record<Voice, (c: AudioContext) => void> = {
     ;[392, 329.63, 261.63].forEach((f, i) => {
       window.setTimeout(() => tone(c, f, 0.6, 0.085, 'triangle'), i * 140)
     })
+  },
+  // 走错落定：比普通落子轻半分的木击 —— 「落错」的体感。
+  // 不抢戏：它跟在 lose 下行三音之后落，重的那个是惩罚，轻的那个是悔意。
+  fault: (c) => {
+    woodStrike(c, c.currentTime, { gainScale: 0.85, pitchScale: 1.08 })
   },
   // 摆子吸附：轻快脆实的硬木敲击
   snap: (c) => {

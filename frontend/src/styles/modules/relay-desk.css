@@ -1,47 +1,207 @@
 /* ==========================================================================
-   转述台
+   转述台 · 面板体系（chrome 契约 + 教练浮层词汇）
+   --------------------------------------------------------------------------
+   本文件是转述台（RelayConsole 及其浮层）的样式家园：台面 chrome 的共用
+   idiom 与教练面板的内容词汇都在这里，组件里只留结构与语义类。
+
+   chrome 契约（与 ia-desks F13 的台面体系对齐）：
+     · 关闭钮全台一枚 —— .relay-close-btn：右上 ✕、28px、墨三级 hover 纸二级，
+       与复盘台/特训营/帮助层的右上 ✕ 同构；title 承诺的 (Esc) 由面板内的
+       Esc 监听兑现（LiveHelperDrawer），不承诺没有的行为。
+     · 返回：浮层有全场面纱 + 「返回实战」文字钮双 affordance；点击面纱
+       任意空白处同样返回（手机友好）。
+     · 入场/退场对等：进 floatIn（本文件同级 relay-compact.css），出 helperOut，
+       退场相位由 useExitPhase 驱动（ CoachInterruptCard / LiveHelperDrawer 同款）。
+
+   色彩只走 tokens.css 四组（纸/墨/朱砂/玉）+ 青黛预览系；投影遵守 --light-x
+   单光源纪律；动效只动 transform/opacity；过渡显式列属性（禁 transition:all）。
    ========================================================================== */
 
+/* ---- 关闭钮：转述台唯一一枚 idiom ----
+   28px 触摸面（响应式线程的 44px 提案另案，此处保持与各 Desk ✕ 同格），
+   按下去缩一档是「手感」层，走 --dur-xs。焦点环由 base.css 全球体系给，
+   此处不重复定义。 */
+.relay-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
+}
 
+.relay-close-btn:hover {
+  color: var(--ink-0);
+  background: var(--paper-2);
+}
 
+/* 按下去要「陷」一下：与 controls.css .icon-btn:active 同规格 */
+.relay-close-btn:active {
+  transform: scale(0.93);
+}
 
+/* ---- 可按压控件的过渡 ----
+   应手台一串胶囊（应手复制/悔棋/招法提示/识破企图/更多）共用。
+   显式列属性 —— 军规禁 transition:all（Tailwind 的 transition-all 会连
+   文字变长时的 width、disabled 时的一切都动画，正是 controls.css:20 注释
+   要消灭的行为）。时长/缓动全走令牌：transform 是按压反馈（--dur-xs），
+   颜色/底/边/影是微交互（--dur-fast），与 .btn 同款纪律。 */
+.relay-press {
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
+}
 
+/* ---- 算路三问的 ①②③ 签 ----
+   教练浮层（LiveHelperDrawer 算路模式 / CoachLiveCard 同内容）共用。
+   两问中性解释用纸签；第三问「落子前对抗三问」染朱砂 —— 朱砂只标记
+   「有危险」，落子前的自问就是一次危险扫描，与 tokens.css 的色彩宪章一致。 */
+.relay-guide-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-bottom: 4px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+  background: var(--paper-2);
+  color: var(--ink-1);
+  font-size: 11px;
+  font-weight: 700;
+}
 
+.relay-guide-badge.is-accent {
+  background: var(--cinnabar-wash);
+  border-color: var(--cinnabar-edge);
+  color: var(--cinnabar);
+}
 
+/* ==========================================================================
+   实战分步推演浮层（LiveHelperDrawer）的内容词汇
+   --------------------------------------------------------------------------
+   定位与外壳在 relay-compact.css 的 .relay-compact .live-helper-drawer
+   （它永远是应手台 subsection 里的绝对定位浮层）。这里只管内容。
+   ========================================================================== */
 
+/* 浮层面纱：点击空白处返回对局。浓度取唯一面纱令牌（--veil-bg，overlay 契约）
+   的两成 —— 这是轻弹层的轻纱，不是全screen Desk 的重纱（42%+4px 模糊）。
+   令牌未就绪时回退值与 modals.css 的 .overlay 同源（墨 42% 的那枚）。 */
+.relay-helper-veil {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--veil-bg, rgba(28, 25, 21, 0.42)) 20%, transparent);
+  backdrop-filter: blur(1px);
+}
 
+/* 分步推演剧场：三种模式各一种纸墨语气，与特训营气泡同语言
+   （drill-tactics.css：good=玉实底、bad=朱砂实底、threat=纸底朱砂描边）——
+   good 是「正着确认」用玉；bad 是「已发生的后果」染朱砂洗底；threat 是
+   「还没发生的企图」，只描朱砂边不染面，与已发生的后果区分。
+   右侧 32px 留给常驻 ✕（本类自带 padding，utility 的 pr-* 压不过来，
+   故写进本类；顶/左/下 12/14/12 与原 p-3 对齐）。 */
+.relay-helper-theater {
+  padding: 12px 32px 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--paper-1);
+  border: 1.5px solid var(--hairline-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
+.relay-helper-theater.mode-good {
+  border-color: color-mix(in srgb, var(--jade) 35%, transparent);
+  background: linear-gradient(180deg, var(--jade-wash), var(--paper-1));
+}
 
+.relay-helper-theater.mode-bad {
+  border-color: var(--cinnabar-edge);
+  background: linear-gradient(180deg, var(--cinnabar-wash), var(--paper-1));
+}
 
+/* threat：面不改色，只换边 —— 「还没发生」不做实底 */
+.relay-helper-theater.mode-threat {
+  border-color: var(--cinnabar-edge);
+  background: var(--paper-1);
+}
 
+/* 分步条目：纸面细边，当前步染朱砂洗底 + 单光源投影 */
+.relay-helper-step {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--paper-0);
+  border: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
 
+.relay-helper-step:hover {
+  border-color: var(--hairline-strong);
+}
 
+.relay-helper-step.is-current {
+  border: 1.5px solid var(--cinnabar);
+  background: var(--cinnabar-wash);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px
+    color-mix(in srgb, var(--cinnabar) 12%, transparent);
+}
 
+/* 步签：默认「第 N 步」墨色；带 tag 时三色分工 —— 对手=朱砂、我方=玉、
+   后续=墨，与盘面气泡的语气一致（谁的动作、谁的意图）。 */
+.relay-helper-step-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-1);
+}
 
+.relay-helper-step-badge.has-tag {
+  font-size: 11px;
+  padding: 1.5px 6px;
+  border-radius: var(--r-sm);
+  background: var(--paper-2);
+  color: var(--ink-0);
+  border: 1px solid var(--hairline);
+}
 
+.relay-helper-step-badge.tag-opp {
+  background: var(--cinnabar-wash);
+  color: var(--cinnabar);
+  border-color: var(--cinnabar-edge);
+}
 
+.relay-helper-step-badge.tag-our {
+  background: var(--jade-wash);
+  color: var(--jade);
+  border-color: color-mix(in srgb, var(--jade) 32%, transparent);
+}
 
+.relay-helper-step-badge.tag-follow {
+  background: var(--paper-2);
+  color: var(--ink-1);
+  border-color: var(--hairline);
+}
 
-
-
-
-
-
-
+/* ==========================================================================
+   既有决定（继承自本文件前身，一字不改留档）
+   ========================================================================== */
 
 /* 引擎思考不再有点亮呼吸：等应手出来那一刻，结果自己说话 */
 
 /* ---- 引擎应手 ---- */
-
-
-
-
-
-
-
-
-
-
 
 /* 静默思考态：虚线框收成素框，一句话加一个按钮，什么都不动 */
 

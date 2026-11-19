@@ -1,5 +1,12 @@
 /* ==========================================================================
    Awwwards / Webby / FWA 东方美学奢华材质与微交互增强 (Aesthetic Elevation)
+   --------------------------------------------------------------------------
+   2026-11 清理：ruyao / zhuqi 两套「材质主题」的 body 辉光、棋盘追光与
+   三个徽标点整段删除 —— UIContext 早已只有 'xuan' | 'wumu'，这些规则
+   永远匹配不到任何 DOM，却在向读代码的人撒谎（DT-05）。theme-badge 的
+   乌墨金点 #c89d58 是四组体系外的第五色，按「要么转正要么删除」删除 ——
+   乌墨下徽标点回归朱砂，与强调色同源。硬编码的朱砂/墨 rgb 全部改
+   color-mix(in srgb, var(--token) N%, transparent)，两主题自动跟踪。
    ========================================================================== */
 
 /* 1. 美学材质主题背景光晕 */
@@ -13,32 +20,6 @@
       80% 60% at 88% 90%,
       rgba(200, 157, 88, 0.04),
       rgba(0, 0, 0, 0) 50%
-    );
-}
-
-[data-theme="ruyao"] body::before {
-  background-image: radial-gradient(
-      120% 80% at 12% -10%,
-      rgba(255, 255, 255, 0.95),
-      rgba(255, 255, 255, 0) 60%
-    ),
-    repeating-linear-gradient(
-      45deg,
-      rgba(39, 112, 92, 0.02) 0 1px,
-      rgba(255, 255, 255, 0) 1px 4px
-    );
-}
-
-[data-theme="zhuqi"] body::before {
-  background-image: radial-gradient(
-      120% 80% at 12% -10%,
-      rgba(255, 230, 210, 0.6),
-      rgba(255, 255, 255, 0) 60%
-    ),
-    repeating-linear-gradient(
-      45deg,
-      rgba(141, 38, 30, 0.02) 0 1px,
-      rgba(255, 255, 255, 0) 1px 4px
     );
 }
 
@@ -71,7 +52,8 @@
   background: var(--paper-3);
   border-color: var(--ink-3);
   color: var(--ink-0);
-  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(43, 35, 26, 0.12);
+  box-shadow: calc(2px * var(--light-x)) 2px 8px
+    color-mix(in srgb, var(--ink-1) 12%, transparent);
 }
 
 .theme-badge:active {
@@ -84,21 +66,6 @@
   border-radius: 50%;
   background: var(--cinnabar);
   box-shadow: 0 0 5px var(--cinnabar);
-}
-
-.theme-badge.theme-wumu .theme-badge-dot {
-  background: #c89d58;
-  box-shadow: 0 0 6px rgba(200, 157, 88, 0.8);
-}
-
-.theme-badge.theme-ruyao .theme-badge-dot {
-  background: #27705c;
-  box-shadow: 0 0 6px rgba(39, 112, 92, 0.6);
-}
-
-.theme-badge.theme-zhuqi .theme-badge-dot {
-  background: #e3bd6e;
-  box-shadow: 0 0 6px rgba(227, 189, 110, 0.8);
 }
 
 .theme-badge-switch {
@@ -139,7 +106,7 @@
 
 .icon-zen.is-on .zen-seal-glyph {
   background: var(--cinnabar);
-  color: #fff;
+  color: var(--ink-on-accent);
   transform: rotate(-6deg);
 }
 
@@ -196,12 +163,13 @@
   height: 20px;
   border-radius: 4px;
   background: var(--cinnabar);
-  color: #fff;
+  color: var(--ink-on-accent);
   font-family: var(--font-kai);
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 1px 3px rgba(180, 50, 42, 0.4);
+  box-shadow: calc(1px * var(--light-x)) 1px 3px
+    color-mix(in srgb, var(--cinnabar) 40%, transparent);
 }
 
 .zen-hud-title {
@@ -277,22 +245,6 @@
   );
 }
 
-[data-theme="ruyao"] .board-surface::after {
-  background: radial-gradient(
-    circle 520px at var(--mouse-x, 35%) var(--mouse-y, 30%),
-    rgba(255, 255, 255, 0.14) 0%,
-    rgba(255, 255, 255, 0) 65%
-  );
-}
-
-[data-theme="zhuqi"] .board-surface::after {
-  background: radial-gradient(
-    circle 520px at var(--mouse-x, 35%) var(--mouse-y, 30%),
-    rgba(255, 230, 160, 0.14) 0%,
-    rgba(255, 230, 160, 0) 65%
-  );
-}
-
 /* 6. 国手大成朱砂金石通关印章 (Grandmaster Cinnabar Seal Stamp) */
 .drill-victory-seal-stamp {
   position: relative;
@@ -325,7 +277,10 @@
   border: 3.5px double var(--cinnabar);
   border-radius: 6px;
   background: var(--cinnabar-wash);
-  box-shadow: inset 0 0 8px rgba(180, 50, 42, 0.2), 0 2px 8px rgba(180, 50, 42, 0.18);
+  /* inset 是内壁受光（豁免光源纪律）；外投影收回 0.42 横分量 */
+  box-shadow: inset 0 0 8px color-mix(in srgb, var(--cinnabar) 20%, transparent),
+    calc(2px * var(--light-x)) 2px 8px
+      color-mix(in srgb, var(--cinnabar) 18%, transparent);
 }
 
 .seal-stamp-chars {
@@ -338,7 +293,8 @@
   line-height: 1.1;
   color: var(--cinnabar);
   letter-spacing: 0.12em;
-  text-shadow: 0 0 1px rgba(180, 50, 42, 0.6);
+  /* 字体的墨迹是排印手段不是投影（光源纪律豁免），但颜色要跟踪令牌 */
+  text-shadow: 0 0 1px color-mix(in srgb, var(--cinnabar) 60%, transparent);
 }
 
 .seal-stamp-ribbon {

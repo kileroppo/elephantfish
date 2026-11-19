@@ -82,6 +82,9 @@ function AppContent() {
   const [showOverModal, setShowOverModal] = useState(false)
   const [dismissedOver, setDismissedOver] = useState(false)
   const [overMounted, overLeaving] = useExitPhase(showOverModal && !dismissedOver && !setup.active)
+  // 排局台退场过门：退出不是瞬切。CSS 键（.workspace-setup-studio.is-leaving /
+  // setupDeskIn/Out）已由 setup-desk 线程落入 setup-studio.css，这里接线即播
+  const [setupMounted, setupLeaving] = useExitPhase(setup.active, 220)
   const isPlaying = game?.status.state === 'playing'
 
   useEffect(() => {
@@ -95,22 +98,35 @@ function AppContent() {
     const timer = window.setTimeout(() => {
       setShowOverModal(true)
       if (game.status.winner !== null) {
-        play(game.status.winner === game.engine_side ? 'win' : 'lose')
+        // 胜方是引擎 → 输的是坐在屏幕前的人，响「输」。曾经这里写反了，
+        // 引擎将死玩家的那一刻放的是胜利音效。
+        play(game.status.winner === game.engine_side ? 'lose' : 'win')
       }
     }, 3000)
 
     return () => window.clearTimeout(timer)
   }, [isPlaying, game?.status.winner, game?.engine_side])
 
-  // 页面加载引擎执红先行时自动起手
+  // 页面加载引擎执红先行时自动起手 —— 让位给首访落盘：
+  // 落盘没收场就不起手。否则引擎第一手会在棋子「摆到一半」时改道
+  // （落盘是 fill:both 的 animation，占着 transform，滑行 transition 被压住），
+  // 且 BootScreen 刚谢幕访客还没看清开局，hero 交接被抢拍。
   const autoStarted = useRef(false)
+  const [introDone, setIntroDone] = useState(false)
+  // 防死锁兜底：useGame 没有任何轮询会自动补引擎着法，一旦 introDone 永不翻真，
+  // ply=0 且引擎先手的局将永远停摆。落盘全程 948ms，2s 兜底绰绰有余；
+  // 正常路径回执先到，定时器空转销毁。
   useEffect(() => {
-    if (!game || autoStarted.current) return
+    const t = window.setTimeout(() => setIntroDone(true), 2000)
+    return () => window.clearTimeout(t)
+  }, [])
+  useEffect(() => {
+    if (!game || autoStarted.current || !introDone) return
     if (game.ply === 0 && game.engine_to_move && game.status.state === 'playing' && !g.thinking) {
       autoStarted.current = true
       void g.engineMove()
     }
-  }, [game, g])
+  }, [game, g, introDone])
 
   const onBoardMove = useCallback(
     async (iccs: string) => (await g.submitMove(iccs)) !== 'error',
@@ -124,6 +140,9 @@ function AppContent() {
       const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
 
       if (e.key === 'Escape') {
+        // 排局台内 Esc 的语义层次（收浮层→清选择→退出）由 SetupStudio 捕获相
+        // handler 全权接管，这里直接让路，两套语义永不互相截胡
+        if (setup.active) return
         ui.setHelp(false)
         // 退出禅意必须放在无条件 return 之前 —— 此前这条死代码导致 Esc 永远退不出禅意
         if (ui.zenMode) {
@@ -162,11 +181,14 @@ function AppContent() {
         if (game) handleNewGame(game.engine_side)
         return
       }
-      if (e.key === 'z' || e.key === 'Z') {
-        e.preventDefault()
-        ui.toggleZen()
-        return
-      }
+    if (e.key === 'z' || e.key === 'Z') {
+      // 排局进行中不切禅意：禅意 HUD 叠上排局台是一台谁也没设计过的混合机器
+      // （SetupStudio 内已有同款拦截，这里是双保险）
+      if (setup.active) return
+      e.preventDefault()
+      ui.toggleZen()
+      return
+    }
       if (e.key === 't' || e.key === 'T') {
         e.preventDefault()
         ui.cycleTheme()
@@ -251,7 +273,7 @@ function AppContent() {
         />
       )}
 
-      {ui.zenMode && (
+      {ui.zenMode && !setup.active && (
         <ZenHud
           isPlaying={isPlaying}
           turn={game.turn}
@@ -260,8 +282,8 @@ function AppContent() {
         />
       )}
 
-      {setup.active ? (
-        <main className="workspace workspace-setup-studio">
+      {setupMounted ? (
+        <main className={`workspace workspace-setup-studio${setupLeaving ? ' is-leaving' : ''}`}>
           <SetupStudio
             game={game}
             boardMap={setup.boardMap}
@@ -337,6 +359,7 @@ function AppContent() {
                 visualClues={ui.liveClues ?? undefined}
                 readOnly={ui.previewGame !== null}
                 onMove={onBoardMove}
+                onIntroEnd={() => setIntroDone(true)}
               />
 
               {overMounted && (

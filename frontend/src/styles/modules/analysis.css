@@ -66,7 +66,8 @@
   height: 8px;
   border-radius: 999px;
   overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(43, 35, 26, 0.16);
+  /* inset = 内壁受光，光源纪律豁免；颜色跟踪 --ink-1，乌墨下自动转亮 */
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--ink-1) 16%, transparent);
 }
 
 /* 评分条左右两段。这里过的是 width（布局属性）。换成 transform: scaleX 就能上
@@ -74,24 +75,27 @@
    渐变本来的样子还得再写一条 calc(100% / var(--er)) 的 background-size，并且给
    --er 兜一个不为 0 的下限。收益只是一个 8px 高的叶子节点少一次重排，不值这个
    复杂度。 */
+/* 两端都是令牌：红端 cinnabar→cinnabar-bright，黑端 ink-2→ink-1 —— 乌墨下
+   整套跟随主题倒转（红端成夜光朱，黑端成骨白），不再有写死的 #9d2820/#2a241d。 */
 .eval-red {
-  background: linear-gradient(90deg, #9d2820, var(--cinnabar-bright));
+  background: linear-gradient(90deg, var(--cinnabar), var(--cinnabar-bright));
   transition: width var(--dur-slow) var(--ease-out);
 }
 
 .eval-black {
-  background: linear-gradient(90deg, #4a4034, #2a241d);
+  background: linear-gradient(90deg, var(--ink-2), var(--ink-1));
   transition: width var(--dur-slow) var(--ease-out);
 }
 
-/* 中线：让「两边各一半」这件事一眼看得出来 */
+/* 中线：让「两边各一半」这件事一眼看得出。用 --paper-0（主题的基面色）——
+   它在宣纸下是米白、乌墨下是夜的顶面色，压红端与骨白端都清楚 */
 .eval-mid {
   position: absolute;
   left: 50%;
   top: 0;
   bottom: 0;
   width: 1px;
-  background: rgba(253, 250, 244, 0.55);
+  background: var(--paper-0);
   pointer-events: none;
 }
 
@@ -119,8 +123,9 @@
   margin-top: -5.5px;
   border-radius: 50%;
   background: var(--paper-0);
-  box-shadow: 0 0 0 1.5px rgba(43, 35, 26, 0.45),
-    calc(1px * var(--light-x)) 1px 3px rgba(43, 35, 26, 0.4);
+  /* 外圈是描边圆环（对称，光源纪律豁免）；落影收回 0.42 横分量 */
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ink-1) 45%, transparent),
+    calc(1px * var(--light-x)) 1px 3px color-mix(in srgb, var(--ink-1) 40%, transparent);
 }
 
 /* 棋势走势线：评分条下面的一条极淡的叙事线，不抢评分条的视觉 */
@@ -240,7 +245,8 @@
 }
 
 .depth-ladder.is-live .rung.lit:last-of-type {
-  box-shadow: 0 0 0 0 rgba(180, 50, 42, 0.5);
+  /* 对称的呼吸光环（0 0 0 0），光源纪律豁免；颜色跟踪 --cinnabar */
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--cinnabar) 50%, transparent);
   animation: breathe 1.4s var(--ease-out) infinite;
 }
 

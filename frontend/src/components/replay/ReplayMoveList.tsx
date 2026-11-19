@@ -15,16 +15,20 @@ interface RoundRow {
   black?: ReplayReply['plies'][number]
 }
 
+/** 判分符号归队 history.css 的 .grade-chip 五档 tone —— 颜色说的是这一手
+ * 怎么样，两边都不许自己组织语言（lib/format 给措辞，grade-chip 给颜色）。
+ * 曾经这里是四组 Tailwind 默认色（rose/amber/yellow/emerald 各一档），
+ * 等于在同一个产品里给同一件事配了第四套色。 */
 function compactSymbol(tone: string) {
   switch (tone) {
     case 'bad':
-      return { sym: '??', cls: 'text-rose-700 bg-rose-500/15' }
+      return { sym: '??', cls: 'grade-chip tone-bad' }
     case 'warn':
-      return { sym: '?', cls: 'text-amber-700 bg-amber-500/15' }
+      return { sym: '?', cls: 'grade-chip tone-warn' }
     case 'soft':
-      return { sym: '?!', cls: 'text-yellow-700 bg-yellow-500/15' }
+      return { sym: '?!', cls: 'grade-chip tone-soft' }
     case 'good':
-      return { sym: '✓', cls: 'text-emerald-700 bg-emerald-500/15' }
+      return { sym: '✓', cls: 'grade-chip tone-good' }
     default:
       return null
   }
@@ -91,11 +95,11 @@ export function ReplayMoveList({
       <button
         ref={on ? activeCellRef : undefined}
         type="button"
-        className={`h-7.5 px-2 rounded-md text-xs font-medium transition-all cursor-pointer flex items-center justify-between gap-1 w-full border ${
+        className={`h-7.5 px-2 rounded-md text-xs font-medium transition cursor-pointer flex items-center justify-between gap-1 w-full border ${
           on
             ? 'bg-cinnabar/10 text-cinnabar border-cinnabar/40 font-bold shadow-3xs'
             : isBlunder
-            ? 'bg-rose-500/5 hover:bg-rose-500/12 text-rose-900 border-rose-300/40'
+            ? 'bg-cinnabar/5 hover:bg-cinnabar/12 text-cinnabar border-cinnabar/30'
             : 'bg-transparent hover:bg-paper-2 text-ink-1 border-transparent'
         }`}
         onClick={() => onSelectPly(p.ply)}
@@ -112,18 +116,18 @@ export function ReplayMoveList({
 
         <div className="flex items-center gap-1 shrink-0">
           {p.gives_check && (
-            <span className="text-[10px] font-bold text-red-600 bg-red-100/80 px-1 rounded">
+            <span className="text-[10px] font-bold text-cinnabar bg-cinnabar/10 px-1 rounded">
               将
             </span>
           )}
           {p.mate && (
-            <span className="text-[10px] font-bold text-white bg-red-600 px-1 rounded shadow-3xs">
+            <span className="text-[10px] font-bold text-[var(--ink-on-accent)] bg-cinnabar px-1 rounded shadow-3xs">
               杀
             </span>
           )}
           {sym && (
             <span
-              className={`font-mono text-[10.5px] px-1 py-0.2 rounded font-bold ${sym.cls}`}
+              className={`font-num text-[10.5px] px-1 py-0.2 rounded font-bold ${sym.cls}`}
             >
               {sym.sym}
             </span>

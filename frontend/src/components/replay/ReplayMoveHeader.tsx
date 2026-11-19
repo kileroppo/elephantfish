@@ -24,8 +24,8 @@ export function ReplayMoveHeader({ current, grade }: ReplayMoveHeaderProps) {
             <span
               className={`replay-by by-${current.by} side-${current.side} text-[11px] font-medium px-1.5 py-0.5 rounded ${
                 current.side === 'red'
-                  ? 'text-piece-red bg-red-500/10'
-                  : 'text-piece-black bg-slate-500/10'
+                  ? 'text-piece-red bg-cinnabar/10'
+                  : 'text-piece-black bg-ink-2/10'
               }`}
             >
               {sideName(current.side)}

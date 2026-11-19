@@ -1,8 +1,15 @@
 /* ==========================================================================
    设计令牌
    --------------------------------------------------------------------------
-   整套界面只有三组颜色：纸、墨、朱砂。纸是底，墨是字，朱砂只用来标记
-   「现在轮到谁」和「有危险」。数量少才压得住，多了就俗。
+   整套界面只有四组颜色：纸、墨、朱砂、玉。纸是底，墨是字，朱砂只用来标记
+   「现在轮到谁」和「有危险」，玉只用来标记「确认」与「指认」。数量少才
+   压得住，多了就俗。
+
+   第五组是 --tint-preview 青黛系 —— 它不是一个可以随便用的新颜色，是
+   What-If 残影预览的专用身份色（详见该节注释）。除此之外不许加色。
+
+   本文件是全站唯一的色值 / 字体栈 / 缓动来源。tw.css 的 @theme inline
+   全部桥接到这里的变量；模块 css 只许 var() 引用，不许出现十六进制。
    ========================================================================== */
 
 :root {
@@ -12,27 +19,42 @@
   --paper-2: #eee8dc;
   --paper-3: #e3dccd;
   --paper-4: #d2c9b6;
+  /* 宣纸里那一缕更暖的奶油：只用于「这一行被点名了」的渐变下半瓣
+     （.rank-row.is-best）。它不是新色族，是纸族的暖端 —— 乌墨下压成
+     暖褐，见文末 wumu 块。 */
+  --paper-warm: #fbf3e8;
 
-  /* ---- 墨：正文到极淡的线 ---- */
+  /* ---- 墨：正文到极淡的线 ----
+     2026-11 对比度清零：ink-3 / ink-mute / ink-4 三档原供 10-12px 小字，
+     实测 2.61-4.66:1，不达 WCAG AA（4.5:1）。三档整体压深一档，现在
+     对 paper-1 为 6.10 / 5.65 / 5.18（对最常用的 paper-2 也不低于 4.74）。
+     代价是三档之间的明度差被压缩 —— 层级改用字号与字重说话，这正是
+     审计报告 F1-6 的处方。装饰性用法（趋势线描边等）不受影响。 */
   --ink-0: #1c1915;
   --ink-1: #2a241d;
   --ink-2: #4b4237;
-  --ink-3: #776b5b;
-  --ink-4: #a19683;
-  --ink-mute: #9a8f7d;
+  --ink-3: #65594b;
+  --ink-4: #6f6455;
+  --ink-mute: #6a5e50;
   --hairline: rgba(30, 26, 20, 0.14);
   --hairline-strong: rgba(43, 35, 26, 0.22);
 
   /* ---- 朱砂：唯一的强调色 ---- */
   --cinnabar: #a8322a;
   --cinnabar-bright: #cd4034;
-  --cinnabar-wash: rgba(180, 50, 42, 0.1);
-  --cinnabar-edge: rgba(180, 50, 42, 0.28);
+  --cinnabar-wash: rgba(168, 50, 42, 0.1);
+  --cinnabar-edge: rgba(168, 50, 42, 0.28);
 
   /* ---- 玉：正面的、确认性的绿 ---- */
   --jade: #2c6a56;
   --jade-bright: #35836a;
   --jade-wash: rgba(44, 106, 86, 0.1);
+
+  /* ---- 强调色上的字：朱砂底上那一白 ----
+     全站曾有两个白（#fff 与 #fff8f2）并存。提为令牌即登记：宣纸下是暖白
+     #fff8f2（对 cinnabar 6.33:1），乌墨下反转为深朱褐 #3d1410 —— 夜里的
+     朱砂被夜光照亮成珊瑚，深字才压得住（对 wumu cinnabar 5.41:1）。 */
+  --ink-on-accent: #fff8f2;
 
   /* ---- 棋盘 ---- */
   --board-face-1: #f3ecdc;
@@ -54,6 +76,25 @@
   --piece-red: #a92c24;
   --piece-black: #221d18;
 
+  /* ---- 青黛：What-If 残影预览的专用身份色 ----
+     为什么可以破例加第五组：残影预览是「你还没走的那一步」在盘上的投影，
+     它必须同时和纸（底）、朱砂（真走子的红）、玉（确认）都区分得开 ——
+     四组里没有任何一个能兼任。青黛（#2f5d6b）是国画里与朱砂、赭石同页的
+     冷色，压得住宣纸，也不与玉的绿相混（玉偏翠，青黛偏蓝）。
+     消费方（drill / entry 线程）只许整组引用，不许拆出单值再用：
+       --tint-preview        实体：残影棋子描字、预览标签（对 paper-1 6.49:1）
+       --tint-preview-bright 提亮：轨迹头、高亮边（5.28:1，仍达 AA）
+       --tint-preview-wash   面：残影底晕（12% alpha，刻意淡）
+       --tint-preview-edge   边：残影轮廓（32% alpha）
+       --tint-trace-from/to  轨迹：墨痕式的渐隐两端（35% → 4%）
+     乌墨下整套提亮为夜光青（#7cc0cf 起），见文末 wumu 块。 */
+  --tint-preview: #2f5d6b;
+  --tint-preview-bright: #3a6b7a;
+  --tint-preview-wash: rgba(47, 93, 107, 0.12);
+  --tint-preview-edge: rgba(47, 93, 107, 0.32);
+  --tint-trace-from: rgba(47, 93, 107, 0.35);
+  --tint-trace-to: rgba(47, 93, 107, 0.04);
+
   /* ---- 光：整个界面只有一盏，在左上，投影一律朝右下 ----
      --light-x 是投影的横向系数（纵向恒为 1）。方向只在这里定一次，写法也只有一条：
      **每个投射影的横向分量都写成 `calc(<纵向位移> * var(--light-x))`** —— 于是
@@ -70,12 +111,19 @@
          真正表达凹凸的那种（如 .seal span 的阴刻）算光影 —— 要跟方向一致、符号相反。 */
   --light-x: 0.42;
 
-  /* ---- 字体 ---- */
+  /* ---- 字体 ----
+     策略声明（诚实版）：本产品**不自托管**任何 webfont —— 不建 @font-face、
+     不 preload、不假装修载。"XQ Serif" 保留在栈首：它是设计语言里那枚签名
+     衬线的名字，装了的设备（设计评审机）直接命中；没装的设备按宋体系诚实
+     回退（macOS Songti SC → Windows SimSun → Linux Noto/Source Han → serif），
+     三个平台三种脸是已知代价，换来的首帧零阻塞与零 CLS。
+     两条铁律：① 全站字体栈只有这一份定义，tw.css 经 @theme inline 桥接，
+     不许再出现平行栈；② 回退链末端必须是 generic family，不许悬空。 */
   --font-display: "XQ Serif", "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC",
     "SimSun", serif;
   --font-kai: "XQ Serif", "STKaiti", "KaiTi", "Kaiti SC", "楷体", "STSong", serif;
-  --font-ui: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-    system-ui, -apple-system, sans-serif;
+  --font-ui: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    sans-serif;
   --font-num: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas,
     "Menlo", monospace;
 
@@ -89,6 +137,22 @@
     calc(6px * var(--light-x)) 6px 20px -12px rgba(43, 35, 26, 0.2);
   --shadow-float: calc(2px * var(--light-x)) 2px 6px rgba(43, 35, 26, 0.08),
     calc(20px * var(--light-x)) 20px 44px -20px rgba(43, 35, 26, 0.3);
+
+  /* ---- 层叠阶梯（overlay-contract 线程消费，命名即契约）---- */
+  /* 档位表 —— 具体层请对照注释里的语义，不要凭感觉插值：
+       --z-veil    100  模态纱罩：压暗全屏的那层，画在 modal 之下
+       --z-drawer  200  抽屉：侧抽栏 / 抽屉式面板，浮于内容、低于模态
+       --z-modal   300  模态：对话框及其纱罩容器（现存 .overlay 即此档）
+       --z-desk    400  全屏工作台：特训营 / 复盘台 / 排局台
+       --z-toast   500  提示条：永远在最上，覆盖包括 desk 在内的一切
+     现存锚点与此表对齐：.toast-stack = 500、.overlay = 300，迁移即改名、
+     零视觉变化。页内 chrome（zen-hud 50、rail 抽屉 70、棋盘层 ≤60）全部
+     低于 veil，不需要也不许进这张表。 */
+  --z-veil: 100;
+  --z-drawer: 200;
+  --z-modal: 300;
+  --z-desk: 400;
+  --z-toast: 500;
 
   /* ---- 版面净距 ---- */
   /* 回合条药丸（.turn-badge）的实际高度：行高 20px + 上下 padding 5px×2 + 边框 1px×2。
@@ -155,49 +219,84 @@
 }
 
 /* ==========================================================================
-   乌墨：深灰底、米白线。只此一套暗色，其余材质主题已移除。
+   乌墨：夜色漆器。只此一套暗色，其余材质主题已移除。
+   --------------------------------------------------------------------------
+   艺术方向（不是令牌替换）：宣纸是「一张被左上灯照着的纸」，乌墨是
+   「一盏灯下的漆器」。三件事跟着换：
+
+   1. **纸的阶梯反转**。宣纸里号码越大越「沉」（0 最亮→4 最暗）；乌墨里
+      深浅语义倒转 —— 1 是夜的底，2/3/4 是坐在底上的 chip、装饰与控件，
+      「接得到夜光」才亮，依次增亮（4 是滚动条拇指与 toast 状态点的
+      控件色，两个消费者都要求它亮得出）；0 是最受光的顶面（弹层、药丸、
+      行），微微偏暖（灯是暖的）。原稿 paper-0 暗于 paper-2/3， elevation
+      语义是倒的，已重排。
+   2. **棋子重做受光模型**。四层明度不再压成单色 #2c2c31（那等于把朱红
+      漆器拍成灰塑料片）：改成深褐四层（受光面 #372e26 → 暗部 #1c1712），
+      红黑双方靠字色（提亮朱 #e0695a / 骨白 #e4dccb）区分，瓷环在深褐上
+      的分离度也从 2.6:1 回到 4:1 以上。棋盘三层恢复微弱差（织物还在，
+      只是夜里看不出纹理，看得出厚薄），晕影从「透明」恢复为压场的暗角。
+   3. **投影重建**。--shadow-panel 从 none 恢复：暗色里投影不是不存在，
+      是黑得发闷 —— 单光源纪律不变（横分量仍 = 纵向 × --light-x），
+      透明度压低。--shadow-float 顺手也收回 0.42 纪律（原稿是正下方
+      垂直投影，违背光源契约）。
+
+   对比度：ink-3/mute/4 三档小字对 paper-1 达 6.41/6.89/7.40，对最亮的
+   顶面 paper-0 也不低于 5.06；朱砂从 4.38:1 补到 6.02:1（对顶面 4.76）。
    ========================================================================== */
 [data-theme="wumu"] {
-  --paper-0: #1e1e22;
+  --paper-0: #2d2a30;
   --paper-1: #17171a;
-  --paper-2: #202024;
-  --paper-3: #2a2a2f;
+  --paper-2: #202027;
+  --paper-3: #26262d;
   --paper-4: #3a3a40;
+  --paper-warm: #241f1a;
 
   --ink-0: #f1eadb;
   --ink-1: #ece4d6;
   --ink-2: #c4bcae;
-  --ink-3: #8f887c;
-  --ink-4: #66615a;
-  --ink-mute: #77726a;
+  --ink-3: #a09a90;
+  --ink-4: #aca69c;
+  --ink-mute: #a6a096;
 
   --hairline: rgba(236, 228, 214, 0.1);
   --hairline-strong: rgba(236, 228, 214, 0.22);
 
-  --cinnabar: #d0574a;
-  --cinnabar-bright: #de6a5c;
-  --cinnabar-wash: rgba(208, 87, 74, 0.14);
-  --cinnabar-edge: rgba(208, 87, 74, 0.38);
+  --cinnabar: #e0786a;
+  --cinnabar-bright: #e8857a;
+  --cinnabar-wash: rgba(224, 120, 106, 0.1);
+  --cinnabar-edge: rgba(224, 120, 106, 0.38);
 
-  --jade: #4a9f84;
-  --jade-bright: #5bb396;
-  --jade-wash: rgba(74, 159, 132, 0.14);
+  --jade: #57b393;
+  --jade-bright: #6ec9a8;
+  --jade-wash: rgba(87, 179, 147, 0.12);
 
-  --board-face-1: #1e1e22;
-  --board-face-2: #1e1e22;
-  --board-face-3: #1e1e22;
+  /* 夜里的朱砂被灯照成珊瑚：深字才压得住（5.41:1），白字会飘 */
+  --ink-on-accent: #3d1410;
+
+  --board-face-1: #232019;
+  --board-face-2: #1f1c16;
+  --board-face-3: #1b1813;
   --board-line: #cfc6b4;
-  --board-vignette: rgba(0, 0, 0, 0);
+  --board-vignette: rgba(0, 0, 0, 0.35);
 
-  --disc-face-1: #2c2c31;
-  --disc-face-2: #2c2c31;
-  --disc-face-3: #2c2c31;
-  --disc-face-deep: #2c2c31;
+  --disc-face-1: #372e26;
+  --disc-face-2: #2e261f;
+  --disc-face-3: #251e18;
+  --disc-face-deep: #1c1712;
   --piece-red: #e0695a;
   --piece-black: #e4dccb;
 
-  --shadow-panel: none;
-  --shadow-float: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+  --tint-preview: #7cc0cf;
+  --tint-preview-bright: #8acad8;
+  --tint-preview-wash: rgba(124, 192, 207, 0.14);
+  --tint-preview-edge: rgba(124, 192, 207, 0.4);
+  --tint-trace-from: rgba(124, 192, 207, 0.45);
+  --tint-trace-to: rgba(124, 192, 207, 0.05);
+
+  --shadow-panel: calc(1px * var(--light-x)) 1px 2px rgba(0, 0, 0, 0.4),
+    calc(6px * var(--light-x)) 6px 20px -12px rgba(0, 0, 0, 0.5);
+  --shadow-float: calc(2px * var(--light-x)) 2px 8px rgba(0, 0, 0, 0.5),
+    calc(20px * var(--light-x)) 20px 44px -18px rgba(0, 0, 0, 0.6);
 
   --trail-red: rgba(224, 105, 90, 0.4);
   --trail-red-fade: rgba(224, 105, 90, 0.06);

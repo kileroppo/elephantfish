@@ -257,8 +257,11 @@ try {
 if (!cssText) {
   bad(`读不到构建产物 CSS（${distDir}）—— 改了样式要先 npm run build`)
 } else {
-  const hits = cssText.match(/transition:\s*all/gi) || []
-  if (hits.length) bad(`构建产物里还有 ${hits.length} 处 transition:all —— 显式列属性`)
+  // 编译产物里 Tailwind 的 transition-all 落地成 transition-property:all，
+  // 老正则只认 transition:\s*all，看不见这一形态 —— 曾经全树约 70 处
+  // transition-all 就是从这扇门溜过去的。两种形态一起扫。
+  const hits = cssText.match(/transition(?:-property)?\s*:\s*all/gi) || []
+  if (hits.length) bad(`构建产物里还有 ${hits.length} 处 transition:all / transition-property:all —— 显式列属性`)
   else ok('无 transition:all  （构建产物已扫，属性值全部显式列出）')
 }
 

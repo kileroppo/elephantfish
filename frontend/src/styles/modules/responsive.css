@@ -34,7 +34,10 @@
   }
 
   /* 窄屏解除高度与弹性挤压限制，改为自然流式纵向排版。
-     消除外层 height: 100% 带来的 grid 强制挤压，确保各区块依序自然堆叠。 */
+     消除外层 height: 100% 带来的 grid 强制挤压，确保各区块依序自然堆叠。
+     padding-bottom 只在与桌面齐平的 18px：88px 那份「底栏占位」是给从未存在的
+     底栏留的化石 —— 底栏（.action-dock）只在 ≤720px 显形，占位随之只留在
+     那一档（见下面 720 块），平板档不再白扔 70px。 */
   .workspace,
   .workspace.no-left,
   .workspace.no-right,
@@ -44,7 +47,7 @@
     flex: none;
     grid-template-columns: minmax(0, 1fr);
     grid-auto-rows: auto;
-    padding-bottom: max(88px, calc(env(safe-area-inset-bottom, 0px) + 72px));
+    padding-bottom: 18px;
   }
 
   /* 顶栏在窄屏不需要换布局：.topbar 是 flex，写 grid-template-columns
@@ -92,12 +95,60 @@
     margin-top: var(--board-clearance);
   }
 
-  /* 现场列主操作区：应手台/排局控制台排在棋盘正下方 */
+  /* 现场列主操作区：应手台排在棋盘正下方
+     （旧排局台 SetupPanel 已删，其 .setup-panel 排版规则一并移除） */
   .stage > .relay-compact,
-  .stage > .setup-panel,
-  .relay-compact,
-  .setup-panel {
+  .relay-compact {
     order: 3;
+  }
+
+  /* 控制栏触摸目标与排印修正（桌面零变化：这些类在桌面没有任何规则）。
+     段位卡 / 执子选择 / 新局 / 快捷 Dock 从 32-36px 抬到 44px 命中区；
+     底部文字链（自由排局 · 认输）约 22px，补足 44px 高度；
+     9.5/10px 微型字统一提到 11px —— 拇指点得到，老花眼读得清。 */
+  .cr-tier,
+  .cr-side,
+  .cr-newgame,
+  .cr-dock-btn {
+    min-height: 44px;
+  }
+
+  .cr-link {
+    min-height: 44px;
+  }
+
+  .cr-micro {
+    font-size: 11px;
+  }
+
+  /* 段位卡右下角的次级徽章：与 11.5px 的段位名只差半档，层级不塌 */
+  .cr-micro-sm {
+    font-size: 10.5px;
+  }
+
+  /* 棋谱行是可点的（点击进复盘台）：26px 行高对拇指是折磨 */
+  .move-cell {
+    min-height: 44px;
+  }
+
+  /* 候选手排名行（RankList）与后续走向签（PvBlock）：手机上只有点击没有
+     悬停（组件里已补 tap 预览），命中区随之补齐 —— 34px 视觉 + 5px 热区 */
+  .rank-row {
+    min-height: 44px;
+  }
+
+  .pv-step {
+    min-height: 34px;
+    position: relative;
+  }
+
+  .pv-step::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -5px;
+    bottom: -5px;
   }
 
   /* 窄屏下未打开的控制侧栏不占位 */
@@ -158,9 +209,11 @@
     padding-bottom: max(88px, calc(env(safe-area-inset-bottom, 0px) + 72px));
   }
 
-  .app-shell {
-    padding-bottom: 72px;
-  }
+  /* 旧稿这里有一条 .app-shell { padding-bottom: 72px } 的死规则：
+     全仓没有任何元素挂 .app-shell，注释里「由底栏按键接管」的那个底栏
+     也从未存在。底栏现已真实落地（.action-dock，见 controls.css），
+     占位由 .workspace 的 padding-bottom: max(88px, safe-area+72px) 承担，
+     死规则删净，不再给化石层续费。 */
 
   /* 顶栏紧凑单行自适应：高度压缩至 48px，为手机棋盘腾出宝贵首屏纵向空间 */
   .topbar {
@@ -205,9 +258,9 @@
   }
 
   .setting-link {
-    min-height: 28px;
-    height: 28px;
-    padding: 0 4px;
+    min-height: 36px;
+    height: 36px;
+    padding: 0 6px;
     font-size: 11px;
     flex-shrink: 0;
   }
@@ -222,30 +275,51 @@
     margin-left: auto;
   }
 
-  .mode-segmented button {
-    height: 26px;
-    padding: 0 8px;
-    font-size: 11px;
+  /* 顶栏触摸目标补齐：视觉 36px + 伪元素上下各 4px 热区 = 44px 命中
+     （Apple HIG）。顶栏是 overflow-x:auto 的滚动容器，伪元素只在
+     padding 盒内（上下 6px）扩张，不越界、不裁切；左右不扩张，
+     相邻按钮的热区永远不重叠。原 mode-segmented / tools-group 两条
+     死规则（全无元素使用）已删。 */
+  .topbar-actions button,
+  .setting-link,
+  .engine-pill,
+  .mode-tab,
+  .topbar-drill {
+    height: 36px;
+    position: relative;
   }
 
-  .tools-group {
-    padding-left: 4px;
-  }
-
-  .tools-group button {
-    height: 26px;
-    padding: 0 6px;
-    font-size: 11px;
+  .topbar-actions button::after,
+  .setting-link::after,
+  .engine-pill::after,
+  .mode-tab::after,
+  .topbar-drill::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -4px;
+    bottom: -4px;
   }
 
   .icon-btn {
-    height: 32px;
+    height: 36px;
     padding: 0 8px;
     font-size: 11.5px;
     gap: 3px;
     border-radius: var(--r-sm);
     flex: 1 1 auto;
     justify-content: center;
+    position: relative;
+  }
+
+  .icon-btn::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -4px;
+    bottom: -4px;
   }
 
   .icon-btn svg {
@@ -299,28 +373,9 @@
 
 
 
-  /* 文本录入栏紧凑化 */
-  .type-toggle-btn {
-    min-height: 32px;
-    height: 32px;
-    padding: 4px 14px;
-    font-size: 12px;
-    border-radius: 999px;
-  }
-
-  .type-inline-box {
-    padding: 4px 8px;
-    gap: 6px;
-  }
-
+  /* 窄屏录入胶囊：按钮收一档，输入框字号随手 —— 胶囊本体 38px 不变，
+     与桌面同一只盒子（2026-11-18 录入栏改流内胶囊后此处从简）。 */
   .type-inline-box input {
-    height: 32px;
-    font-size: 12px;
-  }
-
-  .type-inline-box .btn {
-    height: 32px;
-    padding: 0 8px;
     font-size: 12px;
   }
 
@@ -333,19 +388,42 @@
     grid-template-columns: 1fr;
   }
 
-  /* 触控控件尺寸标准（>=32px，适手且不笨重） */
+  /* 触控控件尺寸标准：34px 视觉 + 上下各 5px 伪元素热区 = 44px 命中。
+     注释里曾经写着「≥32px，适手且不笨重」—— 那是鼠标时代的自白；
+     Apple HIG 与 Awwwards/Webby 的易用性判据都认 44px。视觉尺寸不动
+     （笨重依旧不笨重），只把命中区补到尺子上。 */
   .btn,
   .seg,
   .btn-sm {
     height: 34px;
     font-size: 12.5px;
+    position: relative;
   }
   .preset {
     height: 34px;
     font-size: 12px;
+    position: relative;
+  }
+  .btn::after,
+  .seg::after,
+  .btn-sm::after,
+  .preset::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -5px;
+    bottom: -5px;
   }
   .panel {
     padding: 12px;
+  }
+
+  /* 底部操作条显形：≤720px 它是常驻 chrome，>720px 回到 display:none
+     （controls.css 的基态）。workspace 的 padding-bottom 早已为它留好
+     88px 位，棋谱末尾不会被压进条里。 */
+  .action-dock {
+    display: block;
   }
 }
 

@@ -271,7 +271,12 @@ export function ReplayDesk(props?: ReplayDeskProps) {
       if (e.key === 'Escape') {
         e.preventDefault()
         onClose()
-      } else if (e.key === 'ArrowLeft') {
+        return
+      }
+      // 修饰键守卫：Ctrl/Cmd+←→ 在系统里是文本与导航语义，复盘台的翻手键
+      // 不与它们相撞（与特训营同款防卫，ia-desks F9）。
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key === 'ArrowLeft') {
         e.preventDefault()
         go(index - 1)
       } else if (e.key === 'ArrowRight') {
@@ -306,14 +311,14 @@ export function ReplayDesk(props?: ReplayDeskProps) {
 
   return (
     <div
-      className={`overlay replay-veil fixed inset-0 z-40 bg-ink-0/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 select-none transition-opacity duration-200 ${
-        leaving ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      className={`overlay replay-veil fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-5 select-none ${
+        leaving ? 'is-leaving' : ''
       }`}
       onClick={onClose}
     >
       <div
-        className={`sheet replay-desk w-[min(1280px,96vw)] h-[min(92vh,920px)] flex flex-col overflow-hidden p-4 sm:p-5 bg-paper-0/98 rounded-3xl shadow-[0_24px_80px_rgba(0,0,0,0.25)] border border-hairline transition-all duration-200 ${
-          leaving ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
+        className={`sheet replay-desk w-[min(1280px,96vw)] h-[min(92vh,920px)] flex flex-col overflow-hidden p-4 sm:p-5 bg-paper-0/98 rounded-3xl shadow-[var(--shadow-float)] border border-hairline ${
+          leaving ? 'is-leaving' : ''
         }`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -334,12 +339,16 @@ export function ReplayDesk(props?: ReplayDeskProps) {
         />
 
         {error && (
-          <p className="hint replay-hint text-xs text-red-600 my-1" data-replay-error-text="">
+          <p className="hint replay-hint text-xs text-cinnabar my-1" data-replay-error-text="" role="alert">
             {error}
           </p>
         )}
 
-        {replay?.error && <p className="hint replay-hint text-xs text-red-600 my-1">{replay.error}</p>}
+        {replay?.error && (
+          <p className="hint replay-hint text-xs text-cinnabar my-1" role="alert">
+            {replay.error}
+          </p>
+        )}
 
         {game && replay && !replay.error && (
           <div

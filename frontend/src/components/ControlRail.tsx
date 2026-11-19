@@ -87,9 +87,9 @@ export function ControlRail(props: ControlRailProps) {
   const isPlayerRed = playMode === 'relay' ? isEngineRed : !isEngineRed
   const canUndo = !over && game.ply > 0 && !g.thinking
 
-  return (
+  const rail = (
     <aside
-      className={`rail rail-left w-full max-w-[var(--rail-l,262px)] flex flex-col p-1.5 transition-all select-none ${
+      className={`rail rail-left w-full max-w-[var(--rail-l,262px)] flex flex-col p-1.5 transition-[opacity,transform] select-none ${
         open ? 'is-open' : ''
       }`}
       aria-label="对局控制"
@@ -108,7 +108,7 @@ export function ControlRail(props: ControlRailProps) {
           </div>
           <div className="flex items-center gap-1">
             <span
-              className={`text-[10px] font-num px-1.5 py-0.5 rounded-md border leading-none transition-colors ${
+              className={`cr-micro text-[10px] font-num px-1.5 py-0.5 rounded-md border leading-none transition-colors ${
                 g.thinking
                   ? 'bg-cinnabar/10 text-cinnabar border-cinnabar/30 animate-pulse'
                   : 'bg-paper-2/60 text-ink-3 border-hairline'
@@ -125,51 +125,15 @@ export function ControlRail(props: ControlRailProps) {
           </div>
         </div>
 
-        {/* 0. 窄屏下的模式切换分段器 */}
-        <div
-          className="w-full flex sm:hidden items-center p-0.5 bg-paper-2/70 rounded-lg border border-hairline text-xs font-medium"
-          role="tablist"
-          aria-label="对战模式选择"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={playMode === 'relay'}
-            className={`flex-1 py-1 px-1.5 text-[11px] rounded-md transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
-              playMode === 'relay'
-                ? 'bg-paper-0 text-cinnabar shadow-2xs font-semibold'
-                : 'bg-transparent text-ink-3 hover:text-ink-1'
-            }`}
-            onClick={() => {
-              if (playMode !== 'relay') togglePlayMode()
-            }}
-            title="信使代下模式：我是转述人，引擎朝下"
-          >
-            <span>⚡ 信使代下</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={playMode === 'sparring'}
-            className={`flex-1 py-1 px-1.5 text-[11px] rounded-md transition-all duration-200 cursor-pointer border-0 flex items-center justify-center gap-1 ${
-              playMode === 'sparring'
-                ? 'bg-paper-0 text-cinnabar shadow-2xs font-semibold'
-                : 'bg-transparent text-ink-3 hover:text-ink-1'
-            }`}
-            onClick={() => {
-              if (playMode !== 'sparring') togglePlayMode()
-            }}
-            title="实战陪练模式：我亲自下棋，我执朝我"
-          >
-            <span>🎯 实战陪练</span>
-          </button>
-        </div>
+        {/* 0. 模式切换已迁出：桌面在顶栏中央，手机在底部操作条（.action-dock）——
+            曾经这里有一份 sm:hidden 的分段器，埋在分析与棋谱两屏之下，
+            26px 的触摸目标是全站最严重的命中失败。 */}
 
         {/* 1. 对弈段位选择：2×2 雅致对弈段位小卡片矩阵 */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between px-0.5">
             <span className="text-[11px] font-medium text-ink-3">段位棋力</span>
-            <span className="text-[10px] text-ink-mute font-num">
+            <span className="cr-micro text-[10px] text-ink-mute font-num">
               {activeTier === 'apprentice'
                 ? '4层 · 拟人快'
                 : activeTier === 'club'
@@ -205,7 +169,7 @@ export function ControlRail(props: ControlRailProps) {
                   type="button"
                   role="tab"
                   aria-selected={isOn}
-                  className={`h-9 px-2 rounded-xl text-xs transition-all duration-200 active:scale-[0.98] cursor-pointer border flex items-center justify-between text-left ${
+                  className={`cr-tier h-9 px-2 rounded-xl text-xs transition-[background-color,color,border-color,box-shadow,transform] duration-200 active:scale-[0.98] cursor-pointer border flex items-center justify-between text-left ${
                     isOn
                       ? 'bg-cinnabar/8 text-cinnabar border-cinnabar/50 font-semibold shadow-2xs'
                       : 'bg-paper-1/60 hover:bg-paper-2 text-ink-2 border-hairline/80 hover:border-ink-4/40'
@@ -218,7 +182,7 @@ export function ControlRail(props: ControlRailProps) {
                     <span className="text-[11.5px] leading-tight">{shortName}</span>
                   </span>
                   <span
-                    className={`text-[9.5px] font-num px-1 py-0.25 rounded ${
+                    className={`cr-micro-sm text-[9.5px] font-num px-1 py-0.25 rounded ${
                       isOn ? 'bg-cinnabar/15 text-cinnabar' : 'text-ink-mute'
                     }`}
                   >
@@ -234,7 +198,7 @@ export function ControlRail(props: ControlRailProps) {
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between px-0.5">
             <span className="text-[11px] font-medium text-ink-3">执子与先手</span>
-            <span className="text-[10px] text-ink-mute font-num">
+            <span className="cr-micro text-[10px] text-ink-mute font-num">
               {isPlayerRed ? '红先行' : '黑后至'}
             </span>
           </div>
@@ -247,7 +211,7 @@ export function ControlRail(props: ControlRailProps) {
               type="button"
               role="radio"
               aria-checked={isPlayerRed}
-              className={`h-8.5 px-2 rounded-xl text-xs transition-all duration-200 active:scale-95 cursor-pointer border flex items-center justify-center gap-1.5 ${
+              className={`cr-side h-8.5 px-2 rounded-xl text-xs transition-[background-color,color,border-color,box-shadow,transform] duration-200 active:scale-95 cursor-pointer border flex items-center justify-center gap-1.5 ${
                 isPlayerRed
                   ? 'bg-cinnabar/10 text-cinnabar border-cinnabar/50 font-semibold shadow-2xs'
                   : 'bg-paper-1/60 hover:bg-paper-2 text-ink-2 border-hairline/80'
@@ -269,7 +233,7 @@ export function ControlRail(props: ControlRailProps) {
               type="button"
               role="radio"
               aria-checked={!isPlayerRed}
-              className={`h-8.5 px-2 rounded-xl text-xs transition-all duration-200 active:scale-95 cursor-pointer border flex items-center justify-center gap-1.5 ${
+              className={`cr-side h-8.5 px-2 rounded-xl text-xs transition-[background-color,color,border-color,box-shadow,transform] duration-200 active:scale-95 cursor-pointer border flex items-center justify-center gap-1.5 ${
                 !isPlayerRed
                   ? 'bg-ink-0/10 text-ink-0 border-ink-1/40 font-semibold shadow-2xs'
                   : 'bg-paper-1/60 hover:bg-paper-2 text-ink-2 border-hairline/80'
@@ -292,7 +256,7 @@ export function ControlRail(props: ControlRailProps) {
         {/* 3. 核心主操作：新局（金石印章质感全宽按钮） */}
         <button
           type="button"
-          className="h-9 w-full rounded-xl font-display text-[13px] font-semibold tracking-[0.28em] indent-[0.28em] bg-gradient-to-b from-cinnabar-bright to-cinnabar text-white hover:brightness-105 active:scale-[0.98] transition-all shadow-xs flex items-center justify-center cursor-pointer border-0"
+          className="cr-newgame h-9 w-full rounded-xl font-display text-[13px] font-semibold tracking-[0.28em] indent-[0.28em] bg-gradient-to-b from-cinnabar-bright to-cinnabar text-white hover:brightness-105 active:scale-[0.98] transition-[filter,box-shadow,transform] shadow-xs flex items-center justify-center cursor-pointer border-0"
           onClick={handleNewGame}
         >
           新局
@@ -302,7 +266,7 @@ export function ControlRail(props: ControlRailProps) {
         <div className="grid grid-cols-3 gap-1.5 pt-0.5">
           <button
             type="button"
-            className="h-8 px-1.5 rounded-lg text-[11px] font-medium bg-paper-2/60 hover:bg-paper-2 text-ink-1 border border-hairline transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+            className="cr-dock-btn h-8 px-1.5 rounded-lg text-[11px] font-medium bg-paper-2/60 hover:bg-paper-2 text-ink-1 border border-hairline transition-[background-color,color,border-color,box-shadow,transform] flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
             onClick={() => void g.undoRound()}
             disabled={!canUndo}
             title="悔棋一回合 (快捷键 Ctrl+Z)"
@@ -313,7 +277,7 @@ export function ControlRail(props: ControlRailProps) {
 
           <button
             type="button"
-            className="h-8 px-1.5 rounded-lg text-[11px] font-medium bg-paper-2/60 hover:bg-paper-2 text-ink-1 border border-hairline transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+            className="cr-dock-btn h-8 px-1.5 rounded-lg text-[11px] font-medium bg-paper-2/60 hover:bg-paper-2 text-ink-1 border border-hairline transition-[background-color,color,border-color,box-shadow,transform] flex items-center justify-center gap-1 cursor-pointer active:scale-95"
             onClick={ui.turnBoard}
             title="翻转棋盘视角 (快捷键 F)"
           >
@@ -323,7 +287,7 @@ export function ControlRail(props: ControlRailProps) {
 
           <button
             type="button"
-            className={`h-8 px-1.5 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 border ${
+            className={`cr-dock-btn h-8 px-1.5 rounded-lg text-[11px] font-medium transition-[background-color,color,border-color,box-shadow,transform] flex items-center justify-center gap-1 cursor-pointer active:scale-95 border ${
               ui.coachGuard
                 ? 'bg-jade/10 text-jade border-jade/40 font-semibold'
                 : 'bg-paper-2/60 hover:bg-paper-2 text-ink-3 border-hairline'
@@ -340,7 +304,7 @@ export function ControlRail(props: ControlRailProps) {
         <div className="flex items-center justify-between pt-1 px-1 text-[11px] text-ink-3 border-t border-hairline/60">
           <button
             type="button"
-            className={`bg-transparent border-0 cursor-pointer p-0.5 rounded transition-colors flex items-center gap-1 ${
+            className={`cr-link bg-transparent border-0 cursor-pointer p-0.5 rounded transition-colors flex items-center gap-1 ${
               setupMode
                 ? 'text-amber-600 font-semibold'
                 : 'hover:text-ink-1'
@@ -356,7 +320,7 @@ export function ControlRail(props: ControlRailProps) {
 
           <button
             type="button"
-            className={`bg-transparent border-0 cursor-pointer p-0.5 rounded transition-colors ${
+            className={`cr-link bg-transparent border-0 cursor-pointer p-0.5 rounded transition-colors ${
               confirmResign
                 ? 'text-rose-600 font-semibold animate-pulse'
                 : 'hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed'
@@ -370,7 +334,7 @@ export function ControlRail(props: ControlRailProps) {
         </div>
 
         {/* 6. 最底部微型键盘快捷键贴士（Space 语义与 EngineHero「采用最优步」一致） */}
-        <div className="text-[10px] text-ink-mute text-center pt-0.5 flex items-center justify-center gap-1.5 opacity-80">
+        <div className="cr-micro text-[10px] text-ink-mute text-center pt-0.5 flex items-center justify-center gap-1.5 opacity-80">
           <span>Space 采用</span>
           <span>·</span>
           <span>Z 禅意</span>
@@ -379,5 +343,97 @@ export function ControlRail(props: ControlRailProps) {
         </div>
       </div>
     </aside>
+  )
+
+  /* 底部操作条（.action-dock）：手机拇指区的核心动作，≤720px 由 CSS 断点
+     显隐（桌面 display:none，零 JS 嗅探窗口宽度）。
+
+     它为什么长在这里：悔棋 / 新局住在左栏，而 ≤1140px 时左栏排在
+     「分析 + 棋谱」之下 order 5 —— 375px 上走错一步想悔棋，要先滑过
+     一整本棋谱。模式切换与特训营入口随之收编：<640px 顶栏中央容器被
+     hidden 吞掉的那半屏控制，从这里补全（样式见 controls.css）。
+     全屏 Desk（特训营 / 复盘 / 帮助）打开时让位，不叠在弹层上。 */
+  const dock =
+    !ui.drillOpen && !ui.replay && !ui.help ? (
+      <nav className="action-dock" aria-label="对局快捷操作条">
+        <div className="action-dock-inner">
+          <button
+            type="button"
+            className="dock-btn is-on"
+            onClick={togglePlayMode}
+            title={
+              playMode === 'relay'
+                ? '信使代下模式 · 点击切换到实战陪练'
+                : '实战陪练模式 · 点击切换到信使代下'
+            }
+            aria-label={`当前${playMode === 'relay' ? '信使代下' : '实战陪练'}模式，点击切换`}
+          >
+            <span className="dock-glyph" aria-hidden="true">
+              {playMode === 'relay' ? '代' : '练'}
+            </span>
+            <span className="dock-label">{playMode === 'relay' ? '代下' : '陪练'}</span>
+          </button>
+
+          <button
+            type="button"
+            className="dock-btn"
+            onClick={() => void g.undoRound()}
+            disabled={!canUndo}
+            title="悔棋一回合 (快捷键 Ctrl+Z)"
+            aria-label="悔棋一回合"
+          >
+            <span className="dock-glyph" aria-hidden="true">
+              ↶
+            </span>
+            <span className="dock-label">悔棋</span>
+          </button>
+
+          <button
+            type="button"
+            className="dock-btn"
+            onClick={handleNewGame}
+            title="开始新对局 (快捷键 Ctrl+N)"
+            aria-label="开始新对局"
+          >
+            <span className="dock-glyph" aria-hidden="true">
+              新
+            </span>
+            <span className="dock-label">新局</span>
+          </button>
+
+          <button
+            type="button"
+            className="dock-btn"
+            onClick={ui.turnBoard}
+            title="翻转棋盘视角 (快捷键 F)"
+            aria-label="翻转棋盘视角"
+          >
+            <span className="dock-glyph" aria-hidden="true">
+              ⇄
+            </span>
+            <span className="dock-label">翻转</span>
+          </button>
+
+          <button
+            type="button"
+            className="dock-btn"
+            onClick={() => ui.openDrillAt()}
+            title="打开象棋实战特训营"
+            aria-label="打开特训营"
+          >
+            <span className="dock-glyph" aria-hidden="true">
+              训
+            </span>
+            <span className="dock-label">特训</span>
+          </button>
+        </div>
+      </nav>
+    ) : null
+
+  return (
+    <>
+      {rail}
+      {dock}
+    </>
   )
 }

@@ -17,6 +17,9 @@
 }
 
 .turn-badge {
+  position: relative;
+  /* 裁住易手反光（.turn-glare）：那道微光只在药丸里扫，不越界 */
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   /* 左对齐 + 定宽：圆点钉在左侧不动，文字在右边长短变化，整块纹丝不动。
@@ -40,6 +43,8 @@
 
 .turn-badge.is-engine {
   border-color: var(--cinnabar-edge);
+  /* 引擎该出手了：整枚药丸染朱砂 —— 「轮到谁」是全盘唯一配用强调色的事 */
+  color: var(--cinnabar);
 }
 
 .turn-badge.is-over {
@@ -47,8 +52,60 @@
   color: var(--ink-3);
 }
 
+/* 可点击（转述模式下展开录入栏）：hover 只换边色，不放大不位移 */
+.turn-badge.is-clickable {
+  cursor: pointer;
+}
+
+.turn-badge.is-clickable:hover {
+  border-color: var(--cinnabar-edge);
+}
+
 .turn-text {
   animation: fadeIn 220ms var(--ease-out) both;
+}
+
+/* 回合数：等宽数字钉在圆点右侧，一道竖线与正文隔开 */
+.turn-round {
+  font-family: var(--font-num);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ink-mute);
+  padding-right: 8px;
+  border-right: 1px solid var(--hairline);
+}
+
+/* 易手反光：一道纸面微光扫过药丸。key=turn（StageHead.tsx）每易手重播一次。
+   只动 transform/opacity；overflow:hidden 把它裁在药丸里。 */
+.turn-glare {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 100%
+  );
+  animation: pillGlare 640ms var(--ease-out) both;
+}
+
+@keyframes pillGlare {
+  0% {
+    opacity: 0;
+    transform: translateX(-110%);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(320%);
+  }
 }
 
 .turn-disc {
@@ -56,9 +113,26 @@
   height: 10px;
   border-radius: 50%;
   transition: background-color var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-spring);
-  /* key=game.turn（App.tsx）：每易手一次圆点重新挂载，从 .4 弹回 1 ——
+  /* key=turn（StageHead.tsx）：每易手一次圆点重新挂载，从 .4 弹回 1 ——
      「轮到你了」不靠颜色突变，靠这一下脉搏 */
   animation: discPop 240ms var(--ease-spring-sm) both;
+}
+
+/* 引擎该出手了：圆点缓慢明灭（只动 opacity）。这是「正在等你旁边那位想棋」
+   的唯一常驻微动，不抢药丸里那个 discPop 的风头。 */
+.turn-disc.is-live {
+  animation: discPop 240ms var(--ease-spring-sm) both,
+    livePulse 1.8s var(--ease-out) 260ms infinite;
+}
+
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 @keyframes discPop {
@@ -73,14 +147,42 @@
   background: var(--piece-black);
 }
 
+/* 将军旗：「将军！」是全场最有海报相的 200ms —— 一方朱砂小旗盖下来，
+   再留一次呼吸。高度与药丸取齐（--badge-h，审计契约），两枚并排像一对签。
+   checkStamp 只动 transform/opacity。breathe 动的是 box-shadow（那圈光环），
+   它按 tokens.css 的光影豁免条款不走 --light-x；也正因为它占着 box-shadow，
+   旗子本身不再另投投影 —— 光环就是它的存在感。 */
 .check-flag {
-  padding: 4px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--badge-h);
+  padding: 0 13px;
   border-radius: 999px;
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  color: #fff8f2;
-  background: var(--cinnabar);
-  animation: breathe 1.6s var(--ease-out) infinite, stampIn 240ms var(--ease-spring) both;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-indent: 0.2em; /* 尾间距补偿：视觉居中 */
+  white-space: nowrap;
+  color: var(--paper-0);
+  background: linear-gradient(180deg, var(--cinnabar-bright), var(--cinnabar));
+  animation: checkStamp 340ms var(--ease-spring) both,
+    breathe 1.6s var(--ease-out) 340ms infinite;
+}
+
+@keyframes checkStamp {
+  from {
+    opacity: 0;
+    transform: scale(1.32);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.96);
+  }
+  to {
+    transform: scale(1);
+  }
 }
 
 @keyframes breathe {

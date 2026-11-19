@@ -19,8 +19,8 @@
   height: 100%;
   border-radius: 50%;
   border: 2px dashed var(--cinnabar);
-  background: rgba(184, 51, 42, 0.18);
-  box-shadow: 0 0 14px rgba(184, 51, 42, 0.45);
+  background: color-mix(in srgb, var(--cinnabar) 18%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--cinnabar) 45%, transparent);
   animation: weaknessBreathe 1.8s infinite ease-in-out;
 }
 
@@ -35,9 +35,17 @@
   }
 }
 
-/* 核心主攻子高光欠身呼吸 */
+/* 核心主攻子高亮欠身呼吸
+   原来是 #d4af37 金 glow + !important —— 体系外的第五色。朱砂才是这个产品里
+   「看这颗子」的语言（弱点标记、威胁轨迹都归它管），金光在这里只是逃逸。
+   光环叠在 .piece-face 的受光模型之上（var(--face-shadow) 保留），不是替换 ——
+   选中/悬停等同级规则都在 board.css 里排在本文件之前，这里靠后置顺序胜出，
+   不再需要 !important。 */
 .piece.is-master-key .piece-face {
-  box-shadow: 0 0 0 3px #d4af37, 0 0 16px rgba(212, 175, 55, 0.65) !important;
+  box-shadow:
+    var(--face-shadow),
+    0 0 0 3px var(--cinnabar),
+    0 0 16px color-mix(in srgb, var(--cinnabar) 45%, transparent);
   animation: masterKeyFloat 2s infinite ease-in-out;
 }
 

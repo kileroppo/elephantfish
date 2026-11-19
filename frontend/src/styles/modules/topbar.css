@@ -59,3 +59,44 @@
   font-size: 12px;
   user-select: none;
 }
+
+/* ==========================================================================
+   模式文字签：代 / 练 / 训
+   --------------------------------------------------------------------------
+   纸墨朱砂玉的艺术方向，不能靠第一帧的彩色 emoji 宣誓。标记「哪一种模式」
+   靠一方楷体小印：未选中是纸面木签，选中染朱砂；特训营开了整枚翻朱砂，
+   签字翻纸色。原先这里站着 ⚡🎯🏹 三个彩色图标，其中 🎯 还与右侧「专注」
+   共用一枚（一词两用）—— 现在模式侧一律用字，与标题栏的人设语言一致。 */
+.mode-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  padding-bottom: 1px; /* 楷体字形的视觉居中补偿 */
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper-2);
+  font-family: var(--font-kai);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-3);
+  user-select: none;
+  transition: color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.mode-tab[aria-selected="true"] .mode-glyph {
+  color: var(--cinnabar);
+  border-color: var(--cinnabar-edge);
+  background: var(--cinnabar-wash);
+}
+
+/* 特训营：开了整枚按钮翻朱砂，签字跟着翻纸色 */
+.topbar-drill.is-on .mode-glyph {
+  color: var(--paper-0);
+  border-color: var(--cinnabar-bright);
+  background: transparent;
+}

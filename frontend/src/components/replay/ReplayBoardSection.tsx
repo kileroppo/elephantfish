@@ -112,7 +112,7 @@ export function ReplayBoardSection({
           type="button"
           className={`h-7 px-2.5 rounded-lg text-xs font-medium transition active:scale-95 cursor-pointer flex items-center gap-1 border shrink-0 ${
             autoPlay
-              ? 'bg-cinnabar text-white border-cinnabar font-semibold shadow-xs'
+              ? 'bg-cinnabar text-[var(--ink-on-accent)] border-cinnabar font-semibold shadow-xs'
               : 'bg-paper-2/70 hover:bg-paper-2 text-ink-2 border-hairline'
           }`}
           onClick={onToggleAutoPlay}
@@ -153,7 +153,7 @@ export function ReplayBoardSection({
             type="button"
             className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-2 hover:text-ink-0 hover:bg-paper-2 transition cursor-pointer border border-hairline ml-0.5 text-xs font-medium"
             onClick={onToggleFlip}
-            title="翻转棋盘视角（快捷键 F）"
+            title="翻转棋盘视角"
           >
             ⇅
           </button>

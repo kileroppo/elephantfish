@@ -25,7 +25,7 @@ export function ReplayCausalCard({
               type="button"
               className={`btn btn-sm text-xs px-2.5 py-1 rounded cursor-pointer transition-colors ${
                 pvMode === 'best'
-                  ? 'btn-primary !bg-cinnabar !text-white'
+                  ? 'btn-primary !bg-cinnabar !text-[var(--ink-on-accent)]'
                   : 'btn-ghost border border-hairline hover:bg-paper-2'
               }`}
               onClick={() => onTogglePvMode('best')}
@@ -39,7 +39,7 @@ export function ReplayCausalCard({
               type="button"
               className={`btn btn-sm text-xs px-2.5 py-1 rounded cursor-pointer transition-colors ${
                 pvMode === 'refute'
-                  ? 'btn-danger !bg-red-600 !text-white'
+                  ? 'btn-danger !bg-cinnabar !text-[var(--ink-on-accent)]'
                   : 'btn-ghost border border-hairline hover:bg-paper-2'
               }`}
               onClick={() => onTogglePvMode('refute')}
@@ -59,7 +59,7 @@ export function ReplayCausalCard({
 
       {pvMode === 'best' && causal.bestPv.length > 0 && (
         <div className="flex items-center gap-1 flex-wrap text-[11px] mt-0.5">
-          <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 font-semibold text-[10.5px]">
+          <span className="px-1.5 py-0.5 rounded bg-jade/10 text-jade font-semibold text-[10.5px]">
             正解演进
           </span>
           {causal.bestPv.slice(0, 6).map((st, i) => (
@@ -75,7 +75,7 @@ export function ReplayCausalCard({
 
       {pvMode === 'refute' && causal.refutePv.length > 0 && (
         <div className="flex items-center gap-1 flex-wrap text-[11px] mt-0.5">
-          <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-600 font-semibold text-[10.5px]">
+          <span className="px-1.5 py-0.5 rounded bg-cinnabar/10 text-cinnabar font-semibold text-[10.5px]">
             受罚反击
           </span>
           {causal.refutePv.slice(0, 6).map((st, i) => (

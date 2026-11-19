@@ -14,6 +14,7 @@ import type {
 } from '../types'
 import { Board } from './Board'
 import { buildAnimatedFrames } from '../lib/replay'
+import { landMs } from '../lib/board'
 import { play } from '../lib/sound'
 import { useExitPhase } from '../hooks/useExitPhase'
 import { useGameContext } from '../context/GameContext'
@@ -53,6 +54,25 @@ const MOTIF_FALLBACK_CATEGORY: Record<string, string> = {
   left_hanging: 'midgame',
   missed_tactics: 'midgame',
   lost_tempo: 'endgame',
+}
+
+/** 减弱动效偏好：真实降级用的不是「把动画调快」，是换一种呈现。
+ *  分步动画在该偏好下直接落末帧 + 文字摘要，不做每 1.35s 一次的瞬移幻灯片。 */
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const onChange = () => setReduced(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return reduced
 }
 
 export function DrillDesk(props?: DrillDeskProps) {
@@ -99,8 +119,19 @@ export function DrillDesk(props?: DrillDeskProps) {
   const [animPlaying, setAnimPlaying] = useState<boolean>(false)
   const animTimerRef = useRef<number | null>(null)
 
+  // Esc 二段式守卫的「上一按」时刻：训练进行中第一次 Esc 只停动画，2.6s 内的
+  // 第二次才放行退出 —— 超时则重新武装，避免误触后永久卡住。
+  const escArmedAtRef = useRef<number>(0)
+
+  // 「一击绝杀！」短泡：引擎的短泡数据只随 opponent_threat_steps 下发
+  // （good/bad steps 服务端未透传 short_bubble），绝杀得手这一刻由前端按
+  // 获胜手的落点激活 —— 与 animMode 解绑，solved 态独立驱动（原条件挡死）。
+  const [winBubble, setWinBubble] = useState<{ square: string; text: string } | null>(null)
+
   // 反击惩罚态（Rebuttal）
   const [inRebuttal, setInRebuttal] = useState(false)
+
+  const reducedMotion = useReducedMotion()
 
   // 象弈神经对抗试炼舱状态：连续走子时序流与神经心律耗时
   const [moveHistory, setMoveHistory] = useState<
@@ -180,11 +211,21 @@ export function DrillDesk(props?: DrillDeskProps) {
     }
   }, [hoveredChoice, currentPuzzle])
 
+  // 声画同拍：所有「该在落定时刻响」的音都走这里延后发射
+  // （主战局 useGame.ts 同款修法 —— 音与棋子滑行同一份 glideMs/landMs 定义）。
+  const soundTimersRef = useRef<number[]>([])
+  const scheduleSound = useCallback((fn: () => void, delay: number) => {
+    soundTimersRef.current.push(window.setTimeout(fn, Math.max(0, delay)))
+  }, [])
+
   const clearAnimTimer = useCallback(() => {
     if (animTimerRef.current !== null) {
       window.clearInterval(animTimerRef.current)
       animTimerRef.current = null
     }
+    // 发音定时器与帧定时器同生共死：停帧的时候，还没敲出去的音也一并收
+    soundTimersRef.current.forEach((t) => window.clearTimeout(t))
+    soundTimersRef.current = []
   }, [])
 
   // 当前选中的动画步骤数组
@@ -219,10 +260,17 @@ export function DrillDesk(props?: DrillDeskProps) {
       }
 
       setAnimMode(mode)
-      setAnimStep(0)
-      setAnimPlaying(true)
+      if (reducedMotion) {
+        // 减弱动效：直接落末帧，步骤明细交给右侧战况摘要与手动步进 ——
+        // 不做「每 1.35 秒一次瞬移」的幻灯片，那比动画更晕。
+        setAnimStep(list.length)
+        setAnimPlaying(false)
+      } else {
+        setAnimStep(0)
+        setAnimPlaying(true)
+      }
     },
-    [badSteps, goodSteps, threatSteps, clearAnimTimer, onToast],
+    [badSteps, goodSteps, threatSteps, clearAnimTimer, onToast, reducedMotion],
   )
 
   const stopAnimationToPlay = useCallback(() => {
@@ -244,10 +292,19 @@ export function DrillDesk(props?: DrillDeskProps) {
         if (prev < maxStep) {
           const next = prev + 1
           const stepInfo = activeSteps[next - 1]
-          if (stepInfo?.captured) {
-            play('capture')
-          } else {
-            play('move')
+          // 发音时刻对齐落点：帧切换只换画面，声音延后 landMs 发射 ——
+          // 与这颗子自己的滑行同拍，而不是比画面早一整段滑行。
+          if (stepInfo?.iccs && stepInfo.iccs.length >= 4) {
+            const isLast = next === maxStep
+            const captured = !!stepInfo.captured
+            scheduleSound(() => {
+              if (captured || (isLast && animMode === 'bad')) {
+                // 第 4 步「亏损兑现」：无论是否吃子，都给一记重击 —— 代价落地的分量
+                play('capture')
+              } else {
+                play('move')
+              }
+            }, landMs(stepInfo.iccs.slice(0, 2), stepInfo.iccs.slice(2, 4)))
           }
           return next
         } else {
@@ -259,7 +316,7 @@ export function DrillDesk(props?: DrillDeskProps) {
     }, 1350)
 
     return clearAnimTimer
-  }, [animPlaying, animMode, activeSteps, clearAnimTimer])
+  }, [animPlaying, animMode, activeSteps, clearAnimTimer, scheduleSound])
 
   // 当动画帧变化时，同步更新棋盘上的箭头和薄弱格高亮，以及顶部大白话解说
   useEffect(() => {
@@ -303,6 +360,7 @@ export function DrillDesk(props?: DrillDeskProps) {
     setHints([])
     setHintLevel(0)
     setSolved(false)
+    setWinBubble(null)
     setPvTrace([])
     setInRebuttal(false)
     setVisualClues({})
@@ -491,7 +549,22 @@ export function DrillDesk(props?: DrillDeskProps) {
         setSolved(true)
         setInRebuttal(false)
         if (res.xray) setXray(res.xray)
-        play('win')
+        // 绝杀得手：获胜手落定那一刻，琶音才起 —— 与棋子滑行同拍，
+        // 而不是响应到达即响（那会比画面早整整一段滑行）。
+        const winIccs = res.user_move?.iccs || iccs
+        const winLand = winIccs.length >= 4 ? landMs(winIccs.slice(0, 2), winIccs.slice(2, 4)) : 0
+        // 「一击绝杀！」短泡：只认直接绝杀路径（一锤定音）；「目标达成」类
+        // 通关由胶囊与判词说话，不借绝杀的文案。
+        if (res.message.includes('一锤定音') && winIccs.length >= 4) {
+          setWinBubble({ square: winIccs.slice(2, 4), text: '一击绝杀！' })
+        } else {
+          setWinBubble(null)
+        }
+        scheduleSound(() => {
+          play('win')
+          // 无提示实战检验一通关：落定后再补一记木铎重音 —— 盲打拿下，值得双响
+          if (stage === 'exam') scheduleSound(() => play('check'), 520)
+        }, winLand)
         setMoveHistory((prev) => [
           ...prev,
           {
@@ -529,6 +602,9 @@ export function DrillDesk(props?: DrillDeskProps) {
         void refreshCatalog()
       } else if (res.outcome === 'bad_move' && res.rebuttal) {
         setInRebuttal(true)
+        // 受罚同拍：朱砂胶囊弹出的这一刻，lose 下行三音压住盘面 ——
+        // 走错受罚是产品最独特的机制，它的最高潮不能是静音的。
+        play('lose')
         setMoveHistory((prev) => [
           ...prev,
           {
@@ -572,11 +648,28 @@ export function DrillDesk(props?: DrillDeskProps) {
 
         if (bSteps.length > 0 && res.base_game) {
           setBaseGame(res.base_game)
-          setAnimMode('bad')
-          setAnimStep(1)
-          setAnimPlaying(true)
+          // 走错那一手落定补一记轻木击：「落错」要有体感 —— 它滑行落定的
+          // 时刻，比 lose 的惩罚三音晚一小步，一重一轻，两层声音说一件事。
+          const wrongIccs = res.user_move?.iccs || iccs
+          if (wrongIccs.length >= 4) {
+            scheduleSound(
+              () => play('fault'),
+              landMs(wrongIccs.slice(0, 2), wrongIccs.slice(2, 4)),
+            )
+          }
+          if (reducedMotion) {
+            // 减弱动效：惩罚动画直接落末帧，步骤明细在右侧战况摘要里
+            setAnimMode('bad')
+            setAnimStep(bSteps.length)
+            setAnimPlaying(false)
+          } else {
+            setAnimMode('bad')
+            setAnimStep(1)
+            setAnimPlaying(true)
+          }
         }
-        onToast('这步棋会吃亏！棋盘正在为你分步演示接下来几步的连锁后果', 'warn')
+        // 判词只活在盘面胶囊 + CombatChronicle 告警面板里 —— 系统 toast 在这里
+        // 只会复读胶囊已经说的话，与签名时刻抢戏（P2-1）。
       } else if (res.outcome === 'continue') {
         setInRebuttal(false)
         setBaseGame(res.game)
@@ -604,7 +697,21 @@ export function DrillDesk(props?: DrillDeskProps) {
               ]
             : []),
         ])
-        play('move')
+        // 我方着手 + 引擎应手：两手都落定才发音（ Board 只在单手换格时滑行，
+        // 双手同帧是瞬切 —— 声音按「两手次第落地」排，读起来才像对弈交流）。
+        const addedMoves = res.game.records.length - (game?.records.length ?? 0)
+        const lastRec = res.game.records[res.game.records.length - 1]
+        if (addedMoves >= 2 && lastRec) {
+          scheduleSound(() => play('move'), 60)
+          scheduleSound(() => play(lastRec.captured ? 'capture' : 'move'), 360)
+        } else if (lastRec?.iccs && lastRec.iccs.length >= 4) {
+          scheduleSound(
+            () => play(lastRec.captured ? 'capture' : 'move'),
+            landMs(lastRec.iccs.slice(0, 2), lastRec.iccs.slice(2, 4)),
+          )
+        } else {
+          play('move')
+        }
         void refreshCatalog()
       } else {
         setFeedback({
@@ -629,6 +736,7 @@ export function DrillDesk(props?: DrillDeskProps) {
     setAnimPlaying(false)
     setAnimMode('none')
     setAnimStep(0)
+    setWinBubble(null)
     try {
       const res = await api.trainingUndo(currentPuzzle.id)
       setMoveHistory((prev) => (prev.length <= 2 ? [] : prev.slice(0, -2)))
@@ -657,6 +765,7 @@ export function DrillDesk(props?: DrillDeskProps) {
       setGame(res.game)
       setBaseGame(res.base_game || res.game)
       setSolved(false)
+      setWinBubble(null)
       setInRebuttal(false)
       setStage(targetStage)
       setMoveHistory([])
@@ -807,10 +916,23 @@ export function DrillDesk(props?: DrillDeskProps) {
       const isTyping = !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable))
       if (e.key === 'Escape') {
         e.preventDefault()
+        // 与遮罩点击同标准：惩罚动画 / 反驳 / 思考进行中，Esc 不掐断教学时刻 ——
+        // 第一次只停动画并提示，第二次才退出（ia F10：鼠标拦得住，键盘也要拦得住）。
+        const busy = animMode !== 'none' || inRebuttal || thinking
+        if (busy && Date.now() - escArmedAtRef.current > 2600) {
+          escArmedAtRef.current = Date.now()
+          stopAnimationToPlay()
+          onToast('再按 Esc 退出特训营', 'info')
+          return
+        }
+        escArmedAtRef.current = 0
         clearAnimTimer()
         onClose()
         return
       }
+      // 修饰键守卫：Ctrl+F 是浏览器查找、Cmd+R 是刷新 —— 特训营的快捷键表
+      // 不与操作系统语义正面相撞（ia F9）。
+      if (e.ctrlKey || e.metaKey || e.altKey) return
       if (isTyping) return
       const actions = keyActionsRef.current
       if (!actions) return
@@ -838,7 +960,7 @@ export function DrillDesk(props?: DrillDeskProps) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [mounted, leaving, onClose, clearAnimTimer])
+  }, [mounted, leaving, onClose, clearAnimTimer, animMode, inRebuttal, thinking, stopAnimationToPlay, onToast])
 
   const motifPuzzles = useMemo(() => {
     if (!focusMotif) return []
@@ -865,7 +987,13 @@ export function DrillDesk(props?: DrillDeskProps) {
         text: currentStepInfo.short_bubble,
         tone: (animMode === 'bad' ? 'bad' : animMode === 'good' ? 'good' : 'threat') as 'bad' | 'good' | 'threat',
       }
-    : null
+    : solved && winBubble
+      ? {
+          square: winBubble.square,
+          text: winBubble.text,
+          tone: 'good' as const,
+        }
+      : null
 
   const displayGame =
     animMode !== 'none' && animFrames.length > 0
@@ -889,11 +1017,12 @@ export function DrillDesk(props?: DrillDeskProps) {
       }}
     >
       <div
-        className={`w-[min(1240px,96vw)] h-[min(92vh,900px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-slate-50 text-slate-900 rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.2)] border border-slate-200 ${
+        className={`w-[min(1240px,96vw)] h-[min(92vh,900px)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-paper-1 text-ink-1 rounded-2xl border border-hairline ${
           leaving
             ? '[animation:sheetOut_180ms_var(--ease-out)_both]'
             : '[animation:sheetIn_400ms_var(--ease-spring-sm)_both]'
         }`}
+        style={{ boxShadow: 'var(--shadow-float)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 顶部标题栏与分类导航 */}
@@ -927,9 +1056,9 @@ export function DrillDesk(props?: DrillDeskProps) {
         />
 
         {/* 主体工作区：左棋盘 + 右侧通俗解说与动画推演面板 */}
-        <div className={`flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)] min-h-0 overflow-hidden bg-white ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
-          {/* 左侧棋盘列：特斯拉纯粹主控台 */}
-          <div className="flex flex-col items-center justify-between p-3 border-b lg:border-b-0 lg:border-r border-slate-100 bg-[#fafafa] min-h-0 overflow-hidden">
+        <div className={`flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)] min-h-0 overflow-hidden bg-paper-0 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+          {/* 左侧棋盘列 */}
+          <div className="flex flex-col items-center justify-between p-3 border-b lg:border-b-0 lg:border-r border-hairline bg-paper-1 min-h-0 overflow-hidden">
             {/* 盘面顶部沉浸战术灵动胶囊 */}
             <FloatingTacticalCapsule
               currentPuzzle={currentPuzzle}
@@ -1019,13 +1148,14 @@ export function DrillDesk(props?: DrillDeskProps) {
             />
           </div>
 
-          {/* 右侧面板列：特斯拉流式战况屏 */}
-          <div className="flex flex-col p-4 overflow-y-auto bg-white min-h-0">
+          {/* 右侧面板列：战况解说屏 */}
+          <div className="flex flex-col p-4 overflow-y-auto bg-paper-0 min-h-0">
             <CombatChronicle
               currentPuzzle={currentPuzzle}
               solved={solved}
               inRebuttal={inRebuttal}
               feedback={feedback}
+              prosCons={prosCons}
               badStepsCount={badSteps.length}
               hoveredChoice={hoveredChoice}
               choiceOptions={visibleChoices}
@@ -1034,6 +1164,9 @@ export function DrillDesk(props?: DrillDeskProps) {
               hintLevel={hintLevel}
               moveHistory={moveHistory}
               elapsedSeconds={elapsedSeconds}
+              animMode={animMode}
+              animSteps={activeSteps}
+              animStep={animStep}
               onHoverChoice={setHoveredChoice}
               onSelectChoiceRehearse={(opt) => {
                 if (opt.steps && opt.steps.length > 0) {

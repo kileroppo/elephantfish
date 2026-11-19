@@ -8,7 +8,7 @@ export function QueuedStrip({ queued, onClearQueue }: QueuedStripProps) {
 
   return (
     <div
-      className="queued-strip absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 z-45 whitespace-nowrap shadow-md border border-hairline-strong bg-paper-0 px-3 py-1.5 rounded-full flex items-center gap-2 text-xs animate-[floatIn_180ms_var(--ease-out)_both]"
+      className="queued-strip"
       data-relay-queued={queued}
     >
       <span className="text-ink-2">

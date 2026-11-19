@@ -16,7 +16,11 @@
 
 
 
-/* 浮层面板：算路动画 / 失误卡片 / 键盘录入 / 排队（绝对定位，绝不挤压或改变主舞台棋盘高度） */
+/* 浮层面板：算路动画 / 失误卡片 / 排队（绝对定位，绝不挤压或改变主舞台棋盘高度）。
+   键盘录入栏不在此列 —— 它 2026-11-18 起改为应手台下方的流内胶囊，见文末
+   .type-inline-floating 一节。
+   z 走 tokens 阶梯的 drawer 档；投影用 --shadow-float（旧值 --shadow-lg
+   在 tokens.css 里并不存在，box-shadow 会静默算成 none）。 */
 .relay-compact .live-helper-drawer {
   position: absolute;
   bottom: calc(100% + 8px);
@@ -25,43 +29,75 @@
   width: min(92vw, 680px);
   max-height: min(65vh, 460px);
   overflow-y: auto;
-  z-index: 50;
+  z-index: var(--z-drawer, 200);
   background: var(--paper-0);
   border: 1px solid var(--hairline-strong);
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-float);
   padding: 12px 16px;
   margin: 0;
   animation: floatIn 180ms var(--ease-out) both;
 }
 
+/* 退场对等：进 floatIn、出 helperOut —— useExitPhase 多留的 180ms 就播这条。
+   没有这条规则，TSX 上的 is-leaving 是空头支票，浮层会在卸载那一刻硬闪消失
+   （motion-system P2-10 同款「退出一帧删」）。keyframes 的 X 向必须保持
+   translate(-50%, …)：面板基线是 left:50% + translateX(-50%)，丢了 -50%
+   退场半路整块面板会向左漂出应手台。 */
+.relay-compact .live-helper-drawer.is-leaving {
+  animation: helperOut 180ms var(--ease-out) both;
+}
+
 /* .relay-compact .coach-interrupt-card 已重构为左下角独立悬浮卡片，不再绝对定位于棋盘之上 */
 
-.relay-compact .queued-strip {
+/* 排队条：QueuedStrip.tsx 只挂一个裸类名，外观全部在这里单一来源。
+   旧版把定位拆在 .relay-compact .queued-strip、外观拆在裸 .queued-strip
+   两条规则里，还引用过不存在的 --shadow-md（投影静默丢失）；
+   现在合并成一条完整 pill：纸底、全圆角、浮影、drawer 档 z。 */
+.queued-strip {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 45;
+  z-index: var(--z-drawer, 200);
+  display: flex;
+  align-items: center;
+  gap: 8px;
   white-space: nowrap;
-  box-shadow: var(--shadow-md);
+  padding: 6px 14px;
+  border-radius: 999px;
   border: 1px solid var(--hairline-strong);
+  background: var(--paper-0);
+  box-shadow: var(--shadow-float);
+  font-size: 12px;
+  color: var(--ink-2);
+  /* 排队条从应手区下面「长」出来，不是闪现 */
   animation: floatIn 180ms var(--ease-out) both;
 }
 
+/* 键盘录入栏：应手台下方的一枚流内胶囊，样式与应手栏同语言（等高 38px、
+   全圆角、纸色、细边、软影），具体外观写在 TypeInlineFloating.tsx 的
+   utility 里，这里只留流内布局契约与动态反馈。
+   —— 2026-11-18：旧版是 absolute + bottom:calc(100%+8px) 的浮层，压在
+   棋盘底边上，把整排路数标签（九八七六五四三二）盖得严严实实；且白盒红钮
+   与应手栏的胶囊语言两种画风。改流内后由 stage 的 flex 列自然让位。 */
 .relay-compact .type-inline-floating {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 45;
-  background: var(--paper-0);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-md);
-  padding: 6px 10px;
-  width: min(92vw, 420px);
-  animation: floatIn 180ms var(--ease-out) both;
+  width: 100%;
+  box-sizing: border-box;
+  animation: rise 180ms var(--ease-out) both;
+}
+
+/* 录入被拒：反馈落在看得见的胶囊上 —— 整圈描朱砂，内行左右摇。
+   以前只染输入框那一圈细边，胶囊化之后那样几乎看不见。 */
+.type-inline-floating:has(.type-inline-box.is-rejected) {
+  border-color: var(--cinnabar);
+}
+
+/* 录入展开时底盘让位变矮，这一列的宽度上限同步收回一格（44px = 录入胶囊
+   38px + 与应手台的 6px 间距），才能继续与变矮的棋盘边保持黄金对齐
+   （对齐公式本体在 layout.css 的 .stage > .relay-compact）。 */
+.stage > .relay-compact[data-relay-typing] {
+  max-width: min(calc((100vh - 224px) * 720 / 800), 660px);
 }
 
 @keyframes floatIn {
@@ -75,65 +111,24 @@
   }
 }
 
-
-
-.queued-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 14px;
-  border-radius: var(--r-sm);
-  background: var(--paper-2);
-  font-size: 12px;
-  color: var(--ink-2);
-  /* 排队条从应手区下面「长」出来，不是闪现 */
-  animation: rise 200ms var(--ease-out) both;
+@keyframes helperOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
 }
 
-.type-toggle-bar {
-  display: flex;
-  justify-content: center;
-}
-
-.type-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: 1px dashed var(--hairline-strong);
-  border-radius: 999px;
-  color: var(--ink-mute);
-  font-size: 11.5px;
-  cursor: pointer;
-  /* 同上：点击目标撑到 32px */
-  min-height: 32px;
-  padding: 3px 12px;
-  transition: color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
-  /* 收起录入栏时这个按钮会重新挂载 —— 回来也得是淡入，不能闪回来 */
-  animation: fadeIn 180ms var(--ease-out) both;
-}
-
-.type-toggle-btn kbd {
-  background: var(--paper-2);
-  padding: 0 4px;
-  border-radius: 3px;
-  font-size: 10px;
-}
-
-.type-toggle-btn:hover {
-  color: var(--ink-1);
-  border-color: var(--ink-4);
-  background: var(--paper-0);
-}
-
+/* 录入胶囊内的一行：输入框 + 提交 + 收起。宽度撑满胶囊，不再自限 420px ——
+   胶囊本身已经与棋盘列同宽，再限一道会出现「盒子比内容宽一圈」的错觉。 */
 .type-inline-box {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
-  max-width: 420px;
   animation: rise 200ms var(--ease-out) both;
 }
 
@@ -147,266 +142,29 @@
   40%, 80% { transform: translateX(6px); }
 }
 
+/* 输入框去边框、去底色、去内距 —— 边框由外层胶囊统一提供（盒中盒是
+   旧版「风格不符合」的一半来源：外框、内框、按钮三层边叠在一起）。
+   字号/字色与 TSX 的 text-xs / text-ink-0 对齐（本文件是无层样式，
+   会压过 layered utilities，两边必须写同一个值，不能靠 utility 覆盖）；
+   placeholder 与 focus-visible 环交还 base.css 的全局体系，不再本地覆写。 */
 .type-inline-box input {
   flex: 1;
-  padding: 6px 10px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--hairline-strong);
-  background: var(--paper-0);
-  font-size: 13px;
-  color: var(--ink-1);
-  transition: border-color var(--dur-fast) var(--ease-out);
-}
-
-.type-inline-box.is-rejected input {
-  border-color: var(--cinnabar);
-}
-
-.preset-column {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  color: var(--cinnabar);
-  background: linear-gradient(160deg, var(--paper-0), var(--paper-3));
-  box-shadow: inset 0 0 0 1px var(--hairline-strong), var(--shadow-panel);
-  font-family: var(--font-kai);
-}
-
-.brand-text h1 {
-  font-size: 19px;
-  line-height: 1.15;
-  letter-spacing: 0.14em;
-}
-
-.brand-text p {
-  margin: 1px 0 0;
-  font-size: 11.5px;
-  color: var(--ink-3);
-  letter-spacing: 0.02em;
-}
-
-.engine-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font: inherit;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   font-size: 12px;
-  font-weight: 500;
-  /* 这是给手指点的按钮，不是标签：撑到和 .icon-btn 一样高 */
-  min-height: 32px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  margin-left: 6px;
-  background: rgba(120, 120, 120, 0.1);
-  color: var(--ink-2);
-  border: 1px solid var(--hairline-strong);
-  transition: color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out),
-    transform var(--dur-xs) var(--ease-out);
-  animation: fadeIn 220ms var(--ease-out) both;
-}
-
-.engine-badge.is-clickable {
-  cursor: pointer;
-  user-select: none;
-}
-
-.engine-badge.is-clickable:hover {
-  transform: translateY(-1px);
-  background: var(--paper-2);
-  border-color: var(--ink-4);
   color: var(--ink-0);
-  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(43, 35, 26, 0.12);
 }
 
-.engine-badge.is-clickable:active {
-  transform: translateY(0) scale(0.96);
-}
+/* ==========================================================================
+   以下为存量消费者保留区
+   ========================================================================== */
 
-.engine-badge-icon {
-  font-size: 13px;
-  line-height: 1;
-}
-
-.engine-badge-switch {
-  display: inline-block;
-  font-size: 11px;
-  opacity: 0.6;
-  margin-left: 2px;
-  transition: transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast) var(--ease-out);
-}
-
-.engine-badge.is-clickable:hover .engine-badge-switch {
-  opacity: 0.95;
-  transform: rotate(180deg);
-}
-
-.engine-badge.is-pikafish {
-  background: var(--cinnabar-wash);
-  color: var(--cinnabar);
-  border-color: var(--cinnabar-edge);
-}
-
-.engine-badge.is-pikafish.is-clickable:hover {
-  background: rgba(180, 50, 42, 0.16);
-  border-color: var(--cinnabar);
-  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(180, 50, 42, 0.22);
-}
-
-.engine-side-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  min-height: 32px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  margin-left: 6px;
-  background: rgba(120, 120, 120, 0.08);
-  color: var(--ink-2);
-  border: 1px solid var(--hairline-strong);
-  transition: color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out),
-    transform var(--dur-xs) var(--ease-out);
-  cursor: pointer;
-  user-select: none;
-  animation: fadeIn 220ms var(--ease-out) both;
-}
-
-.engine-side-badge:hover {
-  transform: translateY(-1px);
-  background: var(--paper-2);
-  border-color: var(--ink-4);
-  color: var(--ink-0);
-  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(43, 35, 26, 0.12);
-}
-
-.engine-side-badge:active {
-  transform: translateY(0) scale(0.96);
-}
-
-.engine-side-disc {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  font-family: var(--font-kai);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.engine-side-disc.side-red {
-  background: var(--cinnabar);
-  color: #fffbf3;
-  box-shadow: 0 1px 2px rgba(180, 50, 42, 0.35);
-}
-
-.engine-side-disc.side-black {
-  background: var(--ink-0);
-  color: #fffbf3;
-  box-shadow: 0 1px 2px rgba(22, 19, 15, 0.4);
-}
-
-.engine-side-badge.side-red {
-  border-color: var(--cinnabar-edge);
-}
-
-.engine-side-badge.side-red:hover {
-  border-color: var(--cinnabar);
-  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(180, 50, 42, 0.18);
-}
-
-.engine-side-badge.side-black {
-  border-color: var(--hairline-strong);
-}
-
-.engine-side-badge.side-black:hover {
-  border-color: var(--ink-2);
-  box-shadow: calc(2px * var(--light-x)) 2px 8px rgba(22, 19, 15, 0.2);
-}
-
-.engine-side-switch {
-  display: inline-block;
-  font-size: 11px;
-  opacity: 0.6;
-  margin-left: 2px;
-  transition: transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast) var(--ease-out);
-}
-
-.engine-side-badge:hover .engine-side-switch {
-  opacity: 0.95;
-  transform: rotate(180deg);
-}
-
-
-
-
-
-
-
-
-/* 这一段以前是个坑，记一笔：上面原本挂着一个悬空的选择器片段（`.pill-lose,`），
-   结尾那个逗号让选择器列表一直往后续，把紧跟着的 @keyframes spin 整条吞了进去 ——
-   @keyframes 不是合法选择器，于是整条规则连同关键帧一起被丢弃，vite 构建时
-   minifier 会报 Unexpected "@keyframes"。删规则体的时候，记得把选择器的逗号一起删。 */
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.side-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  color: var(--ink-3);
-}
-
-.side-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
-}
-.side-dot.red {
-  background: var(--piece-red);
-}
-.side-dot.black {
-  background: var(--piece-black);
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
+/* .icon-btn：Overlays.tsx 的关闭钮仍在用（setup-panel.css 的
+   .icon-btn.icon-setup.is-on 也挂在同一族类上），故保留基类三态。
+   曾与本文件为邻的 .icon-btn.warn / .warn-dot / .icon-flip / .icon-sound
+   已无任何消费者，随 2026-11-18 清理一并移除。 */
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -437,40 +195,12 @@
   transform: scale(0.93);
 }
 
-.icon-btn.warn {
-  color: var(--cinnabar);
-}
-
-.warn-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cinnabar);
-  animation: breathe 1.4s var(--ease-out) infinite;
-}
-
-.icon-flip svg {
-  transition: transform 380ms var(--ease-spring);
-}
-
-.icon-flip:hover svg {
-  transform: rotate(180deg);
-}
-
-.icon-sound .sound-wave {
-  opacity: 0;
-  transform-origin: 10px 10px;
-  transition: opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
-}
-
-.icon-sound.is-on .sound-wave {
-  opacity: 1;
-}
-
-.icon-sound.is-on .sound-mute {
-  display: none;
-}
-
-.icon-sound:not(.is-on) .sound-mute {
-  color: var(--ink-mute);
+/* 这一段以前是个坑，记一笔：上面原本挂着一个悬空的选择器片段（`.pill-lose,`），
+   结尾那个逗号让选择器列表一直往后续，把紧跟着的 @keyframes spin 整条吞了进去 ——
+   @keyframes 不是合法选择器，于是整条规则连同关键帧一起被丢弃，vite 构建时
+   minifier 会报 Unexpected "@keyframes"。删规则体的时候，记得把选择器的逗号一起删。 */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

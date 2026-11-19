@@ -71,4 +71,8 @@ export interface BoardProps {
   spotlightSquares?: string[] | null
   /** What-If 走前试探残影与对手反击路线（Phase 2） */
   ghostMove?: { from: string; to: string; counterMove?: string; pieceGlyph?: string; pieceSide?: Side } | null
+  /** 开场落盘收场的回执。契约：每次挂载必达且只达一次 ——
+   *  本实例播了落盘，就等 INTRO_TOTAL_MS 后调用；没播（会话内已播过），
+   *  挂载即调用。App 的 autoStart 靠它排「让位」时序，不许静默不调。 */
+  onIntroEnd?: () => void
 }

@@ -56,7 +56,7 @@ export function ReplayCoachCabin({
   const tactics = current?.review?.tactics
 
   return (
-    <div className="coach-cabin flex flex-col p-3 rounded-2xl bg-paper-1/90 border border-hairline shadow-2xs text-ink-1 select-none shrink-0 transition-all duration-200">
+    <div className="coach-cabin flex flex-col p-3 rounded-2xl bg-paper-1/90 border border-hairline shadow-2xs text-ink-1 select-none shrink-0 transition duration-200">
       {/* 1. 顶部：着法标识与轻量微操工具（保证单行平铺不折行） */}
       <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-hairline/60 overflow-x-auto no-scrollbar">
         {/* 左侧：手数、着法、执子与判分 */}
@@ -72,8 +72,8 @@ export function ReplayCoachCabin({
               <span
                 className={`text-[10.5px] font-semibold px-1.5 py-0.5 rounded-full ${
                   current.side === 'red'
-                    ? 'text-piece-red bg-red-500/10'
-                    : 'text-piece-black bg-slate-500/10'
+                    ? 'text-piece-red bg-cinnabar/10'
+                    : 'text-piece-black bg-ink-2/10'
                 }`}
               >
                 {sideName(current.side)}
@@ -110,13 +110,13 @@ export function ReplayCoachCabin({
           {turningCount > 0 && (
             <button
               type="button"
-              className="h-6.5 px-2 rounded-lg text-xs font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 border border-amber-300/60 transition cursor-pointer flex items-center gap-1 shadow-3xs"
+              className="h-6.5 px-2 rounded-lg text-xs font-medium bg-cinnabar/10 hover:bg-cinnabar/20 text-cinnabar border border-cinnabar/30 transition cursor-pointer flex items-center gap-1 shadow-3xs"
               onClick={onNextTurningPly}
               title="跳转到对局关键胜负手/漏着"
             >
               <span>🔥</span>
               <span>胜负手</span>
-              <span className="text-[10px] px-1 rounded-full bg-amber-500/25 font-bold font-num">
+              <span className="text-[10px] px-1 rounded-full bg-cinnabar/20 font-bold font-num">
                 {turningCount}
               </span>
             </button>
@@ -130,7 +130,7 @@ export function ReplayCoachCabin({
                 !hasVisualClues
                   ? 'opacity-30 cursor-not-allowed text-ink-3 border-hairline'
                   : showClues
-                  ? 'bg-cinnabar text-white border-cinnabar font-semibold cursor-pointer'
+                  ? 'bg-cinnabar text-[var(--ink-on-accent)] border-cinnabar font-semibold cursor-pointer'
                   : 'bg-paper-2/80 hover:bg-paper-2 text-ink-2 border-hairline cursor-pointer'
               }`}
               onClick={hasVisualClues ? onToggleClues : undefined}
@@ -168,7 +168,7 @@ export function ReplayCoachCabin({
               </button>
               <button
                 type="button"
-                className="h-6.5 px-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer border-0 shadow-xs"
+                className="h-6.5 px-2 rounded-lg text-xs font-semibold bg-jade hover:bg-jade-bright text-paper-0 transition cursor-pointer border-0 shadow-xs"
                 onClick={onExitSandbox}
               >
                 ✕ 退出
@@ -181,7 +181,7 @@ export function ReplayCoachCabin({
       {/* 2. 中部：名师评语与交互式双轨点播演示 */}
       <div className="flex flex-col gap-2 py-2.5">
         {sandboxSnap ? (
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-300/80 text-xs text-emerald-950 flex flex-col gap-1">
+          <div className="p-2.5 rounded-xl bg-jade/10 border border-jade/30 text-xs text-ink-1 flex flex-col gap-1">
             <div className="flex items-center justify-between font-semibold">
               <span className="flex items-center gap-1">
                 <span>🔀</span>
@@ -194,7 +194,7 @@ export function ReplayCoachCabin({
                 </span>
               )}
             </div>
-            <p className="m-0 text-emerald-900/90 leading-relaxed text-[11.5px]">
+            <p className="m-0 text-ink-2 leading-relaxed text-[11.5px]">
               {cleanCoachText(sandboxInfo?.tactics?.coach_summary) ||
                 '请在棋盘上自由走子，探索其他应对方案。随时点击右上角「退出」回到原谱。'}
             </p>
@@ -224,8 +224,8 @@ export function ReplayCoachCabin({
                       type="button"
                       className={`h-6.5 px-2.5 rounded-full text-xs font-medium cursor-pointer transition flex items-center gap-1 border shadow-3xs ${
                         pvMode === 'best'
-                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
-                          : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-900 border-emerald-300'
+                          ? 'bg-jade text-paper-0 border-jade shadow-xs'
+                          : 'bg-jade/10 hover:bg-jade/20 text-jade border-jade/30'
                       }`}
                       onClick={() => onTogglePvMode('best')}
                       title="在棋盘上动态演练正解攻杀路线"
@@ -245,8 +245,8 @@ export function ReplayCoachCabin({
                       type="button"
                       className={`h-6.5 px-2.5 rounded-full text-xs font-medium cursor-pointer transition flex items-center gap-1 border shadow-3xs ${
                         pvMode === 'refute'
-                          ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
-                          : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-900 border-rose-300'
+                          ? 'bg-cinnabar text-[var(--ink-on-accent)] border-cinnabar shadow-xs'
+                          : 'bg-cinnabar/10 hover:bg-cinnabar/20 text-cinnabar border-cinnabar/30'
                       }`}
                       onClick={() => onTogglePvMode('refute')}
                       title="在棋盘上演练走错后对方的反击手段"
@@ -267,7 +267,7 @@ export function ReplayCoachCabin({
                 {/* 演练步数预览胶囊 */}
                 {pvMode === 'best' && causal.bestPv.length > 0 && (
                   <div className="flex items-center gap-1 flex-wrap text-[11px] animate-fadeIn">
-                    <span className="text-[10.5px] text-emerald-800 font-bold">正解路线:</span>
+                    <span className="text-[10.5px] text-jade font-bold">正解路线:</span>
                     {causal.bestPv.slice(0, 5).map((st, i) => (
                       <span
                         key={i}
@@ -281,7 +281,7 @@ export function ReplayCoachCabin({
 
                 {pvMode === 'refute' && causal.refutePv.length > 0 && (
                   <div className="flex items-center gap-1 flex-wrap text-[11px] animate-fadeIn">
-                    <span className="text-[10.5px] text-rose-800 font-bold">反击路线:</span>
+                    <span className="text-[10.5px] text-cinnabar font-bold">反击路线:</span>
                     {causal.refutePv.slice(0, 5).map((st, i) => (
                       <span
                         key={i}
@@ -298,7 +298,7 @@ export function ReplayCoachCabin({
             {/* 子力因果原因 */}
             {why && (
               <div className="flex items-start gap-1 p-1.5 rounded-lg bg-paper-2/60 border border-hairline/60 text-[11.5px] text-ink-2 leading-relaxed">
-                <span className="shrink-0 text-amber-600 font-bold">💡</span>
+                <span className="shrink-0 text-cinnabar font-bold">💡</span>
                 <span>{cleanCoachText(why)}</span>
               </div>
             )}
@@ -319,7 +319,7 @@ export function ReplayCoachCabin({
         {onDrillSpecificGame ? (
           <button
             type="button"
-            className="h-7.5 px-2.5 rounded-lg text-xs font-semibold bg-paper-2 hover:bg-paper-3 text-ink-0 border border-hairline transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+            className="h-7.5 px-2.5 rounded-lg text-xs font-semibold bg-paper-2 hover:bg-paper-3 text-ink-0 border border-hairline transition cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
             onClick={onDrillSpecificGame}
             title="将整局棋谱载入名师特训营，进行深度拆解"
           >
@@ -334,7 +334,7 @@ export function ReplayCoachCabin({
           {onContinueRelay && (
             <button
               type="button"
-              className="h-7.5 px-2.5 rounded-lg text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/30 transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+              className="h-7.5 px-2.5 rounded-lg text-xs font-semibold bg-paper-2 hover:bg-paper-3 text-ink-1 border border-hairline transition cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
               onClick={onContinueRelay}
               title="从此局面开始切换为信使代下模式"
             >
@@ -345,7 +345,7 @@ export function ReplayCoachCabin({
 
           <button
             type="button"
-            className="h-7.5 px-2.5 rounded-lg text-xs font-semibold bg-cinnabar/10 hover:bg-cinnabar/20 text-cinnabar border border-cinnabar/30 transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+            className="h-7.5 px-2.5 rounded-lg text-xs font-semibold bg-cinnabar/10 hover:bg-cinnabar/20 text-cinnabar border border-cinnabar/30 transition cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
             onClick={onContinueGame}
             title="从此局面开始，进入实战对局与引擎对练"
           >

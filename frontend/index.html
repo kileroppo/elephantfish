@@ -3,13 +3,54 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f3ede1" />
+    <!-- theme-color 双态：宣纸 #f6f2ea / 乌墨 #17171a（= 两主题的 --paper-1，
+         即 body 底色，移动端地址栏不再骑在第三种灰上）。主题由 JS 的
+         data-theme 驱动而非系统偏好，所以不用 media query 双 meta，
+         由下面那段内联脚本跟随 data-theme 实时改写。 -->
+    <meta name="theme-color" content="#f6f2ea" />
     <meta name="description" content="XQ-Coach 象棋教练 —— 中国象棋 AI 实训台 & 棋力实战系统（精训营、错题本、动态防守、大模型转述对弈）" />
+    <!-- 字体策略（诚实版）：本产品**不自托管** webfont —— 没有 @font-face、
+         没有 preload、不假装修载。显示衬线 "XQ Serif" 保留栈首（设计评审
+         机上装了就直接命中），未装的设备按宋体系诚实回退：macOS Songti SC
+         → Windows SimSun → Linux Noto/Source Han Serif SC → serif；楷体栈
+         同理（STKaiti → KaiTi → 楷体 → STSong → serif）。代价是三个平台
+         三种脸，换来的是首帧零阻塞、零 FOIT/FOUT、零 CLS。唯一权威定义在
+         src/styles/tokens.css，tw.css 经 @theme inline 桥接，不许再有平行栈。 -->
     <title>XQ-Coach · 象棋教练</title>
+    <script>
+      /* 主题预载与 theme-color 同步：UIContext 在 useEffect 里才落
+         data-theme，在那之前乌墨用户会先看到一帧宣纸（闪白）。这里按
+         同一把存储键（ef.theme，与 UIContext 的 LS_THEME 一致）在解析
+         期预落主题，并让 theme-color 元标签此后跟随 data-theme 的每
+         一次变化（切主题按 T 时地址栏跟着暗/亮）。 */
+      ;(function () {
+        try {
+          var meta = document.querySelector('meta[name="theme-color"]')
+          var current = localStorage.getItem('ef.theme') === 'wumu' ? 'wumu' : 'xuan'
+          var apply = function (v) {
+            document.documentElement.setAttribute('data-theme', v)
+            if (meta) meta.content = v === 'wumu' ? '#17171a' : '#f6f2ea'
+          }
+          apply(current)
+          new MutationObserver(function () {
+            var v = document.documentElement.getAttribute('data-theme')
+            if (v && v !== current) {
+              current = v
+              apply(v)
+            }
+          }).observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-theme'],
+          })
+        } catch (e) {
+          /* 隐私模式等 localStorage 不可用：静默沿用默认宣纸 */
+        }
+      })()
+    </script>
     <!-- 内联 favicon：一枚棋子。省掉一次 404 请求，也让标签页认得出来。 -->
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='31' fill='%23f3ede1'/%3E%3Ccircle cx='32' cy='32' r='30' fill='%23fdf8ec'/%3E%3Ccircle cx='32' cy='32' r='28' fill='none' stroke='%23a92c24' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='23' fill='none' stroke='%236d5028' stroke-width='1' opacity='.4'/%3E%3Ctext x='32' y='33' text-anchor='middle' dominant-baseline='central' font-family='KaiTi,STKaiti,serif' font-size='30' font-weight='600' fill='%23a92c24'%3E%E8%B1%A1%3C/text%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='31' fill='%23f6f2ea'/%3E%3Ccircle cx='32' cy='32' r='30' fill='%23fbf8f2'/%3E%3Ccircle cx='32' cy='32' r='28' fill='none' stroke='%23a92c24' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='23' fill='none' stroke='%236d5028' stroke-width='1' opacity='.4'/%3E%3Ctext x='32' y='33' text-anchor='middle' dominant-baseline='central' font-family='KaiTi,STKaiti,serif' font-size='30' font-weight='600' fill='%23a92c24'%3E%E8%B1%A1%3C/text%3E%3C/svg%3E"
     />
   </head>
   <body>

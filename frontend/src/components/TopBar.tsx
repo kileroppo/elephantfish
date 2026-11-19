@@ -83,7 +83,7 @@ export function TopBar(props: TopBarProps) {
             type="button"
             role="tab"
             aria-selected={playMode === 'relay'}
-            className={`h-7 px-3 rounded-lg text-xs font-medium tracking-wide transition-all active:scale-95 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+            className={`mode-tab h-8 px-3 rounded-lg text-xs font-medium tracking-wide transition active:scale-95 cursor-pointer border-0 flex items-center justify-center gap-1.5 ${
               playMode === 'relay'
                 ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
@@ -93,7 +93,10 @@ export function TopBar(props: TopBarProps) {
             }}
             title="信使代下模式：我是转述人，引擎朝下"
           >
-            <span>⚡</span>
+            {/* 文字签「代」：纸墨体系里标记模式靠一方小印，不靠彩色 emoji */}
+            <span className="mode-glyph" aria-hidden="true">
+              代
+            </span>
             <span>信使代下</span>
           </button>
 
@@ -101,7 +104,7 @@ export function TopBar(props: TopBarProps) {
             type="button"
             role="tab"
             aria-selected={playMode === 'sparring'}
-            className={`h-7 px-3 rounded-lg text-xs font-medium tracking-wide transition-all active:scale-95 cursor-pointer border-0 flex items-center justify-center gap-1 ${
+            className={`mode-tab h-8 px-3 rounded-lg text-xs font-medium tracking-wide transition active:scale-95 cursor-pointer border-0 flex items-center justify-center gap-1.5 ${
               playMode === 'sparring'
                 ? 'bg-paper-0 text-cinnabar shadow-xs font-semibold'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
@@ -111,22 +114,26 @@ export function TopBar(props: TopBarProps) {
             }}
             title="实战陪练模式：我亲自下棋，我执朝我"
           >
-            <span>🎯</span>
+            <span className="mode-glyph" aria-hidden="true">
+              练
+            </span>
             <span>实战陪练</span>
           </button>
         </div>
 
         <button
           type="button"
-          className={`h-8 px-3.5 rounded-xl text-xs font-medium tracking-wide transition-all active:scale-95 cursor-pointer border flex items-center justify-center gap-1.5 shadow-2xs ${
+          className={`topbar-drill h-8 px-3.5 rounded-xl text-xs font-medium tracking-wide transition active:scale-95 cursor-pointer border flex items-center justify-center gap-1.5 shadow-2xs ${
             drillMode
-              ? 'bg-cinnabar text-white border-cinnabar font-semibold shadow-xs'
+              ? 'bg-cinnabar text-paper-0 border-cinnabar font-semibold shadow-xs'
               : 'bg-paper-2/90 hover:bg-paper-1 text-ink-1 border-hairline'
-          }`}
+          } ${drillMode ? 'is-on' : ''}`}
           onClick={onToggleDrill}
           title="打开象棋实战特训营"
         >
-          <span>🏹</span>
+          <span className="mode-glyph" aria-hidden="true">
+            训
+          </span>
           <span>特训营</span>
         </button>
       </div>

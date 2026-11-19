@@ -1,0 +1,421 @@
+/* ==========================================================================
+   首帧海报 · BootScreen
+   --------------------------------------------------------------------------
+   本地 <250ms 闪逝，所以它从未被任何一帧截到；但引擎冷启动 / 真实网络下
+   它才是产品真正的第一帧（0.5–3s）。既然可能是评委唯一停下来看的一帧，
+   它就不能是一个脉冲圈 —— 它是一张海报：纸纹底（body::before 的斜纹与
+   左上角的灯直接透出来，这里不糊自己的底色）、一枚斜盖的象印、一句
+   教练人设、三条事实化进度。错误态同库：用户看得懂的话与开发者才要的
+   命令分层放，重试常驻。
+
+   纪律：动画只动 transform / opacity；投影横分量一律
+   calc(<纵向位移> * var(--light-x))；入场走 --ease-enter 与 --stagger；
+   reduced-motion 见文件末尾（关键帧只写 from，落定状态在基础规则里，
+   所以关掉动画即是终态）。 */
+
+.boot {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 40px 24px;
+  color: var(--ink-2);
+  text-align: center;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* 视线焦点：中央一块留白，四角逐渐压暗。颜色就是棋盘 vignette 那一味。 */
+.boot-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    74% 62% at 50% 46%,
+    transparent 42%,
+    var(--board-vignette) 100%
+  );
+}
+
+.boot-inner {
+  position: relative;
+  z-index: 1;
+  margin: auto; /* 居中但不裁切：内容高于视口时从 padding 处开始排 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  max-width: min(92vw, 520px);
+}
+
+/* ---- 象印：斜盖的一方朱砂印。阴刻字与全站那盏灯同向、符号相反 ---- */
+.boot-seal {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, var(--cinnabar-bright), var(--cinnabar));
+  box-shadow: calc(12px * var(--light-x)) 12px 26px -10px rgba(180, 50, 42, 0.5),
+    inset 0 0 0 2px var(--paper-0), inset 0 0 0 5px var(--cinnabar);
+  transform: rotate(-4deg);
+  font-family: var(--font-kai);
+  font-size: 40px;
+  line-height: 1;
+  color: var(--paper-0);
+  text-shadow: calc(-1px * var(--light-x)) -1px 1px rgba(90, 16, 12, 0.55),
+    calc(1px * var(--light-x)) 1px 0 rgba(255, 255, 255, 0.25);
+  animation: bootSealIn 560ms var(--ease-spring) 140ms both;
+}
+
+/* 落印那一下溅开的墨环：一次性，不循环 */
+.boot-seal::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 18px;
+  border: 2px solid var(--cinnabar-edge);
+  animation: bootSealRing 680ms var(--ease-out) 520ms both;
+}
+
+@keyframes bootSealIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.78) rotate(-12deg);
+  }
+}
+
+@keyframes bootSealRing {
+  from {
+    opacity: 0.85;
+    transform: scale(0.84);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.14);
+  }
+}
+
+/* ---- 文案：一句主宣、一句副宣 ---- */
+.boot-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(21px, 4.2vmin, 28px);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--ink-0);
+  animation: bootRise 460ms var(--ease-enter) calc(140ms + 2 * var(--stagger)) both;
+}
+
+.boot-sub {
+  margin: 0;
+  max-width: 34em;
+  font-size: 13px;
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  animation: bootRise 460ms var(--ease-enter) calc(140ms + 3 * var(--stagger)) both;
+}
+
+@keyframes bootRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* ---- 三态进度：一条竖轨，随阶段生长（只动 transform） ---- */
+.boot-steps {
+  position: relative;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 252px;
+}
+
+/* 竖轨与生长量：三个圆点把轨等分成两段，data-stage 走到哪填到哪 */
+.boot-steps::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--cinnabar-edge);
+  transform-origin: top;
+  transform: scaleY(0);
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.boot-steps[data-stage="1"]::before {
+  transform: scaleY(0.5);
+}
+
+.boot-steps[data-stage="2"]::before {
+  transform: scaleY(1);
+}
+
+.boot-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  height: 24px;
+  text-align: left;
+  animation: bootStepIn 380ms var(--ease-enter) both;
+  animation-delay: calc(420ms + var(--i, 0) * var(--stagger));
+}
+
+@keyframes bootStepIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.boot-step-dot {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 1.5px solid var(--hairline-strong);
+  background: transparent;
+  transition: background-color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+
+/* 进行中：朱砂一点，外圈一次极轻的呼吸（transform/opacity） */
+.boot-step[data-state="active"] .boot-step-dot {
+  background: var(--cinnabar);
+  border-color: var(--cinnabar);
+}
+
+.boot-step[data-state="active"] .boot-step-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--cinnabar-edge);
+  animation: bootDotRing 1.5s var(--ease-out) infinite;
+}
+
+@keyframes bootDotRing {
+  from {
+    opacity: 0.8;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+/* 已完成：玉色一点 —— 「就绪」是正面事实，用玉不用朱砂 */
+.boot-step[data-state="done"] .boot-step-dot {
+  background: var(--jade);
+  border-color: var(--jade);
+}
+
+.boot-step-label {
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  transition: color var(--dur) var(--ease-out);
+}
+
+.boot-step[data-state="done"] .boot-step-label {
+  color: var(--ink-2);
+}
+
+.boot-step[data-state="active"] .boot-step-label {
+  color: var(--ink-1);
+  font-weight: 600;
+}
+
+.boot-step-state {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-4);
+  transition: color var(--dur) var(--ease-out);
+}
+
+.boot-step[data-state="done"] .boot-step-state {
+  color: var(--jade);
+}
+
+.boot-step[data-state="active"] .boot-step-state {
+  color: var(--cinnabar);
+}
+
+/* ---- 海报落款：一行小字，两边短 Hairline，把「海报」两个字坐实 ---- */
+.boot-colophon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.3em;
+  color: var(--ink-4);
+  animation: bootRise 460ms var(--ease-enter) calc(420ms + 4 * var(--stagger)) both;
+}
+
+.boot-colophon::before,
+.boot-colophon::after {
+  content: '';
+  width: 28px;
+  height: 1px;
+  background: var(--hairline-strong);
+}
+
+/* ==========================================================================
+   错误态：用户的话与开发者的命令分层
+   ========================================================================== */
+
+.boot-seal.is-muted {
+  background: linear-gradient(160deg, var(--ink-3), var(--ink-2));
+  box-shadow: calc(12px * var(--light-x)) 12px 26px -10px rgba(43, 35, 26, 0.42),
+    inset 0 0 0 2px var(--paper-0), inset 0 0 0 5px var(--ink-2);
+}
+
+.boot-seal.is-muted::after {
+  display: none;
+}
+
+.boot-error-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-0);
+  animation: bootRise 420ms var(--ease-enter) calc(140ms + var(--stagger)) both;
+}
+
+/* 发生了什么 / 怎么办：两段话说清楚，不甩一行命令了事 */
+.boot-error-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--ink-3);
+  animation: bootRise 420ms var(--ease-enter) calc(140ms + 2 * var(--stagger)) both;
+}
+
+.boot-error-body p {
+  margin: 0;
+}
+
+/* 开发者命令：本机部署时直接给，访客折叠进细节里 */
+.boot-cmd {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--hairline);
+  background: var(--paper-2);
+  font-family: var(--font-num);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-1);
+  animation: bootRise 420ms var(--ease-enter) calc(140ms + 3 * var(--stagger)) both;
+}
+
+.boot-details {
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ink-3);
+  animation: bootRise 420ms var(--ease-enter) calc(140ms + 3 * var(--stagger)) both;
+}
+
+.boot-details summary {
+  cursor: pointer;
+  padding: 4px 0;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.boot-details summary:hover {
+  color: var(--ink-1);
+}
+
+.boot-details p {
+  margin: 6px 0 0;
+}
+
+.boot-details .boot-cmd {
+  margin-top: 8px;
+  animation: none;
+}
+
+.boot-retry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  margin-top: 4px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--cinnabar);
+  color: var(--paper-0);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-indent: 0.14em;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  animation: bootRise 420ms var(--ease-enter) calc(140ms + 4 * var(--stagger)) both;
+}
+
+.boot-retry:hover {
+  background: var(--cinnabar-bright);
+}
+
+.boot-retry:active {
+  transform: scale(0.96);
+}
+
+/* ==========================================================================
+   reduced-motion：关键帧只写 from，落定状态在基础规则里 —— 关掉动画即是终态。
+   唯一要显式处理的是「进行中」圆点的呼吸环：它平时靠动画活着，
+   没有动画时它是一个静止的圈，必须藏掉。
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .boot-seal,
+  .boot-seal::after,
+  .boot-title,
+  .boot-sub,
+  .boot-step,
+  .boot-colophon,
+  .boot-error-title,
+  .boot-error-body,
+  .boot-cmd,
+  .boot-details,
+  .boot-retry {
+    animation: none;
+  }
+
+  .boot-steps::before {
+    transition: none;
+  }
+
+  .boot-step[data-state="active"] .boot-step-dot::after {
+    animation: none;
+    opacity: 0;
+  }
+}

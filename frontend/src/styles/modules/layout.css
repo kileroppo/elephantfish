@@ -33,7 +33,12 @@
     calc(var(--rail-r) + var(--rail-gap));
   column-gap: 0;
   padding: 8px 24px 18px;
-  transition: grid-template-columns var(--drawer), max-width var(--drawer);
+  /* 抽屉开合本身就是列宽的变化（收 0 与展开之间没有「可以不改布局」的中间态），
+     这一条是 motion.mjs 帧预算断言登记过的例外（TRANS_OK）。同期的 max-width
+     重定心曾经也挂在这条 transition 上 —— 但外框只是个没有面子（无背景无描边）
+     的布局容器，它的宽窄一跳肉眼看不见，真正可见的列轨已经在动画里，所以它不配
+     再领一个例外，直接瞬切。 */
+  transition: grid-template-columns var(--drawer);
 }
 
 /* 核心对弈主态：左侧设置栏收起，棋盘与右侧分析棋谱组成两栏书页黄金视觉 */
@@ -198,7 +203,9 @@
 .rail-left {
   margin-right: var(--rail-gap);
   --rail-slide: -20px;
-  transition: margin-right var(--drawer);
+  /* 栏缝展宽（--rail-gap → --stage-gutter）不走 transition：间距由左栏轨宽承担，
+     而轨宽在 .workspace 那条 grid-template-columns 里已经动画了，再过渡一次
+     margin 是同一段位移收两份路钱。 */
 }
 
 /* 右栏内容右对齐：栏轨变窄时裁掉的是左边，看起来就是从屏幕右缘滑进来的 */

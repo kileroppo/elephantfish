@@ -34,6 +34,21 @@ from server.session import Reply
 logger = logging.getLogger(__name__)
 
 
+def _safe_chinese(board: str, move: Any, fallback: str) -> str:
+    """``to_chinese`` 的防崩包装：着法起点无子时退回原始 ICCS 串。
+
+    定式树游标与盘面可能短暂不同步（错着受罚后游标停在树根，而盘面已经前进），
+    此时 ``to_chinese`` 会在空格上取子抛 ``KeyError``。这里只兜底展示，
+    判断逻辑仍以着法合法性校验为准（见 ``step_drill_reply`` 里的 best_tree_iccs）。
+    """
+    if not move:
+        return fallback
+    try:
+        return nt.to_chinese(board, move)
+    except KeyError:
+        return fallback
+
+
 class MasterDrillSession:
     """单个题目的名师带教实训会话。"""
 
@@ -364,9 +379,18 @@ class TrainingController:
         if isinstance(tree, dict) and user_iccs in tree:
             node = tree[user_iccs]
 
-        best_tree_iccs = next(iter(tree.keys()), '') if isinstance(tree, dict) and tree else (
-            nt.to_iccs(before_engine_move) if before_engine_move else ''
-        )
+        # 树正着：取当前游标的首个着法，但必须仍在**走前盘面**合法。
+        # 错着受罚后游标停在树根（不随惩罚前进），若学员不回溯继续走下一步错着，
+        # 树根着法的发起格可能已空（如车早已离开 b2）—— 此时退回引擎最佳着法，
+        # 否则下游 to_chinese 会在空格上取子直接 KeyError 崩成 500。
+        best_tree_iccs = ''
+        if isinstance(tree, dict) and tree:
+            candidate = next(iter(tree.keys()), '')
+            mv_candidate = nt.from_iccs(candidate) if candidate else None
+            if mv_candidate and game.is_legal(mv_candidate):
+                best_tree_iccs = candidate
+        if not best_tree_iccs and before_engine_move and game.is_legal(before_engine_move):
+            best_tree_iccs = nt.to_iccs(before_engine_move)
 
         # 2. 检查是否命中预设陷阱 (Traps：仅在初始盘面且非当前定式正解时触发)
         traps = sess.puzzle.get('traps', {}) if len(game.records) == 0 else {}
@@ -1247,12 +1271,12 @@ class TrainingController:
         wrong_chinese = ''
         if wrong_iccs:
             mv_w = nt.from_iccs(wrong_iccs)
-            wrong_chinese = nt.to_chinese(board_before, mv_w) if mv_w else wrong_iccs
+            wrong_chinese = _safe_chinese(board_before, mv_w, wrong_iccs)
 
         best_chinese = ''
         if best_iccs:
             mv_b = nt.from_iccs(best_iccs)
-            best_chinese = nt.to_chinese(board_before, mv_b) if mv_b else best_iccs
+            best_chinese = _safe_chinese(board_before, mv_b, best_iccs)
 
         if loss_cp >= 500:
             verdict_headline = f'走错这步相当于白丢约 {pawn_drop} 个兵（大子被吃或防线直接崩溃）'

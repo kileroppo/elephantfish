@@ -234,4 +234,110 @@
 
 
 
+/* ==========================================================================
+   底部操作条（手机拇指区）
+   --------------------------------------------------------------------------
+   悔棋 / 新局 / 翻转 / 特训营 + 模式切换，常驻贴底。桌面端 display:none，
+   ≤720px 的显隐开关在 responsive.css —— 本文件只负责「长什么样」。
+
+   两条硬纪律：
+   1. 纸墨语言：纸面、发丝线、朱砂只标「当前模式」；文字签（代/练/新/训）
+      与顶栏 .mode-glyph 同一套楷体小印语法，不引进新色新字。
+   2. 动效只动 transform/opacity：入场自下 12px 浮起（--ease-enter），
+      reduced-motion 下由 responsive.css 的全局降级块压成瞬现。 */
+.action-dock {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: var(--paper-0);
+  border-top: 1px solid var(--hairline);
+  /* 单光源纪律：光在左上，影朝右下 —— 底栏的影落在屏外，
+     能看到的只有右上角那一线，足够读出「浮起」 */
+  box-shadow: calc(8px * var(--light-x)) 8px 20px -16px rgba(43, 35, 26, 0.22);
+  animation: action-dock-rise var(--dur-slow) var(--ease-enter) both;
+}
+
+@keyframes action-dock-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.action-dock-inner {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.dock-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  /* 44px 触摸目标（Apple HIG）：底栏是纯拇指区，不搞热区扩张，
+     命中区就是视觉区，视觉区就是命中区 */
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 4px 2px;
+  border: 1px solid transparent;
+  border-radius: var(--r-lg);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-xs) var(--ease-out);
+}
+
+.dock-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.dock-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 当前模式（代下 / 陪练）常驻朱砂 —— 与顶栏选中态同一种「现在是这个」 */
+.dock-btn.is-on {
+  color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+  border-color: var(--cinnabar-edge);
+}
+
+.dock-glyph {
+  font-family: var(--font-kai);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.05;
+}
+
+.dock-label {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* 思考期停摆纪律（清单正主在 freeze.css）：引擎算棋那段时间，画面不该有
+   任何东西自己动 —— 底栏的状态切换也照「切」不「渐」办理 */
+.app.is-thinking .dock-btn {
+  transition: none;
+}
+
 /* 累计战绩：跨局的胜负，训练「下赢那款大模型」时最该盯着的一个数 */

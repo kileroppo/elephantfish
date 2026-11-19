@@ -1,10 +1,33 @@
 /* ==========================================================================
    提示条 / 弹层 / 启动态
+   --------------------------------------------------------------------------
+   弹层契约（与 design-system 线程的 --z-* 阶梯一一对应）。令牌就绪前，
+   下方 var() 的第二参数即本地常量；令牌上线后自动让位，无需二次改动：
+
+     --z-drawer  40   侧栏抽屉与顶栏（TopBar / ControlRail / RightRail 现役值）
+     --z-veil    300  面纱：全屏台面与弹层的遮罩底板
+     --z-desk    300  全屏台面（复盘台 / 特训营 / 排局台）
+     --z-modal   300  模态对话（帮助层）
+     --z-toast   500  提示条：转瞬即逝，恒在最上（仍低于 Poof 999 / 教练卡 9999）
+
+   台面与模态同域（300）不是疏忽：复盘台的 veil 同时挂着 .overlay 与
+   Tailwind z-40，而模块样式未入 CSS layer、优先级高于 utilities layer，
+   其有效 z 由这里的 .overlay 决定 —— 两者必须同值，层级靠 App.tsx 的
+   渲染次序决胜（Desk 先渲染、帮助层后渲染，帮助恒在上）。待复盘台 /
+   特训营迁入独立 Desk 基座（他人领地，见结报告 P2）后再拆分数值。
+
+   面纱只此一种：墨的 42% + 4px 模糊。复盘台 bg-ink-0/40 + blur-sm、
+   特训营 bg-ink-0/35 + blur-md、排局台 FEN 弹窗 bg-black/40 是三种
+   待收编的旧面纱，收编路径见结报告。
    ========================================================================== */
 
 .toast-stack {
   position: fixed;
-  top: 24px;
+  /* 顶栏下沿之下：顶栏 h-12 / md:h-13（48 / 52px），正中央是模式切换与
+     特训营入口 —— 提示条钉在 24px 会连人带按钮捂住 2.6-6 秒（F6），
+     而它通知的事情恰恰是被遮住的按钮刚造成的。--topbar-h 令牌化后
+     这里自动跟随；排局台顶栏卸载的场景，留 10px 呼吸也够。 */
+  top: calc(var(--topbar-h, 48px) + 10px);
   left: 50%;
   transform: translateX(-50%);
   right: auto;
@@ -13,9 +36,15 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  z-index: 500;
+  z-index: var(--z-toast, 500);
   pointer-events: none;
   max-width: min(460px, calc(100vw - 40px));
+}
+
+@media (min-width: 768px) {
+  .toast-stack {
+    top: calc(var(--topbar-h, 52px) + 10px);
+  }
 }
 
 .toast {
@@ -43,9 +72,11 @@
   }
 }
 
-/* 退场和进场对仗：往下沉一点、缩一点，spring 收走 */
+/* 退场和进场对仗：往下沉一点、缩一点。进场用 spring（有仪式感的浮现，
+   令牌里 spring 的用途正是 toast 这类瞬间）；退场换 --ease-exit ——
+   起步即加速，收得快，不让人守着一条已经读完的通知。 */
 .toast.is-leaving {
-  animation: toastOut 280ms var(--ease-spring) both;
+  animation: toastOut 280ms var(--ease-exit) both;
   pointer-events: none;
 }
 
@@ -63,24 +94,28 @@
   background: var(--paper-4);
 }
 
+/* 语气色归队四组家族：成 → 玉，警 / 败 → 朱砂（警用稳的、败用亮的），
+   默认信息 → 纸。tokens.css 暂无 --warn 令牌，朱砂双档是先落地的归队，
+   新增 --warn 的提案见结报告。 */
 .toast-ok .toast-dot {
-  background: #7fd6b4;
-}
-.toast-error .toast-dot {
-  background: #ff8a7a;
+  background: var(--jade-bright);
 }
 .toast-warn .toast-dot {
-  background: #f0c674;
+  background: var(--cinnabar);
+}
+.toast-error .toast-dot {
+  background: var(--cinnabar-bright);
 }
 
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 300;
+  z-index: var(--z-modal, 300);
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(22, 19, 15, 0.42);
+  /* 唯一面纱：墨的 42%（--veil-bg 令牌就绪前用本地常量，与 --ink-0 同色相） */
+  background: var(--veil-bg, rgba(28, 25, 21, 0.42));
   backdrop-filter: blur(4px);
   animation: fadeIn 200ms var(--ease-out) both;
 }
@@ -147,6 +182,14 @@
   margin: 22px 0 10px;
   font-size: 13px;
   letter-spacing: 0.12em;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.sheet h4 {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
   color: var(--ink-3);
   font-weight: 500;
 }

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { RankedLine } from '../../types'
 import { boundMark, compactNumber, scoreText, seconds } from '../../lib/format'
 import { useUIContext } from '../../context/UIContext'
@@ -12,6 +13,13 @@ const PV_SHOW = 4
 
 export function RankList({ lines, playedIccs, withPv }: RankListProps) {
   const ui = useUIContext()
+  // 手机上只有点击没有悬停：点一手预演它（再点一次收起），pin 住之后
+  // 悬停让位。回合变化时 UIContext 会清空 previewPv，pin 随之作废。
+  const [pinned, setPinned] = useState<string | null>(null)
+  useEffect(() => {
+    if (ui.previewPv.length === 0) setPinned(null)
+  }, [ui.previewPv])
+
   if (!lines.length) return null
 
   return (
@@ -33,12 +41,21 @@ export function RankList({ lines, playedIccs, withPv }: RankListProps) {
             }`}
             title={`${line.iccs} · ${line.depth} 层 · ${compactNumber(line.nodes)} 节点 · ${seconds(
               line.time,
-            )} · 鼠标悬停预览盘面`}
+            )} · ${pinned === line.iccs ? '再次点击收起预览' : '悬停或点击预览盘面'}`}
             onMouseEnter={() => {
-              ui.handlePreviewBoard(null, pvMoves, null)
+              if (pinned === null) ui.handlePreviewBoard(null, pvMoves, null)
             }}
             onMouseLeave={() => {
-              ui.handlePreviewBoard(null, [], null)
+              if (pinned === null) ui.handlePreviewBoard(null, [], null)
+            }}
+            onClick={() => {
+              if (pinned === line.iccs) {
+                setPinned(null)
+                ui.handlePreviewBoard(null, [], null)
+              } else {
+                setPinned(line.iccs)
+                ui.handlePreviewBoard(null, pvMoves, null)
+              }
             }}
           >
             <span

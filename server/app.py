@@ -36,7 +36,9 @@
 """
 
 import functools
+import gzip
 import json
+import mimetypes
 import os
 import sys
 import traceback
@@ -56,6 +58,12 @@ STATIC_DIR = os.path.join(_ROOT, 'frontend', 'dist')
 # 全进程就这一个对局会话。多对局要靠多开端口，不靠多实例。
 SESSION = GameSession()
 TRAINING = TrainingController(store=SESSION.store, engines=SESSION.engines)
+
+# 预压缩静态资源：启动后第一次被请求时压一遍存内存，之后直接吐字节。
+# 首帧预算的大头是 380KB 的 JS + 180KB 的 CSS —— 不压缩等于把预算白白扔掉一半
+# （浏览器发得起 Accept-Encoding: gzip，是服务端没接）。
+_GZIP_TYPES = ('.js', '.mjs', '.css', '.html', '.svg', '.json')
+_GZIP_CACHE: dict = {}
 
 
 # --------------------------------------------------------------------------- #
@@ -404,7 +412,44 @@ class Handler(SimpleHTTPRequestHandler):
         # 单页应用：文件不存在就交给前端路由，而不是丢 404
         if not os.path.isfile(target) and '.' not in os.path.basename(path):
             self.path = '/index.html'
+            target = os.path.join(STATIC_DIR, 'index.html')
+
+        if os.path.isfile(target) and self._serve_gzip(target):
+            return
         super().do_GET()
+
+    def _serve_gzip(self, target: str) -> bool:
+        """预压缩静态资源：客户端认 gzip 就吐压缩字节，不认就交给父类原样发。
+
+        返回 True 表示这个请求已经在这里完整应答（父类不要再发一次）。
+        """
+        if not target.endswith(_GZIP_TYPES):
+            return False
+        if 'gzip' not in (self.headers.get('Accept-Encoding') or '').lower():
+            return False
+        body = _GZIP_CACHE.get(target)
+        if body is None:
+            try:
+                with open(target, 'rb') as f:
+                    raw = f.read()
+            except OSError:
+                return False
+            body = gzip.compress(raw, compresslevel=6)
+            _GZIP_CACHE[target] = body
+        ctype = mimetypes.guess_type(target)[0] or 'application/octet-stream'
+        if ctype.startswith('text/') or ctype in ('application/javascript', 'application/json'):
+            ctype += '; charset=utf-8'
+        try:
+            self.send_response(200)
+            self.send_header('Content-Type', ctype)
+            self.send_header('Content-Encoding', 'gzip')
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Vary', 'Accept-Encoding')
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # 客户端中途收手（翻页、刷新）是常态，不是错误
+        return True
 
     def end_headers(self):
         # 避免 html 页面被浏览器强缓存导致前端发版后无法加载最新 JS/CSS
@@ -413,6 +458,10 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
             self.send_header('Pragma', 'no-cache')
             self.send_header('Expires', '0')
+        elif '/assets/' in path:
+            # Vite 产物文件名带内容哈希，发版即换名 —— 可以放心长缓存，
+            # 二次来访首帧只剩一次 index.html 往返。
+            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
         super().end_headers()
 
     def _serve_unbuilt(self, path):

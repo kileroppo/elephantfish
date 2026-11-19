@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useUIContext } from '../../context/UIContext'
 
 export interface PvStepItem {
@@ -12,6 +12,12 @@ export interface PvBlockProps {
 
 export function PvBlock({ pvText }: PvBlockProps) {
   const ui = useUIContext()
+  // 手机上只有点击没有悬停：点一步预演从此步起的走向（再点一次收起）。
+  // pin 住之后悬停让位；回合变化时 UIContext 清空 previewPv，pin 作废。
+  const [pinned, setPinned] = useState<number | null>(null)
+  useEffect(() => {
+    if (ui.previewPv.length === 0) setPinned(null)
+  }, [ui.previewPv])
 
   return (
     <div className="pv-block flex flex-col gap-2 p-3 rounded-2xl bg-paper-0/95 border border-hairline/80 shadow-2xs select-none">
@@ -31,19 +37,31 @@ export function PvBlock({ pvText }: PvBlockProps) {
                 key={`${step.iccs}-${i}`}
                 /* --i：入场波次的序号，history.css 拿它排 18ms 一档的 rise（同盘面可走点） */
                 style={{ '--i': i } as CSSProperties}
-                className={`pv-step flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs transition-all duration-150 cursor-pointer border ${
+                className={`pv-step flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs transition-[background-color,color,border-color,box-shadow,transform] duration-150 cursor-pointer border ${
                   isRed
                     ? 'pv-red bg-rose-50/80 hover:bg-rose-100 text-piece-red border-rose-200/80 shadow-3xs hover:-translate-y-0.5 hover:shadow-xs'
                     : 'pv-black bg-paper-1 hover:bg-paper-2 text-ink-1 border-hairline/80 shadow-3xs hover:-translate-y-0.5 hover:shadow-xs'
                 }`}
                 onMouseEnter={() => {
-                  const moves = pvText.slice(i).map((s) => s.iccs).filter(Boolean)
-                  ui.handlePreviewBoard(null, moves, null)
+                  if (pinned === null) {
+                    const moves = pvText.slice(i).map((s) => s.iccs).filter(Boolean)
+                    ui.handlePreviewBoard(null, moves, null)
+                  }
                 }}
                 onMouseLeave={() => {
-                  ui.handlePreviewBoard(null, [], null)
+                  if (pinned === null) ui.handlePreviewBoard(null, [], null)
                 }}
-                title={`悬停预览该步盘面走向：${step.chinese || step.iccs}`}
+                onClick={() => {
+                  const moves = pvText.slice(i).map((s) => s.iccs).filter(Boolean)
+                  if (pinned === i) {
+                    setPinned(null)
+                    ui.handlePreviewBoard(null, [], null)
+                  } else {
+                    setPinned(i)
+                    ui.handlePreviewBoard(null, moves, null)
+                  }
+                }}
+                title={`${pinned === i ? '再次点击收起' : '悬停或点击'}预览该步盘面走向：${step.chinese || step.iccs}`}
               >
                 <span className="pv-num font-num text-[10px] opacity-60 font-bold">{i + 1}</span>
                 <span className="pv-cn font-semibold">{step.chinese || step.iccs}</span>

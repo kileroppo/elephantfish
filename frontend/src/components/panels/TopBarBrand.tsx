@@ -57,7 +57,7 @@ export function TopBarBrand({ engineInfo, onToggleEngine }: TopBarBrandProps) {
         onClick={handleToggleEngine}
         title={title}
         aria-label={`引擎状态：${engineName}，点击切换引擎`}
-        className={`engine-pill h-7 rounded-lg text-xs tracking-wide font-medium transition-all cursor-pointer flex items-center gap-1.5 border leading-none px-2 md:px-2.5 ${
+        className={`engine-pill h-7 rounded-lg text-xs tracking-wide font-medium transition-[color,background-color,border-color] cursor-pointer flex items-center gap-1.5 border leading-none px-2 md:px-2.5 ${
           !connected
             ? 'bg-amber-500/10 text-amber-700 border-amber-500/40 hover:bg-amber-500/20'
             : thinking

@@ -1,5 +1,6 @@
+import type { CSSProperties } from 'react'
 import type { Side, XiangqiXRay } from '../../types'
-import { BOARD_H, BOARD_W, parseSquare, toPercent } from '../../lib/board'
+import { BOARD_H, BOARD_W, parseSquare, toPercent, toPixel } from '../../lib/board'
 
 interface BoardHudCaptionProps {
   caption: { badge: string; text: string; tone?: 'bad' | 'good' | 'threat' | 'info' }
@@ -29,7 +30,7 @@ export function BoardHudCaption({ caption, onClick }: BoardHudCaptionProps) {
 
   return (
     <div
-      className={`w-full max-w-[min(100%,480px)] backdrop-blur-md border px-3 py-1.5 rounded-xl text-xs font-medium flex items-center justify-between gap-2.5 shadow-sm transition-all duration-200 select-none cursor-pointer group ${toneClasses}`}
+      className={`w-full max-w-[min(100%,480px)] backdrop-blur-md border px-3 py-1.5 rounded-xl text-xs font-medium flex items-center justify-between gap-2.5 shadow-sm transition-[color,background-color,border-color,box-shadow,opacity] duration-200 select-none cursor-pointer group ${toneClasses}`}
       onClick={onClick}
       title={`${caption.text}（点击联动查看右侧棋理分析）`}
     >
@@ -166,6 +167,10 @@ export function BoardOverlaysLayer({
         const toSq = parseSquare(ghostMove.to)
         const a = toPercent(fromSq.file, fromSq.rank, flipped)
         const b = toPercent(toSq.file, toSq.rank, flipped)
+        // 残影棋子与轨迹线都活在「板面像素 × --u」的同一套坐标系里：
+        // 距离按板面像素算，长度乘 --u 换算成真实像素（板面 720×800 是设计稿尺寸，
+        // 实际渲染由 --u 缩放），角度与缩放无关，直接用在 rotate 上。
+        const ghostPx = toPixel(toSq.file, toSq.rank, flipped)
         const dist = Math.hypot(((b.x - a.x) / 100) * BOARD_W, ((b.y - a.y) / 100) * BOARD_H)
         const angle = Math.atan2(((b.y - a.y) / 100) * BOARD_H, ((b.x - a.x) / 100) * BOARD_W)
 
@@ -183,7 +188,7 @@ export function BoardOverlaysLayer({
               style={{
                 left: `${ca.x}%`,
                 top: `${ca.y}%`,
-                width: `${cDist}px`,
+                width: `calc(var(--u) * ${cDist}px)`,
                 transform: `rotate(${cAngle}rad)`,
               }}
               title="对手当场反击路线"
@@ -198,14 +203,17 @@ export function BoardOverlaysLayer({
               style={{
                 left: `${a.x}%`,
                 top: `${a.y}%`,
-                width: `${dist}px`,
+                width: `calc(var(--u) * ${dist}px)`,
                 transform: `rotate(${angle}rad)`,
               }}
             />
             {counterElem}
+            {/* 定位走 --cx/--cy（板面像素），和真棋子同一条 transform 管道；
+                left/top 百分比那一套是另一条坐标系，混用会在 ghostHover 动画
+                覆写 transform 时丢掉 -50% 居中（残影整体偏移半格）。 */}
             <div
               className={`piece piece-ghost absolute pointer-events-none z-[28] opacity-65 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-[ghostHover_1400ms_infinite_alternate_ease-in-out] ${ghostMove.pieceSide || 'red'}`}
-              style={{ left: `${b.x}%`, top: `${b.y}%` }}
+              style={{ '--cx': `${ghostPx.x}px`, '--cy': `${ghostPx.y}px` } as CSSProperties}
             >
               <span className="piece-face relative grid place-items-center w-full h-full rounded-full">
                 <span className="piece-glyph relative font-kai font-semibold text-[calc(var(--u)*42px)] leading-none -translate-y-[1%]">

@@ -7,62 +7,86 @@
    2. 层叠顺序。tw 层全部声明在 layer 里，app.css 是无层样式 ——
       冲突时存量永远赢，新增类只负责新写的 DOM。
 
-   用法约定（与 tokens.css 同名同义）：
+   单一来源纪律（DT-01 收敛，2026-11）：
+     本文件**不再持有任何色值 / 字体栈 / 缓动值**。全部经 @theme inline
+     桥接到 tokens.css 的 :root / [data-theme="wumu"] 变量 —— inline 模式
+     下工具类直接解析 `var(--paper-*)`，于是乌墨的 [data-theme] 覆盖对
+     bg-paper-* / text-ink-* / border-hairline 等 utility **自动生效**。
+     收敛前这里是第二套色板（paper-0 #fdfaf4 vs tokens #fbf8f2、cinnabar
+     #b4322a vs #a8322a…）且全文没有任何 [data-theme] 块，乌墨下
+     bg-paper-2 仍是亮面 —— 「双色彩源」与「暗色亮面穿帮」同根，就此根治。
+
+     注意：因此本文件的运行依赖 tokens.css 已加载（main.tsx 的导入顺序
+     即契约：tokens → tw → app）。
+
+   用法约定（与 tokens.css 同名同义，且真的是同一个值）：
      bg-cinnabar / text-ink-2 / border-hairline / font-display / font-num …
    ========================================================================== */
 
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
-@theme {
+@theme inline {
   /* 纸 */
-  --color-paper-0: #fdfaf4;
-  --color-paper-1: #f7f2e8;
-  --color-paper-2: #efe8db;
-  --color-paper-3: #e4dac8;
-  --color-paper-4: #d6c9b1;
+  --color-paper-0: var(--paper-0);
+  --color-paper-1: var(--paper-1);
+  --color-paper-2: var(--paper-2);
+  --color-paper-3: var(--paper-3);
+  --color-paper-4: var(--paper-4);
 
   /* 墨 */
-  --color-ink-0: #16130f;
-  --color-ink-1: #2a241d;
-  --color-ink-2: #4b4237;
-  --color-ink-3: #776b5b;
-  --color-ink-4: #a19683;
-  --color-ink-mute: #9a8f7d;
-  --color-hairline: rgba(43, 35, 26, 0.12);
-  --color-hairline-strong: rgba(43, 35, 26, 0.22);
+  --color-ink-0: var(--ink-0);
+  --color-ink-1: var(--ink-1);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-ink-mute: var(--ink-mute);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
 
   /* 朱砂 / 玉 */
-  --color-cinnabar: #b4322a;
-  --color-cinnabar-bright: #cd4034;
-  --color-jade: #2c6a56;
-  --color-jade-bright: #35836a;
+  --color-cinnabar: var(--cinnabar);
+  --color-cinnabar-bright: var(--cinnabar-bright);
+  --color-jade: var(--jade);
+  --color-jade-bright: var(--jade-bright);
 
   /* 棋盘与棋子 */
-  --color-board-line: #6d5028;
-  --color-piece-red: #a92c24;
-  --color-piece-black: #221d18;
+  --color-board-line: var(--board-line);
+  --color-piece-red: var(--piece-red);
+  --color-piece-black: var(--piece-black);
 
-  /* 字体（与 tokens.css 同一族） */
-  --font-display: 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC',
-    'SimSun', serif;
-  --font-kai: 'STKaiti', 'KaiTi', 'Kaiti SC', '楷体', 'STSong', serif;
-  --font-ui: 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
-    system-ui, -apple-system, sans-serif;
-  --font-num: 'JetBrains Mono', 'Cascadia Mono', 'SFMono-Regular', Consolas,
-    'Menlo', monospace;
+  /* 幽灵类修复（DT-10）：@theme 未定义但组件在调用的类。v4 对未定义的
+     主题色不产出 CSS、不报错 —— GameShelf 的搜索框因此一直没有边框与
+     焦点环，BoardOverlaysLayer 的 primary 徽标没有底色。 primary 即朱砂
+     （primary-600 是其实心档），border-subtle 即 hairline。
+     遗留待清（属组件线程，不越权）：GameShelf.tsx:107 的 btn-outline /
+     btn-xs / text-fg / text-fg-muted 是 daisyUI 残留，本项目无此类，
+     需改用 .btn 族或已定义类；BoardOverlaysLayer 徽标上的 text-white
+     在乌墨下对提亮朱砂仅 2.97:1，应换 --ink-on-accent。 */
+  --color-primary: var(--cinnabar);
+  --color-primary-600: var(--cinnabar);
+  --color-border-subtle: var(--hairline);
 
-  /* 动效令牌 */
-  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --ease-spring: cubic-bezier(0.34, 1.32, 0.46, 1);
-  --animate-duration-fast: 140ms;
-  --animate-duration: 220ms;
-  --animate-duration-slow: 380ms;
+  /* 字体：与 tokens.css 是同一份栈（inline 解析，不是抄写） */
+  --font-display: var(--font-display);
+  --font-kai: var(--font-kai);
+  --font-ui: var(--font-ui);
+  --font-num: var(--font-num);
+
+  /* 动效令牌：缓动桥接 tokens；ease-spring-sm 补上 —— 它此前不在 @theme
+     里，TSX 的 ease-spring-sm 调用一直是静默失效的（同 DT-10 类问题）。 */
+  --ease-enter: var(--ease-enter);
+  --ease-exit: var(--ease-exit);
+  --ease-out: var(--ease-out);
+  --ease-move: var(--ease-move);
+  --ease-land: var(--ease-land);
+  --ease-spring: var(--ease-spring);
+  --ease-spring-sm: var(--ease-spring-sm);
 
   /* 入场淡入：RightRail tab 面板 / CombatChronicle / DrillHeader 下拉 /
      FloatingTacticalCapsule / CoachLiveCard / EngineHero 复制反馈 /
      ReplayCoachCabin 等 13 处 animate-fadeIn 调用点。
-     keyframes 写在 @theme 内，v4 会随 animate-fadeIn 工具类按需产出。 */
+     keyframes 随 @theme 按需产出；--ease-out 运行期解析到 tokens.css。 */
   --animate-fadeIn: fadeIn 200ms var(--ease-out) both;
 
   @keyframes fadeIn {

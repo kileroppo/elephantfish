@@ -53,7 +53,7 @@ export function SparringTierSelect({
             <button
               key={t.id}
               type="button"
-              className={`preset w-full h-8 px-3 rounded text-xs tracking-wide transition-all border flex items-center justify-center font-medium cursor-pointer ${
+              className={`preset w-full h-8 px-3 rounded text-xs tracking-wide transition-[color,background-color,border-color] border flex items-center justify-center font-medium cursor-pointer ${
                 isOn
                   ? 'is-on bg-cinnabar text-white border-cinnabar shadow-xs font-semibold'
                   : 'bg-paper-1/60 hover:bg-paper-2 text-ink-2 border-hairline hover:border-ink-4/40'
@@ -69,7 +69,7 @@ export function SparringTierSelect({
       <div className="flex flex-col gap-1.5 pt-1">
         <button
           type="button"
-          className={`preset w-full h-8 px-2.5 rounded text-xs transition-all border flex items-center justify-center text-center font-medium cursor-pointer whitespace-nowrap ${
+          className={`preset w-full h-8 px-2.5 rounded text-xs transition-[color,background-color,border-color] border flex items-center justify-center text-center font-medium cursor-pointer whitespace-nowrap ${
             coachGuardOn
               ? 'is-on bg-jade/15 text-jade border-jade/40 font-semibold'
               : 'bg-paper-1/50 hover:bg-paper-2 text-ink-3 border-hairline'

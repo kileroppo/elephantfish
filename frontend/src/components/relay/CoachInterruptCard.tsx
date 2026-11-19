@@ -92,8 +92,9 @@ export function CoachInterruptCard({
 
   const cardNode = (
     <div
-      /* 外层只当定位壳：fixed 定位 + 尺寸 + transform:none，不参与动画 */
-      className={`fixed bottom-4 lg:bottom-6 z-[9999]${leaving ? ' pointer-events-none' : ''}`}
+      /* 外层只当定位壳：fixed 定位 + 尺寸 + transform:none，不参与动画。
+         z 走 tokens 阶梯的 toast 档（全局提示最高层），不再裸写 9999。 */
+      className={`fixed bottom-4 lg:bottom-6 z-[var(--z-toast,500)]${leaving ? ' pointer-events-none' : ''}`}
       style={{
         left: isLargeScreen ? `${leftPx}px` : '16px',
         right: isLargeScreen ? 'auto' : '16px',
@@ -106,10 +107,10 @@ export function CoachInterruptCard({
       {/* 内层卡片承载观感与落章动画：translate/scale 只动这一层，动画结束回到
           关键帧终态，不污染外层定位；退场期间 pointer-events 已在外层切断 */}
       <div
-        className={`shadow-2xl p-4 rounded-xl border bg-paper-0/98 backdrop-blur-md select-none ${
+        className={`shadow-[var(--shadow-float)] p-4 rounded-xl border bg-paper-0/98 backdrop-blur-md select-none ${
           shownTactics.severity === 'critical'
-            ? 'border-cinnabar shadow-red-950/20 ring-1 ring-cinnabar/30'
-            : 'border-amber-400 shadow-amber-950/15 ring-1 ring-amber-400/30'
+            ? 'border-cinnabar ring-1 ring-cinnabar/30'
+            : 'border-[var(--cinnabar-edge)] ring-1 ring-cinnabar/20'
         }`}
         role="region"
         aria-label="师傅扶手关键手点拨"
@@ -133,9 +134,9 @@ export function CoachInterruptCard({
             </span>
             <button
               type="button"
-              className="w-6 h-6 rounded-full flex items-center justify-center text-ink-3 hover:text-ink-0 hover:bg-paper-2 text-sm transition-colors cursor-pointer"
+              className="relay-close-btn"
               onClick={onDismiss}
-              title="关闭提示并继续对局"
+              title="忽略这条点拨，继续对局"
               aria-label="关闭提示"
             >
               ✕
@@ -151,7 +152,7 @@ export function CoachInterruptCard({
           {onUndo && (
             <button
               type="button"
-              className="btn btn-primary btn-sm min-h-8 h-8 px-3 text-xs leading-none rounded cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95 transition-all"
+              className="btn btn-primary btn-sm min-h-8 h-8 px-3 text-xs leading-none rounded cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95"
               onClick={onUndo}
               onMouseEnter={() => {
                 if (shownTactics.visual_clues?.best_move) {

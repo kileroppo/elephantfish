@@ -144,7 +144,10 @@
 
 .rank-row.is-best {
   border-color: var(--cinnabar-edge);
-  background: linear-gradient(180deg, var(--paper-0), #fbf3e8);
+  /* 下半瓣的暖奶油提为令牌 --paper-warm：宣纸下 #fbf3e8 原值不变，
+     乌墨下压成暖褐 #241f1a —— 原来是写死的 #fbf3e8，暗色里这行会亮成
+     「深→奶油」渐变，像贴了块膏药 */
+  background: linear-gradient(180deg, var(--paper-0), var(--paper-warm));
 }
 
 /* 你走的那一手：玉色描边。它不是「好」，只是「在这块表里指认得出你」，
@@ -190,7 +193,12 @@
   padding: 2px 4px;
   border-radius: 3px;
   color: var(--jade);
-  background: rgba(44, 106, 86, 0.14);
+  background: color-mix(in srgb, var(--jade) 14%, transparent);
+}
+
+/* 乌墨下玉色洗底配中间调玉字只有 ~4.6:1，提亮一档过 AA（5.86:1） */
+[data-theme='wumu'] .rank-flag {
+  color: var(--jade-bright);
 }
 
 .rank-pv {

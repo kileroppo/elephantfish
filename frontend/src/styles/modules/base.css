@@ -1,5 +1,9 @@
 /* ==========================================================================
    布局与外观
+   --------------------------------------------------------------------------
+   全局关注点都住这里：纸的质感、标题排印、继承式 reset、焦点体系、
+   ::selection / ::placeholder。与具体模块无关的规则不许往 responsive.css
+   之类的模块里塞（焦点规则曾住在 responsive.css，2026-11 迁回本站）。
    ========================================================================== */
 
 *,
@@ -24,6 +28,11 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow: hidden;
+  /* 汉字排印：标点在行首的压缩交给 text-spacing-trim（渐进增强，
+     Chrome 129+ / 新版 Safari 支持，其余浏览器静默忽略）。
+     中西文混排的间距由 PingFang / 宋体自带的 autospace 负责 —— 那是
+     字体引擎内建的行为，比任何手写 word-spacing 都准；这里不重复指挥。 */
+  text-spacing-trim: trim-start;
 }
 
 /* 纸的质感：一层极淡的斜纹 + 一盏从左上打下来的光 */
@@ -45,6 +54,11 @@ body::before {
     );
 }
 
+/* 标题排印：多行中文标题的行高节奏 + 标点悬挂 + 行平衡。
+   浏览器 normal ≈1.2 对两行宋体标题是挤的；1.45 是中文标题的呼吸位。
+   hanging-punctuation: allow-end 让行尾标点探出文本框（渐进增强，
+   Chromium 暂不支持，支持的了才生效，不影响齐头那一侧）。
+   letter-spacing 0.02em 的尾字距对左对齐无害，保留。 */
 h1,
 h2,
 h3 {
@@ -52,13 +66,66 @@ h3 {
   font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: 0.02em;
+  line-height: 1.45;
+  text-wrap: balance;
+  hanging-punctuation: allow-end;
   color: var(--ink-0);
+}
+
+/* 继承式 reset：preflight 被刻意跳过，按钮/输入框不吃浏览器默认按钮字体，
+   于是每个新写的 Tailwind 按钮都静默丢失设计字体（text-xs 只设字号）。
+   这里只接管 font/letter-spacing 的继承，不碰颜色与边框 —— 存量显式
+   声明永远赢。 */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  letter-spacing: inherit;
 }
 
 code,
 kbd {
   font-family: var(--font-num);
   font-size: 0.86em;
+  /* 快捷键与棋谱数字要等宽对齐（kbd 是 min-width 居中的方片，
+     非等宽数字会让 Ctrl / Shift 这些键片宽飘忽） */
+  font-variant-numeric: tabular-nums;
+}
+
+/* 焦点体系（全球唯一一份定义）：朱砂 2px 实线 + offset 由远及近。
+   offset 的「出发点」写在下面的 *:not(:focus-visible) 上 —— 过渡要有
+   个「从哪来」的值才播得出来；非键盘焦点不出环，鼠标点击保持干净。
+   减弱动效下 --dur-xs 被 tokens.css 压到 1ms，过渡即静默。 */
+:focus-visible {
+  outline: 2px solid var(--cinnabar);
+  outline-offset: 2px;
+  border-radius: 4px;
+  transition: outline-offset var(--dur-xs) var(--ease-out);
+}
+
+*:not(:focus-visible) {
+  outline-offset: 6px;
+}
+
+/* 选中即签名：纸墨界面每次复制棋谱/FEN 都是一次品牌露馅的机会。
+   宣纸下用朱砂淡色底 + 墨字；乌墨下 cinnabar-wash 太淡，直接用
+   cinnabar-edge 加深，字用提亮一档的墨。 */
+::selection {
+  background: var(--cinnabar-wash);
+  color: var(--ink-0);
+}
+
+[data-theme='wumu'] ::selection {
+  background: var(--cinnabar-edge);
+  color: var(--ink-1);
+}
+
+/* placeholder 统一墨阶第三档（达 AA），并显式压回 Firefox 默认带的
+   opacity —— 不然它会在宣纸上灰得发脏。 */
+::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
 }
 
 .sr-only {

@@ -36,7 +36,7 @@ export const CoachLiveCard: React.FC<CoachLiveCardProps> = ({
 }) => {
   return (
     <div
-      className="coach-live-card w-full rounded-2xl border border-hairline/90 bg-paper-0/95 backdrop-blur-xl p-3 shadow-sm flex flex-col gap-2.5 select-none animate-fadeIn transition-all duration-200"
+      className="coach-live-card w-full rounded-2xl border border-hairline/90 bg-paper-0/95 backdrop-blur-xl p-3 shadow-sm flex flex-col gap-2.5 select-none animate-fadeIn"
       role="region"
       aria-label="实时教练推演卡片"
     >
@@ -45,7 +45,7 @@ export const CoachLiveCard: React.FC<CoachLiveCardProps> = ({
         <div className="flex items-center p-0.5 bg-paper-1/90 rounded-xl border border-hairline/80 shadow-2xs">
           <button
             type="button"
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer border-0 ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors duration-200 cursor-pointer border-0 ${
               mode === 'good'
                 ? 'bg-paper-0 text-cinnabar font-bold shadow-xs'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
@@ -56,7 +56,7 @@ export const CoachLiveCard: React.FC<CoachLiveCardProps> = ({
           </button>
           <button
             type="button"
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer border-0 ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors duration-200 cursor-pointer border-0 ${
               mode === 'threat'
                 ? 'bg-paper-0 text-cinnabar font-bold shadow-xs'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
@@ -67,7 +67,7 @@ export const CoachLiveCard: React.FC<CoachLiveCardProps> = ({
           </button>
           <button
             type="button"
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer border-0 ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors duration-200 cursor-pointer border-0 ${
               mode === 'guide'
                 ? 'bg-paper-0 text-cinnabar font-bold shadow-xs'
                 : 'bg-transparent text-ink-3 hover:text-ink-1'
@@ -80,7 +80,7 @@ export const CoachLiveCard: React.FC<CoachLiveCardProps> = ({
 
         <button
           type="button"
-          className="w-7 h-7 flex items-center justify-center text-ink-3 hover:text-ink-0 hover:bg-paper-2 rounded-full text-xs transition cursor-pointer shrink-0 active:scale-95"
+          className="relay-close-btn shrink-0"
           onClick={onClose}
           title="收起教练推演"
           aria-label="关闭"
@@ -99,7 +99,7 @@ export const CoachLiveCard: React.FC<CoachLiveCardProps> = ({
         /* 算路三问模式 */
         <div className="flex flex-col gap-2 text-xs">
           <div className="p-2 rounded-xl bg-paper-1/80 border border-hairline/80">
-            <span className="text-[11px] font-bold text-amber-900 block mb-1">
+            <span className="relay-guide-badge mb-1">
               ① 核心抓手（第一性原理）
             </span>
             <ul className="list-disc pl-4 text-ink-2 space-y-1 m-0">
@@ -112,7 +112,7 @@ export const CoachLiveCard: React.FC<CoachLiveCardProps> = ({
           </div>
 
           <div className="p-2 rounded-xl bg-paper-1/80 border border-hairline/80">
-            <span className="text-[11px] font-bold text-blue-900 block mb-1">
+            <span className="relay-guide-badge mb-1">
               ② 逆向倒推
             </span>
             <p className="text-ink-2 leading-relaxed m-0">
@@ -121,7 +121,7 @@ export const CoachLiveCard: React.FC<CoachLiveCardProps> = ({
           </div>
 
           <div className="p-2 rounded-xl bg-paper-1/80 border border-hairline/80">
-            <span className="text-[11px] font-bold text-cinnabar block mb-1">
+            <span className="relay-guide-badge is-accent mb-1">
               ③ 对抗自查三问
             </span>
             <div className="space-y-1 mt-1">
@@ -163,7 +163,7 @@ export const CoachLiveCard: React.FC<CoachLiveCardProps> = ({
               </button>
               <button
                 type="button"
-                className="h-6.5 px-2.5 rounded-lg bg-cinnabar hover:bg-cinnabar-bright text-white font-semibold text-xs transition shadow-xs cursor-pointer active:scale-95"
+                className="h-6.5 px-2.5 rounded-lg bg-cinnabar hover:bg-cinnabar-bright text-[var(--ink-on-accent)] font-semibold text-xs transition shadow-xs cursor-pointer active:scale-95"
                 onClick={onTogglePlay}
               >
                 {animPlaying ? '⏸ 暂停' : '▶ 连播'}
@@ -188,7 +188,7 @@ export const CoachLiveCard: React.FC<CoachLiveCardProps> = ({
                 <button
                   key={st.step}
                   type="button"
-                  className={`w-full text-left p-2.5 rounded-xl border transition-all duration-200 cursor-pointer ${
+                  className={`w-full text-left p-2.5 rounded-xl border transition-colors duration-200 cursor-pointer ${
                     isCurrent
                       ? 'border-cinnabar bg-cinnabar/10 shadow-xs ring-1 ring-cinnabar/30'
                       : 'border-hairline/70 bg-paper-0/70 hover:bg-paper-0'

@@ -44,6 +44,18 @@ const CHECK_ALARM_MS = 700
 /** 本地预判最多活这么久。到点服务端还没认，就判这一手落空、就地回位 */
 const PENDING_MS = 800
 
+/** 首访落盘总时长（ms）。与 board.css 的 .piece.is-entering 同源：
+ *  180ms 基延迟 + 最大波次 delay（BoardPiecesLayer: displayRow*44 + file*4，
+ *  峰值 9*44 + 8*4 = 428ms）+ 340ms 动画。App.tsx 的 autoStart 靠它让位，
+ *  改波次公式时这里必须同步。 */
+export const INTRO_TOTAL_MS = 948
+
+/** 会话内落盘只播一次。模块级而非 per-instance ref：Board 会在排局 /
+ *  复盘 / 特训营之间卸载重挂，ref 会让每次重挂都重播摆子（现状即如此，
+ *  与 board.css「开场落盘只播一次」的注释相悖）。刷新页面才重来 ——
+ *  「首访」本来就该以一次刷新为界。 */
+let sessionIntroPlayed = false
+
 /** 主棋盘组件：统一状态协调、落子逻辑、右键/点击事件处理与各子图层组装 */
 export function Board({
   game,
@@ -70,6 +82,7 @@ export function Board({
   xrayOverlay = null,
   spotlightSquares = null,
   ghostMove = null,
+  onIntroEnd,
 }: BoardProps) {
   const surfaceRef = useRef<HTMLDivElement>(null)
 
@@ -109,10 +122,26 @@ export function Board({
   /** 正在滑的棋子 -> 这一段位移该走多久。锁住，滑完才收 */
   const glideRef = useRef(new Map<number, number>())
 
-  // 开场落盘只播一次
-  const bootedRef = useRef(false)
+  // 开场落盘只播一次（会话内）；渲染期读模块旗决定本实例播不播
+  const bootedRef = useRef(sessionIntroPlayed)
+  const isIntroRef = useRef(false)
   useEffect(() => {
     bootedRef.current = true
+    if (sessionIntroPlayed && !isIntroRef.current) {
+      // 别的实例已播过：本实例不重播，但也要汇报（autoStart 别干等）
+      onIntroEnd?.()
+      return
+    }
+    isIntroRef.current = true
+    sessionIntroPlayed = true
+    const t = window.setTimeout(() => {
+      isIntroRef.current = false
+      onIntroEnd?.()
+    }, INTRO_TOTAL_MS)
+    return () => window.clearTimeout(t)
+    // StrictMode 双跑：isIntroRef 让第二次 effect 认出「本实例就是落盘主角」
+    // 并重新上定时器，而不是立刻汇报 —— 否则 dev 下 onIntroEnd 会在挂载
+    // 瞬间触发，autoStart 的让位形同虚设。
   }, [])
 
   // 正在播落子反馈的那颗子（一次性）

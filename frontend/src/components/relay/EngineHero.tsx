@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { GameSnapshot } from '../../types'
+import { useExitPhase } from '../../hooks/useExitPhase'
 
 export interface EngineHeroProps {
   thinking: boolean
@@ -42,6 +43,9 @@ export function EngineHero({
   onToggleCoachGuard,
 }: EngineHeroProps) {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  // 更多菜单的退场相位：入场有编舞（animate-in zoom-in-95），退场也要有 —
+  // 一帧删是 motion P2-10 点名的「闪」；与各 Desk 的 useExitPhase 同款。
+  const [menuMounted, menuLeaving] = useExitPhase(moreMenuOpen, 180)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -61,7 +65,7 @@ export function EngineHero({
       <div className="!flex md:!hidden flex-col gap-1.5 w-full max-w-[min(100vw-24px,460px)] mx-auto px-1 select-none">
         {/* 第 1 行：走法与对弈核心状态 */}
         <div
-          className={`flex items-center justify-between h-10 px-3.5 rounded-xl border transition-all duration-150 ${
+          className={`flex items-center justify-between h-10 px-3.5 rounded-xl border relay-press ${
             thinking
               ? 'border-cinnabar bg-cinnabar/10 text-cinnabar shadow-xs'
               : 'border-hairline bg-paper-0 shadow-xs'
@@ -75,7 +79,7 @@ export function EngineHero({
               </div>
               <button
                 type="button"
-                className="px-3 py-1 rounded-full bg-cinnabar text-white text-xs font-medium shadow-xs active:scale-95 transition-transform"
+                className="px-3 py-1 rounded-full bg-cinnabar text-[var(--ink-on-accent)] text-xs font-medium shadow-xs active:scale-95 relay-press"
                 onClick={onStop}
               >
                 采用最优步
@@ -108,7 +112,7 @@ export function EngineHero({
                 {onToggleCoachGuard && (
                   <button
                     type="button"
-                    className={`flex items-center h-7 px-2 rounded-lg border text-[11px] font-medium transition active:scale-95 whitespace-nowrap ${
+                    className={`flex items-center h-7 px-2 rounded-lg border text-[11px] font-medium relay-press active:scale-95 whitespace-nowrap ${
                       coachGuard
                         ? 'bg-paper-1 border-hairline text-ink-1'
                         : 'bg-transparent border-dashed border-hairline text-ink-4'
@@ -122,7 +126,7 @@ export function EngineHero({
                 {playMode === 'sparring' && onUndo && (
                   <button
                     type="button"
-                    className="flex items-center h-7 px-2.5 rounded-lg bg-paper-1 hover:bg-paper-2 border border-hairline text-ink-1 text-xs font-medium transition active:scale-95 shadow-xs whitespace-nowrap"
+                    className="flex items-center h-7 px-2.5 rounded-lg bg-paper-1 hover:bg-paper-2 border border-hairline text-ink-1 text-xs font-medium relay-press active:scale-95 shadow-xs whitespace-nowrap"
                     onClick={onUndo}
                     title="悔棋 (Ctrl+Z)"
                   >
@@ -137,7 +141,7 @@ export function EngineHero({
               {gameEngineToMove && playing && (
                 <button
                   type="button"
-                  className="px-3 py-1 rounded-lg bg-cinnabar text-white text-xs font-medium shadow-xs transition active:scale-95"
+                  className="px-3 py-1 rounded-lg bg-cinnabar text-[var(--ink-on-accent)] text-xs font-medium shadow-xs relay-press active:scale-95"
                   onClick={onEngineMove}
                 >
                   让引擎先出招
@@ -151,9 +155,9 @@ export function EngineHero({
         <div className="flex items-center gap-1.5 w-full">
           <button
             type="button"
-            className={`flex-1 flex items-center justify-center gap-1.5 h-9 rounded-xl border text-xs font-medium transition active:scale-95 ${
+            className={`flex-1 flex items-center justify-center gap-1.5 h-9 rounded-xl border text-xs font-medium relay-press active:scale-95 ${
               helperOpen && helperMode === 'good'
-                ? 'bg-cinnabar text-paper-0 border-cinnabar shadow-xs font-semibold'
+                ? 'bg-jade text-[var(--ink-on-accent)] border-jade shadow-xs font-semibold'
                 : 'bg-paper-0 border-hairline text-ink-1 hover:bg-paper-1'
             }`}
             onClick={() => void onOpenHelper('good')}
@@ -165,9 +169,9 @@ export function EngineHero({
 
           <button
             type="button"
-            className={`flex-1 flex items-center justify-center gap-1.5 h-9 rounded-xl border text-xs font-medium transition active:scale-95 ${
+            className={`flex-1 flex items-center justify-center gap-1.5 h-9 rounded-xl border text-xs font-medium relay-press active:scale-95 ${
               helperOpen && helperMode === 'threat'
-                ? 'bg-amber-500/15 border-amber-500 text-amber-900 shadow-xs font-semibold'
+                ? 'bg-[var(--cinnabar-wash)] border-[var(--cinnabar-edge)] text-cinnabar shadow-xs font-semibold'
                 : 'bg-paper-0 border-hairline text-ink-1 hover:bg-paper-1'
             }`}
             onClick={() => void onOpenHelper('threat')}
@@ -180,7 +184,7 @@ export function EngineHero({
           <div className="relative" ref={menuRef}>
             <button
               type="button"
-              className={`w-9 h-9 flex items-center justify-center rounded-xl border text-xs font-medium transition active:scale-95 ${
+              className={`w-9 h-9 flex items-center justify-center rounded-xl border text-xs font-medium relay-press active:scale-95 ${
                 moreMenuOpen || showTypeInput || (helperOpen && helperMode === 'guide')
                   ? 'bg-paper-2 border-hairline text-ink-0'
                   : 'bg-paper-0 border-hairline text-ink-2 hover:bg-paper-1'
@@ -190,8 +194,14 @@ export function EngineHero({
             >
               ···
             </button>
-            {moreMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-36 py-1 bg-paper-0 rounded-xl border border-hairline shadow-xl flex flex-col z-50 text-xs animate-in zoom-in-95 duration-150">
+            {menuMounted && (
+              <div
+                className={`absolute right-0 top-full mt-2 w-36 py-1 bg-paper-0 rounded-xl border border-hairline shadow-xl flex flex-col z-[var(--z-drawer,200)] text-xs ${
+                  menuLeaving
+                    ? 'pointer-events-none [animation:fadeOut_180ms_var(--ease-out)_both]'
+                    : 'animate-in zoom-in-95 duration-150'
+                }`}
+              >
                 <button
                   type="button"
                   className="flex items-center gap-2 px-3 py-2 text-left hover:bg-paper-1 text-ink-1 transition"
@@ -222,7 +232,7 @@ export function EngineHero({
 
       {/* ================= 桌面端：单行极简教练胶囊 (!hidden md:!inline-flex) ================= */}
       <div
-        className={`!hidden md:!inline-flex relative h-[38px] px-3.5 rounded-full border border-hairline bg-paper-0/95 backdrop-blur-md shadow-xs items-center justify-center gap-2.5 box-border mx-auto transition-all duration-150 select-none ${
+        className={`!hidden md:!inline-flex relative h-[38px] px-3.5 rounded-full border border-hairline bg-paper-0/95 backdrop-blur-md shadow-xs items-center justify-center gap-2.5 box-border mx-auto relay-press select-none ${
           thinking ? 'border-cinnabar bg-cinnabar/10 text-cinnabar' : ''
         }`}
       >
@@ -234,7 +244,7 @@ export function EngineHero({
             </span>
             <button
               type="button"
-              className="px-2.5 py-0.5 text-[11px] h-6 rounded-full border border-cinnabar/40 text-cinnabar bg-paper-0 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap hover:bg-cinnabar hover:text-white transition duration-150 active:scale-95"
+              className="px-2.5 py-0.5 text-[11px] h-6 rounded-full border border-cinnabar/40 text-cinnabar bg-paper-0 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap hover:bg-cinnabar hover:text-[var(--ink-on-accent)] relay-press active:scale-95"
               onClick={onStop}
               title="采用当前最优步 (Space)"
             >
@@ -249,7 +259,7 @@ export function EngineHero({
               <button
                 key={lastEngineMove.ply}
                 type="button"
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 h-[26px] rounded-lg border border-hairline bg-paper-1 cursor-pointer transition-all duration-150 hover:border-cinnabar/60 hover:shadow-xs active:scale-95"
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 h-[26px] rounded-lg border border-hairline bg-paper-1 cursor-pointer relay-press hover:border-cinnabar/60 hover:shadow-xs active:scale-95"
                 onClick={() => void onCopyMove(lastEngineMove.iccs, lastEngineMove.chinese)}
                 title="点击复制走法"
               >
@@ -271,7 +281,7 @@ export function EngineHero({
               {playMode === 'sparring' && onUndo && (
                 <button
                   type="button"
-                  className="px-2 py-0.5 h-[24px] text-[11px] rounded-full whitespace-nowrap leading-none bg-paper-1 hover:bg-paper-2 border border-hairline text-ink-2 hover:text-ink-0 cursor-pointer inline-flex items-center transition-all duration-150 active:scale-95"
+                  className="px-2 py-0.5 h-[24px] text-[11px] rounded-full whitespace-nowrap leading-none bg-paper-1 hover:bg-paper-2 border border-hairline text-ink-2 hover:text-ink-0 cursor-pointer inline-flex items-center relay-press active:scale-95"
                   onClick={onUndo}
                   title="撤回上一步 (Ctrl+Z)"
                 >
@@ -287,9 +297,9 @@ export function EngineHero({
             <div className="inline-flex items-center gap-1.5 shrink-0" ref={menuRef}>
               <button
                 type="button"
-                className={`px-3 py-1 h-[26px] text-xs rounded-full whitespace-nowrap leading-none font-medium cursor-pointer inline-flex items-center gap-1 active:scale-95 transition-all shadow-xs ${
+                className={`px-3 py-1 h-[26px] text-xs rounded-full whitespace-nowrap leading-none font-medium cursor-pointer inline-flex items-center gap-1 active:scale-95 relay-press shadow-xs ${
                   helperOpen && helperMode === 'good'
-                    ? 'bg-cinnabar text-paper-0 ring-2 ring-cinnabar/30'
+                    ? 'bg-jade text-[var(--ink-on-accent)] ring-2 ring-jade/30'
                     : 'bg-paper-1 hover:bg-paper-2 border border-hairline text-ink-0'
                 }`}
                 onClick={() => void onOpenHelper('good')}
@@ -301,9 +311,9 @@ export function EngineHero({
 
               <button
                 type="button"
-                className={`px-3 py-1 h-[26px] text-xs rounded-full whitespace-nowrap leading-none font-medium cursor-pointer inline-flex items-center gap-1 active:scale-95 transition-all ${
+                className={`px-3 py-1 h-[26px] text-xs rounded-full whitespace-nowrap leading-none font-medium cursor-pointer inline-flex items-center gap-1 active:scale-95 relay-press ${
                   helperOpen && helperMode === 'threat'
-                    ? 'bg-amber-500/15 border border-amber-500 text-amber-900 font-semibold'
+                    ? 'bg-[var(--cinnabar-wash)] border border-[var(--cinnabar-edge)] text-cinnabar font-semibold'
                     : 'bg-paper-1 hover:bg-paper-2 border border-hairline text-ink-1'
                 }`}
                 onClick={() => void onOpenHelper('threat')}
@@ -316,7 +326,7 @@ export function EngineHero({
               <div className="relative">
                 <button
                   type="button"
-                  className={`w-[26px] h-[26px] flex items-center justify-center rounded-full border text-xs font-semibold cursor-pointer transition active:scale-95 ${
+                  className={`w-[26px] h-[26px] flex items-center justify-center rounded-full border text-xs font-semibold cursor-pointer relay-press active:scale-95 ${
                     moreMenuOpen || showTypeInput || (helperOpen && helperMode === 'guide')
                       ? 'bg-paper-2 border-hairline text-ink-0'
                       : 'bg-paper-1 border-hairline text-ink-3 hover:text-ink-0 hover:bg-paper-2'
@@ -326,8 +336,14 @@ export function EngineHero({
                 >
                   ···
                 </button>
-                {moreMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-34 py-1 bg-paper-0 rounded-xl border border-hairline shadow-xl flex flex-col z-50 text-xs animate-in zoom-in-95 duration-150">
+                {menuMounted && (
+                  <div
+                    className={`absolute right-0 top-full mt-2 w-34 py-1 bg-paper-0 rounded-xl border border-hairline shadow-xl flex flex-col z-[var(--z-drawer,200)] text-xs ${
+                      menuLeaving
+                        ? 'pointer-events-none [animation:fadeOut_180ms_var(--ease-out)_both]'
+                        : 'animate-in zoom-in-95 duration-150'
+                    }`}
+                  >
                     <button
                       type="button"
                       className="flex items-center gap-2 px-3 py-2 text-left hover:bg-paper-1 text-ink-1 transition"
@@ -361,7 +377,7 @@ export function EngineHero({
             {gameEngineToMove && playing && (
               <button
                 type="button"
-                className="h-[24px] px-2.5 text-[11px] leading-none rounded-lg bg-cinnabar text-white font-medium shadow-xs transition active:scale-95"
+                className="h-[24px] px-2.5 text-[11px] leading-none rounded-lg bg-cinnabar text-[var(--ink-on-accent)] font-medium shadow-xs relay-press active:scale-95"
                 onClick={onEngineMove}
               >
                 让引擎先出招
@@ -370,9 +386,9 @@ export function EngineHero({
             <div className="h-4 w-px bg-hairline" />
             <button
               type="button"
-              className={`px-3 py-1 h-[26px] text-xs rounded-full whitespace-nowrap leading-none font-medium cursor-pointer inline-flex items-center gap-1 active:scale-95 transition-all shadow-xs ${
+              className={`px-3 py-1 h-[26px] text-xs rounded-full whitespace-nowrap leading-none font-medium cursor-pointer inline-flex items-center gap-1 relay-press active:scale-95 shadow-xs ${
                 helperOpen && helperMode === 'good'
-                  ? 'bg-cinnabar text-paper-0 ring-2 ring-cinnabar/30'
+                  ? 'bg-jade text-[var(--ink-on-accent)] ring-2 ring-jade/30'
                   : 'bg-paper-1 hover:bg-paper-2 border border-hairline text-ink-0'
               }`}
               onClick={() => void onOpenHelper('good')}
@@ -383,9 +399,9 @@ export function EngineHero({
             </button>
             <button
               type="button"
-              className={`px-3 py-1 h-[26px] text-xs rounded-full whitespace-nowrap leading-none font-medium cursor-pointer inline-flex items-center gap-1 active:scale-95 transition-all ${
+              className={`px-3 py-1 h-[26px] text-xs rounded-full whitespace-nowrap leading-none font-medium cursor-pointer inline-flex items-center gap-1 relay-press active:scale-95 ${
                 helperOpen && helperMode === 'threat'
-                  ? 'bg-amber-500/15 border border-amber-500 text-amber-900 font-semibold'
+                  ? 'bg-[var(--cinnabar-wash)] border border-[var(--cinnabar-edge)] text-cinnabar font-semibold'
                   : 'bg-paper-1 hover:bg-paper-2 border border-hairline text-ink-1'
               }`}
               onClick={() => void onOpenHelper('threat')}
